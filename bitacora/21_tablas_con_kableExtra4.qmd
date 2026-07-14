@@ -1,0 +1,447 @@
+---
+title: "Tesis"
+format: 
+  pdf:
+    pdf-engine: xelatex
+    latex-auto-install: true
+    cite-method: biblatex
+    # forzar estilo APA
+    biblatexoptions: 
+      - style=apa
+      - backend=biber
+      # para saltos de línea
+    header-includes:
+      - \usepackage{makecell}
+bibliography: referencias2.bib  
+csl: apa.csl
+---
+
+# Desarrollo
+
+Vamos a intentar visualizar la tabla con `kableExtra::kbl`.
+
+En primer lugar se importará la tabla
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(kableExtra)
+
+evi_emp_jov <- read_csv(
+  "evid_emp_prev_jov.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+Se define las notas y las columnas
+
+```{r}
+# notas al pie de la tabla
+nota_evi_emp_jov <- c(
+  "\\\\textbf{Nota:}",
+  "(1) El autor construye ocupaciones según la educación requerida",
+  "(2) La autora determina la educación requerida mediante la distribución de frecuencias; incidencia aproximada debido a que muestra la proporción por edad de forma gráfica",
+  "(3) Pregunta realizada al egresado: \\\\textit{con respecto a su empleo actual, ¿cree que tener una carrera universitaria es excesivo, adecuado o insuficiente?} y al empleador: \\\\textit{¿tener una carrera universitaria fue requisito para obtener su empleo actual?}"
+)
+
+# títulos de las columnas
+nom_cols <- c(
+  "Autor",
+  "Lugar",
+  "Periodo",
+  "Fuente de datos",
+  "Dimensión temporal",
+  "Método / Modelo",
+  "Población",
+  "Incidencia",
+  "Efecto salarial"
+)
+```
+
+
+Ahora se validará
+
+```{r}
+# evi_emp_jov |> 
+#   kableExtra::kbl(
+#     format = "latex",
+#     escape = FALSE,
+#     booktabs = TRUE
+#   ) |> 
+#   kable_styling(
+#     position = "center",
+#     font_size = 10
+#   ) |> 
+#   footnote(
+#     general = nota_evi_emp_jov,
+#     general_title = "",
+#     escape = FALSE
+#   )
+```
+
+Al momento de compilar me arrojó este error
+
+```
+ERROR: 
+compilation failed- error
+Undefined control sequence.
+l.279 (1) \n
+             @zamudio1997 & México & 1996 & ENEU 1996 & Transversal & Objeti...
+The control sequence at the end of the top line
+of your error message was never \def'ed. If you have
+misspelled it (e.g., `\hobx'), type `I' and the correct
+spelling (e.g., `I\hbox'). Otherwise just continue,
+and I'll forget about whatever was undefined.
+
+ 
+
+see 21_tablas_con_kableExtra4.log for more information.
+WARN: Error encountered when rendering files
+```
+
+Al validar con Gemini, primero debe hacerse una transformación en `mutate` utilizando la función `linebreak` de la siguiente manera
+
+```
+library(dplyr)
+library(kableExtra)
+
+# 1. Creamos los datos usando \n para el salto de línea
+datos_manuales <- tibble::tribble(
+  ~Variable, ~Explicacion,
+  "Edad",    "HOLA 1 \n HOLA 2", # <--- Usamos \n aquí
+  "Ingreso", "Todo este texto es completamente normal."
+)
+
+# 2. Generamos la tabla
+datos_manuales %>%
+  # Aplicamos la función linebreak a la columna que tiene el \n
+  mutate(Explicacion = linebreak(Explicacion)) %>% 
+  kbl(
+    booktabs = TRUE, 
+    escape = FALSE, # Mantenemos esto en FALSE
+    col.names = c("Variable", "Explicación")
+  ) %>%
+  kable_styling(latex_options = c("hold_position", "striped"))
+```
+
+En este caso todas tienen el salto de línea, para ser concisos solo `autor`, `Método modelo`, `Incidencia`, y `Efecto salarial`
+
+```{r}
+# evi_emp_jov |> 
+#   mutate(
+#     autor = linebreak(autor),
+#     metodo_modelo = linebreak(metodo_modelo),
+#     incidencia = linebreak(incidencia),
+#     efecto_salarial = linebreak(efecto_salarial)
+#   ) |> 
+#   kableExtra::kbl(
+#     format = "latex",
+#     col.names = nom_cols,
+#     escape = FALSE,
+#     booktabs = TRUE
+#   ) |>
+#   kable_styling(
+#     position = "center",
+#     font_size = 10
+#   ) |>
+#   footnote(
+#     general = nota_evi_emp_jov,
+#     general_title = "",
+#     escape = FALSE
+#   )
+```
+
+Según Gemini, el problema surge porque añado el salto de línea `\n` desde el archivo CSV la forma de corregir es mediante reemplazo de caracteres.
+
+```
+vi_emp_jov |> 
+  mutate(
+    # 1. Primero, convertimos el texto literal "\n" a un salto de línea real en R
+    autor = str_replace_all(autor, "\\\\n", "\n"),
+    metodo_modelo = str_replace_all(metodo_modelo, "\\\\n", "\n"),
+    incidencia = str_replace_all(incidencia, "\\\\n", "\n"),
+    efecto_salarial = str_replace_all(efecto_salarial, "\\\\n", "\n"),
+    ...
+```
+
+Al preguntar en dónde generar la tabla, la IA sugiere que en Excel pero que se añade explícitamente el salto de línea con `ALT + ENTER`
+
+Se realiza el cambio en el archivo desde Excel y se vuelve a validar
+
+```{r}
+#| label: tbl-ejemplo1
+#| tbl-cap: "Ejemplo 1"
+#| tbl-cap-location: top
+#| tbl-pos: "h"
+
+evi_emp_jov |> 
+  mutate(
+    autor = linebreak(autor),
+    metodo_modelo = linebreak(metodo_modelo),
+    incidencia = linebreak(incidencia),
+    efecto_salarial = linebreak(efecto_salarial)
+  ) |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+Ya se pudo renderizar, pero las claves de cita no se están generando
+
+Primero cambiaremos la orientación de la página esto se hace con `landscape`
+
+Primero se deja el mutate
+
+```{r}
+evi_emp_jov <- evi_emp_jov |>
+  mutate(
+    autor = linebreak(autor),
+    metodo_modelo = linebreak(metodo_modelo),
+    incidencia = linebreak(incidencia),
+    efecto_salarial = linebreak(efecto_salarial)
+  )
+```
+
+
+```{r}
+#| label: tbl-ejemplo2
+#| tbl-cap: "Ejemplo 2"
+#| tbl-cap-location: top
+#| tbl-pos: "h"
+
+evi_emp_jov |> kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+Se observa que `landscape` no hace ningún cambio quizá porque está especificada la posición de la tabla, quitemóslo
+
+```{r}
+#| label: tbl-ejemplo3
+#| tbl-cap: "Ejemplo 3"
+#| tbl-cap-location: top
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+No hace nada
+
+Entonces tenemos dos problemas
+
+* `landscape` que no cambia la orientación de la tabla
+* las citas dentro de la tabla ya que muestra la clave y no la cita bibliográfica
+
+Con `#| tbl-pos: "p"` pone la tabla en una nueva página pero no cambia la orientación
+
+```{r}
+#| label: tbl-ejemplo4
+#| tbl-cap: "Ejemplo 4"
+#| tbl-cap-location: top
+#| tbl-pos: "h"
+
+evi_emp_jov |> kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+Se observa que `landscape` no hace ningún cambio quizá porque está especificada la posición de la tabla, quitemóslo
+
+```{r}
+#| label: tbl-ejemplo5
+#| tbl-cap: "Ejemplo 5"
+#| tbl-cap-location: top
+#| tbl-pos: "p"
+
+tabla_hor <- evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  )
+
+landscape(tabla_hor)
+```
+
+Tampoco
+
+Se añadió una barra invertida directamente en excel, pero tampoco
+
+Al validar con Gemini, la solución es especificar el sistema de citas y añadir código de latex en el archivo Excel
+
+Al encabezado YAML se agrega
+
+```
+format:
+  pdf:
+    cite-method: natbib # O biblatex
+    keep-tex: true
+bibliography: referencias.bib
+```
+
+Y se agrega `\citet{key}` al excel
+
+Sigue sin aparecer
+
+se realizan los siguientes cambios
+
+se añade `colum_spec`
+
+```
+column_spec(1, width = "4cm")
+```
+
+Y al excel se hace esto
+`(1) \\ \citet{clave_cita}`
+
+```{r}
+#| label: tbl-ejemplo6
+#| tbl-cap: "Ejemplo 6"
+#| tbl-cap-location: top
+#| tbl-pos: "p"
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  column_spec(1, width = "4cm") |> 
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+Arroja error al investigar en internet se cita en latex con `\cite`
+
+Se hacen los cambios
+
+```{r}
+#| label: tbl-ejemplo7
+#| tbl-cap: "Ejemplo 7"
+#| tbl-cap-location: top
+#| tbl-pos: "p"
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  # column_spec(1, width = "4cm") |>
+  footnote(
+    general = nota_evi_emp_jov,
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+Por fin ya pude renderizar y que me cargará la cita bibliográfica pero aparece `[1]` en vez de la cita como tal ¿por qué?
+
+Según Gemini, se deben hacer estos cambios. Cambiar `\cite` a `\textcite`
+
+Al encabezado YAML
+
+```
+---
+title: "Tesis"
+format: 
+  pdf:
+    pdf-engine: xelatex
+    cite-method: biblatex
+    # Añadimos las opciones de biblatex para forzar estilo APA
+    biblatexoptions: 
+      - style=apa
+      - backend=biber
+bibliography: referencias2.bib  
+header-includes:
+  - \usepackage{makecell}
+---
+```
+
+Se hacen los cambios
+
+Por fin quedó!
+
+Ahora sólo falta cambiar la orientación de la página
+
+
+# Referencias

@@ -1,0 +1,118 @@
+---
+date: today
+format: html
+---
+
+En este documento se abordará las cuestiones mencionadas en "Aprende escribiendo/Indicadores de precisión estadística de la ENOE". Se trata de obtener 
+
+* error estándar
+* coeficiente de variación
+* intervalo de confianzan 
+
+En el cálculo de la incidencia 
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+```
+
+En este caso, no se utilizará el script de funciones
+
+Se calcula la incidencia total
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = survey_total(vartype = c("se", "cv", "ci"))
+  )
+```
+
+Siguiendo con los criterios de semaforización del INEGI
+
+Excepto `NA` la estimación del total puede interpretarse en un nivel de alta precisión ya que están entre 0% y 15%
+
+En temas de porcentaje:
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = survey_prop(vartype = c("se", "cv", "ci"))
+  )
+```
+
+Misma situación que el caso anterior. Por tanto, la pregunta pertinente sería: ¿reportar los indicadores de precisión estadística relacionada al total o a la proporción?
+
+Último ejemplo
+
+```{r}
+jovenes |> 
+  group_by(educacion, edu_mismatch_obj) |> 
+  summarise(
+    # n = n(),
+    tot = survey_total(vartype = c("se", "cv", "ci"))
+  )
+```
+
+Se observa un CV del 54% en jóvenes egresados de doctorado sobrecalificados. Por tanto, sería prudente tomar ese dato con cautela o precaución 
+
+Recordemos que CV puede obtenerse así (INEGI, 2023; Martínez Sánchez, 2017)
+
+$$
+CV = se / estimador
+$$
+
+Así pues,
+
+```{r}
+3666.6359 / 22055
+```
+
+Validemos los demás casos
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    promedio = survey_mean(ingreso_mensual, vartype = c("se", "cv", "ci"), na.rm = TRUE)
+  )
+```
+
+Los casos donde el coeficiente de variación son elevados son relacionados a la subcalificación, es comprensible dado que solamente una parte pequeña de la muestra está subcalificado.
+
+Además, solamente el caso de doctorado con sobrecalificación, pero de ahí en fuera los estimadores podrían considerarse de buena calidad.
+
+
+Entonces, como sugerencia se podrían hacer los siguienres cambios:
+
+* En C3 Metodología: añadir la cuestión de "indicadores de precisión estadística": error estándar, coeficiente de variación, intervalo de confianza estableciendo un criterio similar al que maneja el INEGI.
+
+* En C4 Resultados: en las gráficas señalar cuando el estimador (total o porcentaje) sea de calidad media o baja. En las tablas añadir error estándar, coeficiente de variación e intervalo de confianza. 
+
+* Mostrar dichos indicadores del estimador del total
+
+* Para añadir dichas cuestiones se utilizan los trabajos de (Martínez Sánchez, 2017) e (INEGI, 2023)
+
+Ejemplo
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    tot = survey_mean(
+      ingreso_mensual,
+      vartype = c("se", "cv", "ci"), 
+      na.rm = TRUE,
+      deff = TRUE
+    )
+  )
+```
+

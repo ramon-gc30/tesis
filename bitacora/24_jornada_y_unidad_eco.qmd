@@ -1,0 +1,188 @@
+---
+title: "Tesis"
+format: html
+---
+
+En este documento se añade una variable al modelo de regresión que controla la duración de la jornada laboral en el efecto salarial de la sobrecalificación
+
+Se añadirá la variable `dur_est`
+
+```{r}
+#| label: setup
+
+source("scripts/23_codigo_completo_v7.R")
+```
+
+Se valida el conteo de los valores de dicha variable
+
+```{r}
+ocupada |> 
+  group_by(dur_est) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+El 47.2% de la población ocupada tiene una jornada laboral de 35 a 48 horas. Mientras que los casos no especificados representan el 1.4%.
+
+Se convierte el valor `6` a `NA` y se convierte a factor
+
+```{r}
+ocupada <- ocupada |> 
+  mutate(
+    jornada = if_else(dur_est != "6", dur_est, NA),
+    jornada = factor(jornada)
+  )
+
+ocupada |> 
+  group_by(jornada) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Se realiza la regresión para el caso general
+
+```{r}
+model_general <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + educacion + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada, data = ocupada)
+
+summary.lm(model_general)
+```
+
+Aumenta considerablemente la R-Cuadrada que pasa de 39.04% a 48.95%. Asimismo, el signo de `under_obj` es positivo, acorde a la literatura. Se observa que la pérdida salarial relativa de la sobrecalificación es del 10.18% aproximadamente. Esta cifra es superior al modelo que no controla la jornada laboral, véase C:/Prog/tesis/bitacora/23_inc_y_efec_objetivo4dig_edu-ilo2.qmd.
+
+Qué pasa si quito nivel educativo?
+
+```{r}
+model_general2 <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada, data = ocupada)
+
+summary.lm(model_general2)
+```
+
+Todas las variables, a excepción de `regiones5` son estadísticamente significativas. La R-Cuadrada disminuye pero no tanto, pasa de 48.95% a 48.32%. La variable `over_obj` tiene un coeficiente de -3.7%. 
+
+¿Qué onda con `sector_eco`?
+
+```{r}
+ocupada |> 
+  group_by(sector_eco) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Tiene 3 valores, entonces ¿por qué el modelo solo considera el valor `3`? Habrá un tema de colinealidad perfecta?
+
+Se quita `anios_estudios`
+
+```{r}
+model_general3 <- lm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada, data = ocupada)
+
+summary.lm(model_general3)
+```
+
+
+Ahora se valida el caso de jóvenes
+
+```{r}
+jovenes <- ocupada |> 
+  filter(
+    edad_7g == "3" & 
+      (educacion == "6" | educacion == "7" | educacion == "8" | educacion == "9")
+  )
+
+model_jov <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + carreras + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada, data = jovenes)
+
+summary.lm(model_jov)
+```
+
+La R-Cuadrada pasa de 31.54% a 36.64%. La pérdida salarial relativa de la sobrecalificación pasa de -13.20% a -15.89%. 
+
+¿Qué pasa si añado nivel educativo?
+
+```{r}
+model_jov2 <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + educacion + carreras + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada, data = jovenes)
+
+summary.lm(model_jov2)
+```
+
+No existen diferencias significativas, la R-Cuadrada pasa de 36.64% a 36.8% 
+
+Si quito `anios_edu`
+
+```{r}
+model_jov3 <- lm(log(ingreso_mensual) ~ over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + educacion + carreras + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada, data = jovenes)
+
+summary.lm(model_jov3)
+```
+
+No se modifica la R-Cuadrada
+
+Entonces se puede trabajar con la educación en años o como tipo factor
+
+Se realiza una nueva versión del código
+
+¿Qué onda con `tue2`?
+
+```{r}
+ocupada |> 
+  group_by(tue2) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Indica el tipo de unidad económica, se cambia el valor `0`a `NA`
+
+```{r}
+ocupada <- ocupada |> 
+  mutate(
+    unidad_eco = if_else(tue2 != "0", tue2, NA),
+    unidad_eco = factor(unidad_eco)
+  )
+
+ocupada |> 
+  group_by(unidad_eco) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Se realiza la regresión
+
+```{r}
+model_general4 <- lm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, data = ocupada)
+
+summary.lm(model_general4)
+```
+
+Se valida el caso de jóvenes
+
+```{r}
+jovenes <- ocupada |> 
+  filter(
+    edad_7g == "3" & 
+      (educacion == "6" | educacion == "7" | educacion == "8" | educacion == "9")
+  )
+
+model_jov4 <- lm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + carreras + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, data = jovenes)
+
+summary.lm(model_jov4)
+```
+
+En teoría son todos los campos precodificados del INEGI para el caso de población ocupada 
+
+Qué pasó con `horas_lab`?
+
+General
+
+```{r}
+model_general5 <- lm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + log(horas_lab) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, data = ocupada)
+
+summary.lm(model_general5)
+```
+
+Jóvenes
+
+```{r}
+model_jov5 <- lm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + log(horas_lab) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, data = jovenes)
+
+summary.lm(model_jov5)
+```
+
+Listo! Se añaden `jornada` y `unidad_eco` al código en una nueva versión

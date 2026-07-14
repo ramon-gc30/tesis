@@ -1,0 +1,374 @@
+---
+title: "Conversión CIUO a SINCO"
+format: html
+---
+
+Este documento es la continuación de convertir CIUO a SINCO. Se propone el siguiente flujo de trabajo:
+
+1. En la tabla `ciuo08`, se le añadirá `skill_level`
+2. Se une la tabla `ciuo08` con `sinco11_ciuo08` mediante `unit`, donde la relación es uno a muchos
+3. Se crea la tabla `sinco11` pivotando `skill_level` a lo ancho para tener los valores únicos de `unitario`
+4. Se une `sinco11` con `sinco19_11` mediante `unitario`, donde la relación es uno a muchos.
+5. Se crea la tabla `sinco19` pivotando `skill_level` a lo largo y después a lo ancho para tener los valores únicos de `unitario`
+6. Se define el nivel educativo inferior y superior en `sinco19`
+7. Se une `sinco19` con la tabla de `enoe` mediante `unitario` donde la relación es uno a muchos
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(readxl)
+
+sinco11_ciuo08 <- read_csv(
+  "sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+sinco19_11 <- read_csv(
+  "sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+ciuo08 <- read_xlsx(
+  "ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+Paso 1: añadir `skill_level` a `ciuo08`
+
+```{r}
+glimpse(ciuo08)
+```
+
+Renombramos `description`
+
+```{r}
+ciuo08 <- ciuo08 |> 
+  rename("unit_label" = "description")
+```
+
+Se añade `skill_level`
+
+En el documento previo se realizó este código
+
+```{r}
+ciuo08 |> 
+  mutate(
+    skill_level = case_when(
+      # skill level 4
+      sub_major == "11" | sub_major == "12" |
+        sub_major == "13" | major == "2" |
+        sub_major == "01" ~ "4",
+      # skill level 3
+      sub_major == "14" | major == "3" ~ "3",
+      # skill level 2
+      major == "4" | major == "5" |
+        major == "6" | major == "7" |
+        major == "8" | sub_major == "02" ~ "2",
+      # skill level 1
+      major == "9" | sub_major == "03" ~ "1",
+      TRUE ~ NA,
+    )
+  ) |> 
+  select(major, sub_major, skill_level)
+```
+
+Creo que se puede mejorar
+
+```{r}
+ciuo08 |> 
+  mutate(
+    skill_level = case_when(
+      # skill level 4
+      (major == "1" & sub_major != "14") | (major == "2") | (sub_major == "01") ~ "4",
+      # skill level 3
+      sub_major == "14" | major == "3" ~ "3",
+      # skill level 2
+      major == "4" | major == "5" |
+        major == "6" | major == "7" |
+        major == "8" | sub_major == "02" ~ "2",
+      # skill level 1
+      major == "9" | sub_major == "03" ~ "1",
+      TRUE ~ NA,
+    )
+  ) |> 
+  select(major, sub_major, skill_level)
+```
+
+El resultado es el mismo
+
+```{r}
+ciuo08 <- ciuo08 |> 
+  mutate(
+    skill_level = case_when(
+      # skill level 4
+      sub_major == "11" | sub_major == "12" |
+        sub_major == "13" | major == "2" |
+        sub_major == "01" ~ "4",
+      # skill level 3
+      sub_major == "14" | major == "3" ~ "3",
+      # skill level 2
+      major == "4" | major == "5" |
+        major == "6" | major == "7" |
+        major == "8" | sub_major == "02" ~ "2",
+      # skill level 1
+      major == "9" | sub_major == "03" ~ "1",
+      TRUE ~ NA,
+    )
+  )
+```
+
+Se valida el total de ocupaciones unitarias
+
+```{r}
+ciuo08 |> 
+  distinct(unit)
+```
+
+En total son 436, cifra que coincide con OIT(2012, p. 22). 
+
+Seleccionamos solamente `unit` y `skill_level`
+
+```{r}
+ciuo08 <- ciuo08 |> 
+  select(unit, skill_level) |> 
+  rename("c08_unit" = "unit")
+```
+
+Paso 2: unir `ciuo08` con `sinco11_ciuo08`
+
+Se valida tabla `sinco11_ciuo08`
+
+```{r}
+glimpse(sinco11_ciuo08)
+```
+
+En primer lugar, nos quedamos con las ocupaciones a 4 dígitos
+
+```{r}
+sinco11_ciuo08 <- sinco11_ciuo08 |> 
+  select(sinco11, ciuo08) |> 
+  filter(str_length(sinco11) == 4) |> 
+  rename(
+    "s11_unit" = "sinco11",
+    "c08_unit" = "ciuo08"
+  )
+```
+
+Ahora realizamos la unión mediante `c08_unit` 
+
+```{r}
+sinco11_ciuo08 <- sinco11_ciuo08 |> 
+  left_join(ciuo08, by = "c08_unit")
+```
+
+Ahora creamos la tabla `sinco11`, para lo cual se pivotan los valores a lo ancho
+
+```{r}
+sinco11 <- sinco11_ciuo08 |> 
+  distinct(s11_unit, skill_level) |> 
+  mutate(id = row_number()) |> 
+  pivot_wider(
+    id_cols = s11_unit,
+    names_from = skill_level,
+    values_from = skill_level,
+    names_sort = TRUE
+  ) |> 
+  select(-`NA`)
+```
+
+Se validan las ocupaciones de `sinco11`
+
+```{r}
+sinco11 |> 
+  distinct(s11_unit)
+```
+
+En SINCO-11, aparecen 468 ocupaciones igual al reportado en INEGI (2011)
+
+Paso 4: unir `sinco11` con `sinco19_11`
+
+Primero se valida tabla `sinco19_11`
+
+```{r}
+glimpse(sinco19_11)
+```
+
+Seleccionamos las variables de interés y se renombran, también se consideran solamente las ocupaciones unitarias
+
+```{r}
+sinco19_11 <- sinco19_11 |> 
+  select(sinco_19, sinco_11) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  rename(
+    "s19_unit" = "sinco_19",
+    "s11_unit" = "sinco_11"
+  ) 
+```
+
+Ahora se hace la unión con `sinco11` mediante `s11_unit`
+
+```{r}
+sinco19_11 <- sinco19_11 |> 
+  left_join(sinco11, by = "s11_unit")
+```
+
+Vemos la estructura de la tabla
+
+```{r}
+glimpse(sinco19_11)
+```
+
+Paso 5: crear tabla `sinco19`
+
+Ahora pivotamos a lo largo
+
+```{r}
+sinco19_11 |> 
+  pivot_longer(
+    `1`:`4`,
+    values_to = "skill_level"
+  )
+
+sinco19 <- sinco19_11 |> 
+  pivot_longer(
+    `1`:`4`,
+    values_to = "skill_level"
+  )
+```
+
+Se elimina `name` y `s11_unit`
+
+```{r}
+sinco19 <- sinco19 |> 
+  select(-(s11_unit:name))
+```
+
+Se pivotea a lo ancho 
+
+```{r}
+sinco19 |> 
+  distinct(s19_unit, skill_level) |> 
+  mutate(dummy = "1") |> 
+  pivot_wider(
+    id_cols = s19_unit,
+    names_from = skill_level,
+    names_prefix = "skill_",
+    names_sort = TRUE,
+    values_from = dummy
+  ) |> 
+  select(-skill_NA)
+```
+
+Aparecen 490 ocupaciones unitarias que coincide con lo mostrado en INEGI (2020, p. 22)
+
+```{r}
+sinco19 <- sinco19 |> 
+  distinct(s19_unit, skill_level) |> 
+  mutate(dummy = "1") |> 
+  pivot_wider(
+    id_cols = s19_unit,
+    names_from = skill_level,
+    names_prefix = "skill_",
+    names_sort = TRUE,
+    values_from = dummy
+  ) |> 
+  select(-skill_NA)
+```
+
+Paso 6. Se define el nivel educativo inferior y superior
+
+Se valida la estructura de `sinco19`
+
+```{r}
+glimpse(sinco19)
+```
+
+```{r}
+sinco19 |> 
+  mutate(
+    educacion_inf = case_when(
+      !is.na(skill_1) ~ "1",
+      is.na(skill_1) & !is.na(skill_2) ~ "3",
+      is.na(skill_1) & is.na(skill_2) & !is.na(skill_3) ~ "6",
+      is.na(skill_1) & is.na(skill_2) & is.na(skill_3) & !is.na(skill_4) ~ "7",
+      TRUE ~ NA
+    )
+  )
+```
+
+Al parecer sí está correcto, quiero señalar el caso `2715` se observa que `skill_2 = 1` y `skill_4 = 1`, entonces el rango será secundaria hasta doctorado
+
+Se hace el intento para `educacion_superior`
+
+```{r}
+sinco19 |> 
+  mutate(
+    educacion_sup = case_when(
+      !is.na(skill_4) ~ "9",
+      is.na(skill_4) & !is.na(skill_3) ~ "6",
+      is.na(skill_4) & is.na(skill_3) & !is.na(skill_2) ~ "4",
+      is.na(skill_4) & is.na(skill_3) & is.na(skill_2) & !is.na(skill_1) ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+También está correcto, entonces se crean de forma conjunta 
+
+```{r}
+sinco19 |> 
+  mutate(
+    educacion_min = case_when(
+      !is.na(skill_1) ~ "1",
+      is.na(skill_1) & !is.na(skill_2) ~ "3",
+      is.na(skill_1) & is.na(skill_2) & !is.na(skill_3) ~ "6",
+      is.na(skill_1) & is.na(skill_2) & is.na(skill_3) & !is.na(skill_4) ~ "7",
+      TRUE ~ NA
+    ),
+    educacion_max = case_when(
+      !is.na(skill_4) ~ "9",
+      is.na(skill_4) & !is.na(skill_3) ~ "6",
+      is.na(skill_4) & is.na(skill_3) & !is.na(skill_2) ~ "4",
+      is.na(skill_4) & is.na(skill_3) & is.na(skill_2) & !is.na(skill_1) ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+Ahora se asignan las nuevas variables a la tabla `sinco19`
+
+```{r}
+sinco19 <- sinco19 |> 
+  mutate(
+    educacion_min = case_when(
+      !is.na(skill_1) ~ "1",
+      is.na(skill_1) & !is.na(skill_2) ~ "3",
+      is.na(skill_1) & is.na(skill_2) & !is.na(skill_3) ~ "6",
+      is.na(skill_1) & is.na(skill_2) & is.na(skill_3) & !is.na(skill_4) ~ "7",
+      TRUE ~ NA
+    ),
+    educacion_max = case_when(
+      !is.na(skill_4) ~ "9",
+      is.na(skill_4) & !is.na(skill_3) ~ "6",
+      is.na(skill_4) & is.na(skill_3) & !is.na(skill_2) ~ "4",
+      is.na(skill_4) & is.na(skill_3) & is.na(skill_2) & !is.na(skill_1) ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+Se eliminan las variables `skill`
+
+```{r}
+sinco19 <- sinco19 |> 
+  select(-contains("skill"))
+```
+
+Ahora ya se puede realizar la unión con los valores de `enoe`

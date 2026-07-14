@@ -1,0 +1,1354 @@
+---
+title: "R Notebook"
+output: html_notebook
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de las notas anteriores:
+
+1. C:/Prog/tesis/1_Primeros_pasos.Rmd
+2. C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3. C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4. C:/Prog/tesis/3_Limpieza_datos.Rmd
+
+El objetivo es responder las preguntas de investigación planteadas en la nota física del 23-10-25.
+
+# 1. Limpieza de datos
+
+Esta sección es un resumen del documento: C:/Prog/tesis/3_Limpieza_datos.Rmd
+
+Importación
+
+```{r}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+## Segmentación
+
+```{r}
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+```
+
+## Grupos de edad
+
+```{r}
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    ),
+    edad_7g = as.integer(edad_7g)
+  )
+```
+
+## Carreras universitarias
+
+```{r}
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+```
+
+## Grupos ocupacionales
+
+```{r}
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+```
+
+## Población total
+
+```{r}
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+```
+
+## Población de 12 años y más
+
+```{r}
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+)
+```
+
+## Población de 15 años y más
+
+```{r}
+pob_15ymas <- sdem %>% 
+  filter(
+    r_def == "0",
+    c_res != "2",
+    between(eda, 15, 98)
+  )
+```
+
+## Unión de tablas `sdem` y `coe`
+
+```{r}
+# completo = sdem + coe1 + coe2 con criterio aplicado
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+```
+
+## Profesionistas
+
+```{r}
+profesionistas <- completo %>% 
+  filter(
+    cs_p13_1 == "7" | cs_p13_1 == "8" | cs_p13_1 == "9"
+  )
+```
+
+## Jóvenes de 25 a 34 años
+
+```{r}
+jovenes <- completo %>% 
+  filter(edad_7g == "3")
+```
+
+# 2. Panorama de jóvenes de 25 a 34 años
+
+## 2.1 Población total
+
+¿Cuánto es la población total?
+
+```{r}
+pob_total %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+La ENOE trimestre II de 2025 tiene una muestra de 413,004 que representa a la población total mexicana, esto es, a 130,575,786 de mexicanos.
+
+### Por sexo
+
+```{r}
+pob_total %>% 
+  group_by(sex) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri),
+    pob_tot = sum(pob),
+    prop = pob / pob_tot
+  )
+```
+
+Se observa un "pequeño error" en el cálculo de la proporción de hombres y mujeres de la población total. Los valores de `pob` y `pob_tot` son los mismos y, en consecuencia, el valor de `prop` es igual a `1`, ¿por qué? Porque la función `summarise` trabaja de forma agrupada con la variable `sex` y realiza todos los cálculos en cada valor de dicha variable, se podría decir que trabaja con subtotales; para calcular el total de la variable se debe añadir una función `mutate` después de resumir debido a que `summarise` se desprende de un grupo al mostrar los resultados y se puede trabajar con la tabla de forma completa y no agrupada.
+
+```{r}
+pob_total %>% 
+  group_by(sex) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri)
+  ) %>% 
+  mutate(
+    pob_tot = sum(pob),
+    prop = pob / pob_tot
+  )
+```
+
+Ahora sí, se obtiene la suma total de la variable `pob` y su respectivo porcentaje. Cabe señalar que en este caso no conviene trabajar con `ungroup` ya que `summarise`, por defecto, se desprende del último grupo: "Cuando agrupas por múltiples variables, cada resumen se desprende de un nivel de la agrupación." (Wickham y Grolemund, p. 60), es decir, emplearla será tautológico o redundante pero no genera, en apariencia, un error; veamos el siguiente ejemplo:
+
+```{r}
+pob_total %>% 
+  group_by(sex) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    pob_tot = sum(pob),
+    prop = pob / pob_tot
+  )
+```
+
+Se recomienda utilizar `ungroup` cuando existen agrupaciones de más de dos variables.
+
+### ¿De horizontal a vertical?
+
+Duda: ¿puedo cambiar la manera en cómo están ordenados los datos? es decir, ¿pasarlo de forma horizontal a vertical?
+
+```{r}
+pob_total %>% 
+  group_by(sex) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri)
+  ) %>% 
+  mutate(
+    prop = (pob / sum(pob)) * 100
+  ) %>% 
+  pivot_longer(
+    cols = c("n", "pob", "prop"),
+    names_to = "a",
+    values_to = "b",
+    values_transform = as.integer
+  ) %>% 
+  pivot_wider(
+    names_from = sex,
+    values_from = b
+  ) %>% 
+  mutate(
+    tot = `1` + `2`,
+    a = factor(a),
+    a = fct_recode(
+      a,
+      "Muestra" = "n",
+      "Población total" = "pob",
+      "Porcentaje" = "prop"
+    )
+  ) %>% 
+  rename(
+    "Indicador" = "a",
+    "Hombres" = "1",
+    "Mujeres" = "2",
+    "Total" = "tot"
+  ) 
+```
+
+Si es posible mostrar una tabla y obtener el total de cada fila, pero se necesita mucho código para realizarlo por lo que se deja como duda pendiente y, mientras se realizará en Excel. Además, ¿cómo mostrar totales de cada columna y fila como en Excel?
+
+## 2.1 Población de 15 años y más
+
+¿Cuánta población existe con edad de 15 años y más? Según @inegiconociendoenoe2023 p. 21 se deben aplicar los siguientes criterios:
+
+```
+R_DEF=’00’ AND (C_RES=’1’ OR C_RES=’3’) AND (EDA>=’15’ AND EDA<=’98’)
+```
+
+Dichos criterios (filtros) ya están aplicados a la tabla `pob_15ymas`.
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+El resultado es el mismo cuando se utiliza la tabla `completo`. 
+
+Nota: Anteriormente, el resultado de tabla `pob_total` y `completo` no coincida, en el primero caso era de `324613` y en el segundo de `324431` ¿por qué? Al validar en @inegiconociendoenoe2023 p. 21 se observa que dentro del criterio aplicado consideran el valor `98` de la variable `eda`, es decir, aquellas personas que no especificaron su edad pero tienen más de 12 años y si se observa la construcción de la variable `edad_7g` se mezcló dicho valor junto con el valor `99`, esto es, personas que no mencionaron su edad pero tienen menos de 12 años. ¿Cómo arreglarlo? Añadir otro nivel en la variable `edad_7g` que separe a las personas que no especificaron su edad tanto menores como mayores de edad; se realizó la modificación en línea con los valores de la variable `eda` desde el documento C:/Prog/tesis/3_Limpieza_datos.Rmd. 
+
+```{r}
+completo %>% 
+  filter(between(edad_7g, 2, 98)) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  )
+```
+
+Y también es el mismo con la tabla `pob_12ymas`:
+
+```{r}
+pob_12ymas %>% 
+  filter(between(eda, 15, 98)) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Es decir, la muestra tiene en total a 324,613 personas de 15 años y más que representa a una población de 102,615,200.
+
+### Por sexo
+
+```{r}
+pob_15ymas %>% 
+  group_by(sex) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri)
+  ) %>% 
+  mutate(
+    pob_tot = pob / sum(pob)
+  )
+```
+
+## 2.3 PEA y PNEA
+
+### Agregado
+
+¿De cuánto es la PEA y la PNEA? Primero de forma agregada
+
+```{r}
+pob_15ymas %>% 
+  mutate(
+    clase1 = factor(clase1),
+    clase1 = fct_recode(
+      clase1, 
+      "PEA" = "1",
+      "PNEA" = "2"
+    )
+  ) %>% 
+  group_by(clase1) %>%
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+El total de la PEA es 61,065,005, mientras que de la PNEA es de 41,550,195. Ahora de forma desagregada por sexo y por grupos de edad.
+
+### Por sexo
+
+```{r}
+pob_15ymas %>%
+  count(clase1, sex) %>% 
+  group_by(clase1) %>% 
+  mutate(
+    tot = sum(n),
+    prop = n / tot
+  )
+```
+
+Pero, ¿para obtener los valores del ponderador trimestral? Quizá utilizar `ungroup`.
+
+```{r}
+pob_15ymas %>% 
+  group_by(clase1, sex) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri)
+  ) %>% 
+  mutate(
+    n_tot = sum(n),
+    pob_tot = sum(pob),
+    prop_pob = pob / pob_tot
+  )
+``` 
+
+Se observa que no es necesario utilizar la función `ungroup` debido a que la función `summarise` "suelta" (se desprende) del último grupo señalado en `group_by` por lo que puede trabajarse con el `grupo 1`, en este caso se desprende del grupo `sex` y se añaden más variables (columnas) con `mutate`. 
+
+Por otra parte, se observa que de la PEA, el 59% está compuesto por hombres y el 41% por mujeres, en el caso de la PNEA sólo el 29% son hombres y el 71% mujeres. 
+
+### Desagregado 
+
+```{r}
+pob_15ymas %>% 
+  mutate(
+    clase1 = factor(clase1),
+    clase1 = fct_recode(
+      clase1, 
+      "PEA" = "1",
+      "PNEA" = "2"
+    ),
+    clase2 = factor(clase2),
+    clase2 = fct_recode(
+      clase2,
+      "Población ocupada" = "1", 
+      "Población desocupada" = "2",
+      "Disponible" = "3",
+      "No disponibles" = "4"
+    )
+  ) %>% 
+  group_by(clase1, clase2) %>%
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Por parte de la PEA, hay una población ocupada de 59,440,760 y desocupada de 1,624,245. 
+
+## 2.4 Tasa de participación
+
+### Método de cálculo
+
+Se procede a calcular la tasa de participación, según @inegiconociendoenoe2023 p. 28 se calcula como sigue:
+
+$$
+tp = \frac{PEA}{P15yMAS} * 100
+$$
+
+Donde
+
+$PEA$: `clase1 == 1`,
+$P15yMAS$: `eda=15 a 98`, en este caso, es la tabla `pob_15ymas`
+
+### Agregado
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    pea = sum(clase1 == 1),
+    pob_15ymas = n(),
+    tp = pea / pob_15ymas
+  )
+```
+
+Al validar en @inegienoet22025r p. 8, se observa que la tasa de participación es del 59.5% mientras que a nosotros nos arroja una tasa de 60.23%, ¿por qué? Al contastar en un Excel, la diferencia radica en que se utilizó la muestra y no el ponderador trimestral, es decir, para obtener el resultado en concordancia con INEGI debemos utilizar la variable `fac_tri`.
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    pea = sum(fac_tri[clase1 == 1]),
+    pob_15ymas = sum(fac_tri),
+    tp = pea / pob_15ymas
+  )
+```
+
+Ahora sí, los resultados concuerdan con @inegienoet22025r p. 8, la tasa de participación es del 59.5%. 
+
+Duda: ¿arrojará el mismo resultado si utilizó la tabla `pob_12ymas`?
+
+```{r}
+pob_12ymas %>% 
+  summarise(
+    pea = sum(fac_tri[clase1 == 1]),
+    pob_15ymas = sum(fac_tri),
+    tp = pea / pob_15ymas
+  )
+```
+
+Se observa que no arroja el mismo resultado, entonces deben existir dos tablas:
+
+1. Tabla que considera a la población de 12 años y más para unir las tablas `sdem` y `coe`
+2. Tabla que filtra a la población de 15 años y más para calcular los indicadores y las tasas correspondientes.
+
+Por lo que se creó la tabla `pob_15ymas` que refiere el punto 2.
+
+### Por sexo
+
+Se intentará obtener la tasa de participación por sexo
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    tot = sum(fac_tri),
+    h_tot = sum(fac_tri[sex == 1]),
+    m_tot = sum(fac_tri[sex == 2]),
+    prop_h_tot = h_tot / sum(fac_tri),
+    prop_m_tot = m_tot / sum(fac_tri),
+    pea_tot = sum(fac_tri[clase1 == 1]),
+    h_pea = sum(fac_tri[sex == 1 & clase1 == 1]),
+    m_pea = sum(fac_tri[sex == 2 & clase1 == 1]),
+    # tp = pea / pob_15ymas INEGI(2023: 28)
+    tp_tot = pea_tot / tot,
+    tp_h = h_pea / h_tot,
+    tp_m = m_pea / m_tot,
+    # comprobación
+    comprob = (prop_h_tot * tp_h) + (prop_m_tot * tp_m)
+  ) %>% 
+  select(tp_tot, tp_h, tp_m)
+```
+
+### Comprobación
+
+Para corroborar nuestro resultado, se calcula la media ponderada de la tasa de participación:
+
+$$
+W = \frac{\sum_{i = 1}^n w_i * X_i}{\sum_{i = 1}^n w_i}
+$$
+
+Donde
+
+$W$: media ponderada,
+$w_i$: ponderación (porcentaje) que tiene la observación $i$,
+$X_i$: valor de la observación $i$,
+$\sum_{i = 1}^n w_i$: suma de los porcentajes de todas las observaciones
+
+En nuestro caso, $w_i$ es la proporción de cada sexo en la población de 15 y más por lo que:
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    tot = sum(fac_tri),
+    h_tot = sum(fac_tri[sex == 1]),
+    m_tot = sum(fac_tri[sex == 2]),
+    prop_h_tot = h_tot / sum(fac_tri),
+    prop_m_tot = m_tot / sum(fac_tri),
+    pea_tot = sum(fac_tri[clase1 == 1]),
+    h_pea = sum(fac_tri[sex == 1 & clase1 == 1]),
+    m_pea = sum(fac_tri[sex == 2 & clase1 == 1]),
+    # tp = pea / pob_15ymas INEGI(2023: 28)
+    tp_tot = pea_tot / tot,
+    tp_h = h_pea / h_tot,
+    tp_m = m_pea / m_tot,
+    # comprobación
+    comprob = (prop_h_tot * tp_h) + (prop_m_tot * tp_m),
+    msj = if_else(tp_tot == comprob, "ok", "no")
+  ) %>% 
+  pivot_longer(
+    cols = everything(),
+    values_transform = as.character
+  )
+```
+
+Es decir,
+
+$$
+tp = \frac{(0.467823 * 0.750876) + (0.532177 * 0.458138)}{1} = 0.351277 + 0.24381 = 0.59508733
+$$
+
+Se observa que la media ponderada y la media agregada es la misma, asimismo el resultado coincide con @inegienoet22025r p. 8 ¡Enhorabuena!
+
+## 2.5 Tasa de informalidad laboral
+
+### Método de cálculo
+
+Se utiliza la Tasa de informalidad laboral 1 (TIL1), @inegiconociendoenoe2023 p. 30
+
+$$
+TIL1 = \frac{POI}{PO}
+$$
+
+Donde
+
+$POI$: población en ocupación informal (`EMP_PPAL == 1`),
+$PO$: población ocupada (`clase2 == 1`)
+
+### General
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  )
+```
+
+El resultado también coincide con @inegienoet22025r p. 19
+
+### Por sexo
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po,
+    poi_h = sum(fac_tri[emp_ppal == 1 & sex == 1]),
+    poi_m = sum(fac_tri[emp_ppal == 1 & sex == 2]),
+    po_h = sum(fac_tri[clase2 == 1 & sex == 1]),
+    po_m = sum(fac_tri[clase2 == 1 & sex == 2]),
+    prop_poi_h = poi_h / poi,
+    prop_poi_m = poi_m / poi,
+    prop_po_h = po_h / po,
+    prop_po_m = po_m / po,
+    til1_h = poi_h / po_h,
+    til1_m = poi_m / po_m,
+    comprob = (til1_h * prop_po_h) + (til1_m * prop_po_m),
+    msj = if_else(til1 == comprob, 1, 0)
+  ) %>% 
+  pivot_longer(
+    cols = everything(),
+    values_transform = as.character
+  )
+```
+
+El mensaje de validación arroja un error (`0`), pero desconozco el motivo y al validar en Excel el resultado es afirmativo, es decir, debería mostrar `1` ¿por qué? Como sea, el resultado es el mismo en @inegienoet22025r p. 19. Se deja sólo los datos relacionados a `ti1`.
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po,
+    poi_h = sum(fac_tri[emp_ppal == 1 & sex == 1]),
+    poi_m = sum(fac_tri[emp_ppal == 1 & sex == 2]),
+    po_h = sum(fac_tri[clase2 == 1 & sex == 1]),
+    po_m = sum(fac_tri[clase2 == 1 & sex == 2]),
+    prop_poi_h = poi_h / poi,
+    prop_poi_m = poi_m / poi,
+    prop_po_h = po_h / po,
+    prop_po_m = po_m / po,
+    til1_h = poi_h / po_h,
+    til1_m = poi_m / po_m,
+    comprob = (til1_h * prop_po_h) + (til1_m * prop_po_m),
+    msj = if_else(til1 == comprob, 1, 0)
+  ) %>% 
+  select(
+    contains("prop_po_"), 
+    contains("til")
+  ) %>% 
+  pivot_longer(
+    cols = everything(),
+    values_transform = as.character
+  )
+```
+
+Quizá las líneas de código se pueden simplificar con `group_by`
+
+```{r}
+pob_15ymas %>% 
+  group_by(sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    prop_po = po / sum(po),
+  ) 
+```
+
+Se observa que sí se simplifican las líneas de código. Por su parte, existen dos maneras de comprobar el resultado desagregado:
+
+```{r}
+pob_15ymas %>% 
+  group_by(sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    prop_po = po / sum(po),
+    # comprob = til1 * prop_po # opc 1
+  )  %>% 
+  summarise(
+    # til1_tot = sum(comprob) # opc 1
+    til1_tot = sum(til1 * prop_po) # opc 2
+  )
+```
+
+
+
+### Por grupos de edad
+
+```{r}
+pob_15ymas %>%
+  group_by(edad_7g) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    prop_po = po / sum(po)
+  )
+```
+
+De forma gráfica
+
+```{r}
+pob_15ymas %>%
+  filter(edad_7g != 98) %>% 
+  group_by(edad_7g) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    prop_po = po / sum(po)
+  ) %>% 
+  ggplot(aes(edad_7g, til1)) + 
+  geom_point() + 
+  geom_line()
+```
+
+Comprobación
+
+```{r}
+pob_15ymas %>%
+  group_by(edad_7g) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    prop_po = po / sum(po)
+  ) %>% 
+  summarise(
+    comprob = sum(til1 * prop_po)
+  )
+``` 
+
+### Por grupos de edad y sexo
+
+```{r}
+pob_15ymas %>% 
+  group_by(edad_7g, sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    prop_po = po / sum(po)
+  )
+```
+
+Comprobación
+
+Se puede obtener la `til1` por edad y agregada:
+
+Por edad
+
+```{r}
+pob_15ymas %>% 
+  group_by(edad_7g, sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  # ungroup() %>% 
+  mutate(
+    prop_po = po / sum(po)
+  ) %>% 
+  summarise(
+    comprob = sum(til1 * prop_po)
+  )
+```
+
+Agregada
+
+```{r}
+pob_15ymas %>% 
+  group_by(edad_7g, sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  ungroup() %>%
+  mutate(
+    prop_po = po / sum(po)
+  ) %>% 
+  summarise(
+    comprob = sum(til1 * prop_po)
+  )
+```
+
+La cuestión es ¿cómo graficar? Mediante el argumento estético `color` o `fill`
+
+```{r}
+pob_15ymas %>% 
+  filter(edad_7g != 98) %>% 
+  group_by(edad_7g, sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(edad_7g, til1)) + 
+  geom_point(aes(color = sex)) + 
+  geom_line(aes(color = sex))
+```
+
+La tasa de informalidad laboral (TIL1) tiene una forma cóncava entre los grupos de edad, es decir, los grupos de menor y mayor edad (15 a 24 y  65 y más, respectivamente) presentan la tasa más elevada, en el primer caso es del 67% y en el segundo de 77%; no obstante las mujeres presentan la mayor tasa desde 25 hasta 65 años y más. ¿De cuánto es la diferencia porcentual?
+
+```{r}
+pob_15ymas %>% 
+  group_by(edad_7g, sex) %>% 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == 1]),
+    po = sum(fac_tri[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  transmute(
+    til1_dif = til1 - lag(til1)
+  )
+```
+
+La diferencia es superior al 5% en los grupos de mayor de edad (de 55 años en adelante).
+
+### Jóvenes
+
+#### Por sexo
+
+```{r}
+jovenes %>% 
+  group_by(sex) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) 
+```
+
+No existe mucha diferencia cuando se calcula la til1 por sexo.
+
+#### Por nivel de estudios
+
+```{r}
+jovenes %>% 
+  group_by(cs_p13_1) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  ggplot(aes(cs_p13_1, til1)) +
+  geom_col()
+```
+
+Para el caso de jóvenes de 25 a 34 años con estudios profesionales, presentan una de las tasas de informalidad laboral (TIL1) más bajas con respecto a los demás niveles de estudio; caso contrario de jóvenes sin ningún tipo de estudio (valor `0`) o con estudios básicos, en específico sólo preescolar o primaria debido a que la tasa es cercana al 80%.
+
+Comprobación
+
+```{r}
+jovenes %>% 
+  group_by(cs_p13_1) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  summarise(
+    comprob = sum(til1 * (po / sum(po)))
+  )
+```
+
+El resultado es correcto, véase sección 2.5 > Por grupos de edad
+
+#### Por entidad federativa
+
+```{r}
+jovenes %>%
+  group_by(ent) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, til1)
+  ) %>% 
+  ggplot(aes(ent, til1)) +
+  geom_col() + 
+  coord_flip()
+```
+
+Chiapas, Guerrero y Oaxaca son los estados donde los jóvenes de 25 a 34 años presentan la mayor tasa de informalidad laboral (til1) superior al 70%, por su parte, Coahuila, Nuevo León, y Baja California Sur tienen la menor tasa cercana al 30%.
+
+#### Por estado y nivel de estudios
+
+```{r}
+jovenes %>%
+  filter(cs_p13_1 == 7) %>%  
+  group_by(ent, cs_p13_1) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, til1)
+  ) %>% 
+  ggplot(aes(ent, til1)) +
+  geom_col() + 
+  scale_y_continuous(
+    breaks = seq(0, 1, by = 0.1)
+  ) + 
+  coord_flip()
+```
+
+Para el caso de jóvenes profesionistas, los estados donde presentan mayor tasa de informalidad laboral son Oaxaca (superior al 50%), Hidalgo y Chiapas (ambos cercanos al 50%); muy superior a la agregada del 30%. Por otro lado, Coahuila, Nuevo León y Querétaro tienen la menor tasa de informalidad de alrededor del 20%.
+
+### Profesionistas
+
+#### Agregado
+
+```{r}
+profesionistas %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  )
+```
+
+#### Por grupos de edad y sexo
+
+```{r}
+profesionistas %>% 
+  filter(edad_7g != 98) %>% 
+  group_by(edad_7g, sex) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  ggplot(aes(edad_7g, til1, color = sex)) + 
+  geom_point() + 
+  geom_line()
+```
+
+Los profesionistas más jóvenes (15 a 24) y los de mayor edad (65 y más) son los que tienen la mayor TIL1, cercana al 50% y al 35%, respectivamente; mientras que el grupo de interés (25 a 34 años) presentan una tasa menor al 30%.
+
+#### Por estado
+
+```{r}
+profesionistas %>% 
+  group_by(ent) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, til1)
+  ) %>% 
+  ggplot(aes(ent, til1)) +
+  geom_col() + 
+  # scale_y_continuous(
+  #   breaks = seq(0, 1, by = 0.1)
+  # ) + 
+  coord_flip()
+```
+
+Tlaxcala, Oaxaca e Hidalgo presentan la mayor TIL1.
+Chihuahua, Coahuila y BCS la menor tasa.
+
+#### Por nivel de estudios
+
+```{r}
+profesionistas %>% 
+  filter(edad_7g != 98) %>%
+  group_by(cs_p13_1, edad_7g) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    cs_p13_1 = as.integer(cs_p13_1),
+    edad_7g = factor(edad_7g)
+  ) %>% 
+  ggplot(aes(cs_p13_1, til1, color = edad_7g)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(
+    breaks = seq(7, 9, by = 1)
+  ) + 
+  scale_color_brewer(
+    palette = "Set1"
+  )
+```
+
+En todos los grupos de edad, disminuye la tasa de informalidad al pasar de licenciatura a maestría, por ejemplo en el caso de jóvenes de 25 a 34 años disminuye casi un 10%; no obstante al pasar de maestría a doctorado vuelve a aumentar la tasa de informalidad en el caso de 25 a 34 años y 45 a 54 años, en los demás casos continua disminuyendo la tasa.
+
+#### Por carreras universitarias
+
+```{r}
+profesionistas %>% 
+  filter(edad_7g == 3) %>% 
+  group_by(carrera1) %>% 
+  summarise(
+    poi = sum(fac_tri.x[emp_ppal == 1]),
+    po = sum(fac_tri.x[clase2 == 1]),
+    til1 = poi / po
+  ) %>% 
+  mutate(
+    carrera1 = factor(carrera1),
+    carrera1 = fct_recode(
+      carrera1,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10",
+      # nivel no registrado en INEGI(2016)
+      "No sabe" = "99"
+    ),
+    carrera1 = fct_reorder(carrera1, til1, .desc = TRUE)
+  ) %>% 
+  ggplot(aes(carrera1, til1)) + 
+  geom_col() +
+  scale_x_discrete(
+    labels = scales::label_wrap(width = 25)
+  ) +
+  theme(
+    axis.text.x = element_text(
+      angle = 90,
+      hjust = 1,
+      vjust = 0.5
+      )
+  ) 
+```
+
+La carrera de agronomía y veterinaria es la que presenta la mayor tasa de informalidad superior al 40%, mientras que la carrera de ingeniería, manufactura y construcción es la que tiene la menor tasa casi por encima del 20%.
+
+## 2.6 Desocupados
+
+### Método de cálculo
+
+@inegiconociendoenoe2023 p. 28
+
+$$
+TD = \frac{PD}{PEA} 
+$$
+
+Donde
+
+$PD$: población desocupada (`clase2 == 2`),
+$PEA$ `clase1 == 1`
+
+### General
+
+```{r}
+pob_15ymas %>% 
+  summarise(
+    pd = sum(fac_tri[clase2 == 2]),
+    pea = sum(fac_tri[clase1 == 1]),
+    td = pd / pea
+  )
+```
+
+@inegienoet22025r p. 11 define la desocupación abierta como la población que se encuentra sin trabajo, pero que busca uno y está disponible para trabajar.
+
+### Por sexo
+
+```{r}
+pob_15ymas %>% 
+  group_by(sex) %>% 
+  summarise(
+    pd = sum(fac_tri[clase2 == 2]),
+    pea = sum(fac_tri[clase1 == 1]),
+    td = pd / pea
+  )
+```
+
+### Profesionistas
+
+```{r}
+profesionistas %>% 
+  group_by(edad_7g, cs_p13_1) %>% 
+  summarise(
+    pd = sum(fac_tri.x[clase2 == 2]),
+    pea = sum(fac_tri.x[clase1 == 1]),
+    td = pd / pea
+  )
+```
+
+De forma gráfica
+
+```{r}
+profesionistas %>% 
+  filter(edad_7g != 98) %>% 
+  group_by(edad_7g, cs_p13_1) %>% 
+  summarise(
+    pd = sum(fac_tri.x[clase2 == 2]),
+    pea = sum(fac_tri.x[clase1 == 1]),
+    td = pd / pea
+  ) %>% 
+  ggplot(aes(edad_7g, td, color = cs_p13_1)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_y_continuous(
+    breaks = seq(0, 0.1, by = 0.01)
+  )
+```
+
+La tasa de desocupación es mayor para el caso de licenciatura y, en específico, en el grupo de 15 a 24 años. 
+
+### Causas
+
+```{r}
+profesionistas %>% 
+  filter(p2g2 != "NA") %>% 
+  mutate(
+    p2g2 = factor(p2g2),
+    p2g2 = fct_infreq(p2g2)
+  ) %>% 
+  ggplot(aes(p2g2, fill = sex)) + 
+  geom_bar()
+```
+
+De las razones por la que no se busca trabajo, la mayoría de profesionistas señala que no tiene quién le cuide a sus hijos pequeños, ancianos o enfermos (valor 9), en específico las mujeres; de la razón "No cuenta con la escolaridad, los papeles o la experiencia necesaria para realizar un trabajo" (valor 3) se encuentra en la posición 5 de 12, mientras que "No hay trabajo en su especialidad, oficio o profesión" (valor 2) está en el lugar 9, y "En su localidad no hay trabajo o solo se realiza en ciertas temporadas del año" (valor 5) en la posición 7. 
+
+Por nivel de estudios
+
+```{r}
+profesionistas %>%
+  filter(p2g2 != "NA" & edad_7g != 98) %>% 
+  mutate(
+    edad_7g = factor(edad_7g)
+  ) %>% 
+  group_by(edad_7g, p2g2) %>% 
+  summarise(
+    n = n()
+  ) %>%   
+  ggplot(aes(edad_7g, n, fill = p2g2)) + 
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette = "Paired")
+```
+
+La mayoría de jóvenes profesionistas que reportaron algunas razones por las que actualmente no buscan trabajo, la mayoría señala porque "No tiene quién le cuide a sus hijos pequeños, ancianos o enfermos" (color café), también por "Otras razones personales" (color verde), seguido de "No cuenta con la escolaridad, los papeles o la experiencia necesaria para realizar un trabajo" (color rojo). Para el caso de profesionistas de mayor edad, señalan "Piensa que por su edad o por su aspecto no lo aceptarían en un trabajo" (color mamey).
+
+Razones por las que no trabajó 
+
+```{r}
+profesionistas %>% 
+  filter(p1c != "NA" & p1c != 99 & edad_7g != 98) %>% 
+  mutate(
+    edad_7g = factor(edad_7g)
+  ) %>% 
+  group_by(edad_7g, p1c) %>% 
+  summarise(
+    n = n()
+  ) %>%   
+  ggplot(aes(edad_7g, n, fill = p1c)) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette = "Paired")
+```
+
+La mayoría de profesionistas en todos los grupos de edad, señala que no trabajó la semana pasada por vacaciones (valor 5, color naranja).
+
+## 2.7 Más de 1 trabajo
+
+```{r}
+unique(profesionistas$p7)
+```
+
+```{r}
+profesionistas %>% 
+  filter(
+    p7 != "NA" & p7 != "7" & p7 != 9
+  ) %>% 
+  mutate(
+    edad_7g = factor(edad_7g)
+  ) %>% 
+  group_by(edad_7g, p7) %>% 
+  summarise(
+    n = n()
+  ) %>%   
+  ggplot(aes(edad_7g, n, fill = p7)) +
+  geom_col(position = "fill") +
+  scale_fill_brewer(palette = "Paired")
+```
+
+De los profesionistas que reportaron tener un segundo trabajo, alrededor del 25% reporta realizar otra actividad como "prestar servicios (dar clases, cortar el cabello, lavar ropa ajena)" (valor 2) y "trabajar como asalariado (sueldo, salario o jornal)" (valor 5). ¿Cuántos profesionistas tienen un segundo trabajo?
+
+```{r}
+profesionistas %>% 
+  filter(edad_7g != 98) %>% 
+  ggplot(aes(edad_7g, fill = t_tra)) + 
+  geom_bar(position = "fill")
+```
+
+Un porcentaje inferior al 10% de profesionistas tiene dos trabajos.
+
+## 2.8 Búsqueda de otro trabajo
+
+```{r}
+unique(profesionistas$buscar5c)
+```
+
+```{r}
+profesionistas %>% 
+  count(buscar5c)
+```
+
+```{r}
+profesionistas %>% 
+  mutate(buscar5c = as.integer(buscar5c)) %>% 
+  filter(between(buscar5c, 1, 3) & edad_7g != 98) %>% 
+  mutate(
+    buscar5c = factor(buscar5c), 
+    edad_7g = factor(edad_7g)
+    ) %>% 
+  ggplot(aes(edad_7g, fill = buscar5c)) + 
+  geom_bar()
+```
+
+La mayoría de profesionistas buscan otro trabajo para cambiarse de trabajo, principalmente en el caso de 25 a 34 años.
+
+Nota: recuerda realizar los cálculos con `fac_tri` y no con el conteo.
+
+## 2.8 Condiciones precarias
+
+### Prestaciones médicas
+
+```{r}
+unique(profesionistas$medica5c)
+```
+
+```{r}
+profesionistas %>% 
+  filter(edad_7g != 98) %>% 
+  group_by(edad_7g, medica5c) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    prop = tot / sum(tot)
+  ) %>% 
+  ggplot(aes(edad_7g, prop, color = medica5c)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_color_brewer(palette = "Set1")
+```
+
+Alrededor del 20% de profesionistas, no tiene acceso a prestaciones de salud (valor 1), por otro lado el acceso a instituciones de salud y otras prestaciones aumenta conforme se incrementa la edad pero hasta los 44 años después disminuye de forma agresiva el porcentaje de profesionistas con acceso hasta el 10% ¿por qué? por el valor `0` de `edad_7g` ¿qué representa? @inegienoebd2024 p. 20 no lo especifica, pueden ser valores faltantes `NA`. Vamos a averiguarlo.
+
+```{r}
+profesionistas %>%
+  group_by(medica5c) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) 
+```
+
+El campo precodificado `medica5c` refiere al caso de personas ocupadas.
+
+```{r}
+pob_15ymas %>%
+  mutate(estudios = as.integer(cs_p13_1)) %>% 
+  filter(between(estudios, 7, 9)) %>% 
+  group_by(medica5c, clase1) %>%
+  summarise(
+    tot = sum(fac_tri)
+  ) 
+```
+
+Se observa que el valor `0` proviene tanto de la `PEA` y la `PNEA`. 
+
+Existe otro campo precodificado: `seg_soc`.
+
+```{r}
+profesionistas %>% 
+  mutate(edad_7g = factor(edad_7g)) %>% 
+  group_by(edad_7g, seg_soc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    prop = tot / sum(tot)
+  ) %>% 
+  ggplot(aes(edad_7g, prop, fill = seg_soc)) + 
+  geom_col() + 
+  scale_y_continuous(
+    breaks = seq(0, 1, by = 0.1)
+  )
+```
+
+Alrededor del 25% de profesionistas no tiene acceso a instituciones de salud (valor 1), sin embargo, la proporción de profesionistas con acceso a instituciones de salud es cercano al 10% en jóvenes de 15 a 24 años (valor 2), cercano al 50% para el caso de 25 a 54 años (valores 3 al 5), y de ahí vuelve a bajar hasta casi un porcentaje de 10% en 65 años y más ¿por qué? Cabe señalar que existe una elevada proporción del valor `0`. ¿Qué representa? El campo precodificado `seg_soc` aborda solamente a la población ocupada, vamos a averiguarlo.
+
+```{r}
+pob_15ymas %>% 
+  mutate(nivel_estudios = as.integer(cs_p13_1)) %>% 
+  filter(between(nivel_estudios, 7, 9)) %>% 
+  group_by(seg_soc, clase1) %>% 
+  summarise(
+    tot = sum(fac_tri)
+  )
+```
+
+El valor es el mismo que en el caso de `medica5c`.
+
+Veamos la informalidad en el caso de profeisonistas.
+

@@ -1,0 +1,617 @@
+---
+title: "Principales hallazgos"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Librerías
+
+```{r setup}
+# paquetes ==========================================================
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# # calcular la moda
+# library(DescTools)
+# # coeficiente de asimetría
+# library(moments)
+# library(EnvStats)
+library(modelr)
+# análisis de residuos
+library(performance)
+library(car)
+library(stats)
+library(nortest)
+library(moments)
+library(lmtest)
+library(see)
+
+# importación =======================================================
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación ======================================================
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  escolaridad = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  escolaridad = if_else(escolaridad != 99, escolaridad, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ing_mensual = as.double(ingocup),
+  # 0 pasa a NA ya que 0==NA en p6b2
+  ing_mensual = if_else(ing_mensual != 0, ing_mensual, NA),
+  # promedio de ingreso por hora
+  ing_hora = as.double(ing_x_hrs),
+  # 0 pasa a NA ya que 0==NA en p6b2 y en dur9c == 1 & 9
+  ing_hora = if_else(ing_hora != 0, ing_hora, NA)
+)
+
+# construcción de variables =========================================
+# grupos de edad OECD(2019: 135)
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12 INEGI(2024:16)
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12 INEGI(2024:16)
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitaria INEGI(2016: 13)
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales INEGI(2019: 22)
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# creación de tablas ================================================
+# población total INEGI(2023:21)
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe INEGI(2023:9)
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más INEGI(2023:21)
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+
+# sobre-educación ===================================================
+
+# con el grupo división INEGI(2020: 22) -----------------------------
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu1 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(escolaridad) - sd(escolaridad),
+    vv_pos_ocu1 = mean(escolaridad) + sd(escolaridad),
+    mediana_ocu1 = median(escolaridad)
+  )
+
+# método: moda
+edu_req2_ocu1 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion1, escolaridad) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu1" = "escolaridad") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu1, by = "ocupacion1") %>% 
+  left_join(edu_req2_ocu1, by = "ocupacion1") %>% 
+  mutate(
+    escolaridad = as.double(escolaridad), 
+    moda_ocu1 = as.double(moda_ocu1),
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      # required
+      between(escolaridad, vv_neg_ocu1, vv_pos_ocu1) ~ 0,
+      # over
+      escolaridad > vv_pos_ocu1 ~ 1,
+      # under
+      escolaridad < vv_neg_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu1 = case_when(
+      # required
+      escolaridad == mediana_ocu1 ~ 0,
+      # over
+      escolaridad > mediana_ocu1 ~ 1,
+      # under
+      escolaridad < mediana_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu1 = case_when(
+      # required
+      escolaridad == moda_ocu1 ~ 0,
+      # over
+      escolaridad > moda_ocu1 ~ 1,
+      # under
+      escolaridad < moda_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias 
+    # media
+    over_vv_ocu1 = if_else(escolaridad > vv_pos_ocu1, 1, 0),
+    req_vv_ocu1 = if_else(between(escolaridad, vv_neg_ocu1, vv_pos_ocu1), 1, 0),
+    under_vv_ocu1 = if_else(escolaridad < vv_neg_ocu1, 1, 0),
+    # mediana
+    over_med_ocu1 = if_else(escolaridad > mediana_ocu1, 1, 0),
+    req_med_ocu1 = if_else(escolaridad == mediana_ocu1, 1, 0),
+    under_med_ocu1 = if_else(escolaridad < mediana_ocu1, 1, 0),
+    # moda
+    over_mod_ocu1 = if_else(escolaridad > moda_ocu1, 1, 0),
+    req_mod_ocu1 = if_else(escolaridad == moda_ocu1, 1, 0),
+    under_mod_ocu1 = if_else(escolaridad < moda_ocu1, 1, 0),
+    # variables de años de sobre o infra
+    # mediana
+    so_med_ocu1 = if_else(escolaridad > mediana_ocu1, escolaridad - mediana_ocu1, 0),
+    sr_med_ocu1 = if_else(escolaridad == mediana_ocu1, escolaridad, 0),
+    su_med_ocu1 = if_else(escolaridad < mediana_ocu1, mediana_ocu1 - escolaridad, 0),
+    # moda
+    so_mod_ocu1 = if_else(escolaridad > moda_ocu1, escolaridad - moda_ocu1, 0),
+    sr_mod_ocu1 = if_else(escolaridad == moda_ocu1, escolaridad, 0),
+    su_mod_ocu1 = if_else(escolaridad < moda_ocu1, moda_ocu1 - escolaridad, 0)
+  )
+
+# con el grupo principal INEGI(2020: 22) ----------------------------
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu2 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion2) %>%
+  summarise(
+    vv_neg_ocu2 = mean(escolaridad) - sd(escolaridad),
+    vv_pos_ocu2 = mean(escolaridad) + sd(escolaridad),
+    mediana_ocu2 = median(escolaridad)
+  )
+
+# método: moda
+edu_req2_ocu2 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion2, escolaridad) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu2" = "escolaridad") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu2, by = "ocupacion2") %>% 
+  left_join(edu_req2_ocu2, by = "ocupacion2") %>% 
+  mutate(
+    escolaridad = as.double(escolaridad), 
+    moda_ocu2 = as.double(moda_ocu2),
+    # verdugo y verdugo
+    edu_mis_vv_ocu2 = case_when(
+      # required
+      between(escolaridad, vv_neg_ocu2, vv_pos_ocu2) ~ 0,
+      # over
+      escolaridad > vv_pos_ocu2 ~ 1,
+      # under
+      escolaridad < vv_neg_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu2 = case_when(
+      # required
+      escolaridad == mediana_ocu2 ~ 0,
+      # over
+      escolaridad > mediana_ocu2 ~ 1,
+      # under
+      escolaridad < mediana_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu2 = case_when(
+      # required
+      escolaridad == moda_ocu2 ~ 0,
+      # over
+      escolaridad > moda_ocu2 ~ 1,
+      # under
+      escolaridad < moda_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias
+    # media
+    over_vv_ocu2 = if_else(escolaridad > vv_pos_ocu2, 1, 0),
+    req_vv_ocu2 = if_else(between(escolaridad, vv_neg_ocu2, vv_pos_ocu2), 1, 0),
+    under_vv_ocu2 = if_else(escolaridad < vv_neg_ocu2, 1, 0),
+    # mediana
+    over_med_ocu2 = if_else(escolaridad > mediana_ocu2, 1, 0),
+    req_med_ocu2 = if_else(escolaridad == mediana_ocu2, 1, 0),
+    under_med_ocu2 = if_else(escolaridad < mediana_ocu2, 1, 0),
+    # moda
+    over_mod_ocu2 = if_else(escolaridad > moda_ocu2, 1, 0),
+    req_mod_ocu2 = if_else(escolaridad == moda_ocu2, 1, 0),
+    under_mod_ocu2 = if_else(escolaridad < moda_ocu2, 1, 0),
+    # variables de años de sobre o infra
+    # mediana
+    so_med_ocu2 = if_else(escolaridad > mediana_ocu2, escolaridad - mediana_ocu2, 0),
+    sr_med_ocu2 = if_else(escolaridad == mediana_ocu2, escolaridad, 0),
+    su_med_ocu2 = if_else(escolaridad < mediana_ocu2, mediana_ocu2 - escolaridad, 0),
+    # moda
+    so_mod_ocu2 = if_else(escolaridad > moda_ocu2, escolaridad - moda_ocu2, 0),
+    sr_mod_ocu2 = if_else(escolaridad == moda_ocu2, escolaridad, 0),
+    su_mod_ocu2 = if_else(escolaridad < moda_ocu2, moda_ocu2 - escolaridad, 0)
+  )
+
+# otras variables explicativas ======================================
+
+ocupada <- ocupada %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si eda == 98, se convierte a NA
+    # experiencia = edad - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exp_lab = eda.x - escolaridad - 6,
+    exp_lab = if_else(exp_lab > 0 & eda.x != 98, exp_lab, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exp_lab2 = exp_lab ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casado
+    casad = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jef_hog = if_else(par_c == 101, 1, 0)
+  )
+
+# variables dicotómicas para los grupos ocupacionales
+# grupo de referencia: 9 INEGI(2020: 27)
+ocupada <- ocupada %>% 
+  mutate(
+    div1 = if_else(ocupacion1 == 1, 1, 0),
+    div2 = if_else(ocupacion1 == 2, 1, 0),
+    div3 = if_else(ocupacion1 == 3, 1, 0),
+    div4 = if_else(ocupacion1 == 4, 1, 0),
+    div5 = if_else(ocupacion1 == 5, 1, 0),
+    div6 = if_else(ocupacion1 == 6, 1, 0),
+    div7 = if_else(ocupacion1 == 7, 1, 0),
+    div8 = if_else(ocupacion1 == 8, 1, 0),
+    div9 = if_else(ocupacion1 == 9, 1, 0)
+  )
+```
+
+# Incidencia
+
+Media
+
+```{r}
+ocupada %>% 
+  count(edu_mis_vv_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Moda
+
+```{r}
+ocupada %>% 
+  count(edu_mis_mod_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Mediana
+
+```{r}
+ocupada %>% 
+  count(edu_mis_med_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Jóvenes profesionistas
+
+```{r}
+# Se considera licenciatura, maestría y doctorado
+jov_prof <- ocupada %>% 
+  mutate(grado_esc = as.integer(cs_p13_1)) %>% 
+  filter(between(grado_esc, 7, 9) & edad_7g == 3)
+```
+
+Media
+
+```{r}
+jov_prof %>% 
+  count(edu_mis_vv_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Moda
+
+```{r}
+jov_prof %>% 
+  count(edu_mis_mod_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Mediana
+
+```{r}
+jov_prof %>% 
+  count(edu_mis_med_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+# Ingreso mensual promedio
+
+## General
+
+Método: Media
+
+```{r}
+ocupada %>% 
+  filter(!is.na(ing_mensual)) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+Método: Moda
+
+```{r}
+ocupada %>% 
+  filter(!is.na(ing_mensual)) %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+Método: Mediana
+
+```{r}
+ocupada %>% 
+  filter(!is.na(ing_mensual)) %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+Si no se considera al grupo 1 y 2
+
+Moda
+
+```{r}
+ocupada %>% 
+  filter(!is.na(ing_mensual) & (ocupacion1 != 1 & ocupacion1 != 2)) %>% 
+  group_by(edu_mis_mod_ocu1) %>%
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+## Jóvenes profesionistas
+
+Método: Media
+
+```{r}
+jov_prof %>% 
+  group_by(edu_mis_vv_ocu1) %>%
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+Método: Moda
+
+```{r}
+jov_prof %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+Método: Mediana
+
+```{r}
+jov_prof %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+# Efecto salarial
+
+## General
+
+Verdugo
+
+```{r}
+modelo_vv_ocu1_amp <- lm(log(ing_mensual) ~ escolaridad + over_vv_ocu1 + under_vv_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = ocupada)
+summary.lm(modelo_vv_ocu1_amp)
+```
+
+ORU
+
+```{r}
+mod_oru_mod_ocu1_amp <- lm(log(ing_mensual) ~ so_mod_ocu1 + sr_mod_ocu1 + su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = ocupada)
+summary.lm(mod_oru_mod_ocu1_amp)
+```
+
+## Jóvenes profesionistas
+
+Verdugo
+
+```{r}
+modelo_vv_jov_prof_amp <- lm(log(ing_mensual) ~ escolaridad + over_vv_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = jov_prof)
+summary.lm(modelo_vv_jov_prof_amp)
+```
+
+```{r}
+mod_oru_mod_jov_prof_amp <- lm(log(ing_mensual) ~ so_mod_ocu1 + sr_mod_ocu1 + su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = jov_prof)
+summary.lm(mod_oru_mod_jov_prof_amp)
+```
+
+# Análisis de residuos
+
+## Jóvenes
+
+Verdugo
+
+Media
+
+```{r}
+mean(modelo_vv_jov_prof_amp$residuals)
+```
+
+Gráficas
+
+```{r}
+par(mfrow = c(2, 2))
+plot(modelo_vv_jov_prof_amp)
+```
+
+Histograma
+
+```{r}
+hist(modelo_vv_jov_prof_amp$residuals, prob = TRUE)
+lines(density(modelo_vv_jov_prof_amp$residuals))
+```
+
+Pruebas estadísticas
+
+
+```{r}
+# normalidad
+moments::jarque.test(resid(modelo_vv_jov_prof_amp))
+
+# homocedasticidad
+lmtest::bptest(modelo_vv_jov_prof_amp)
+
+# autocorrelación
+lmtest::dwtest(modelo_vv_jov_prof_amp)
+```
+
+ORU
+
+Media
+
+```{r}
+mean(mod_oru_mod_jov_prof_amp$residuals)
+```
+
+Gráficas
+
+```{r}
+par(mfrow = c(2, 2))
+plot(mod_oru_mod_jov_prof_amp)
+```
+
+Histograma
+
+```{r}
+hist(mod_oru_mod_jov_prof_amp$residuals, prob = TRUE)
+lines(density(mod_oru_mod_jov_prof_amp$residuals))
+```
+
+```{r}
+# normalidad
+moments::jarque.test(resid(mod_oru_mod_jov_prof_amp))
+
+# homocedasticidad
+lmtest::bptest(mod_oru_mod_jov_prof_amp)
+
+# autocorrelación
+lmtest::dwtest(mod_oru_mod_jov_prof_amp)
+```

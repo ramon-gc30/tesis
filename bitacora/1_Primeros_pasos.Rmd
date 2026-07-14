@@ -1,0 +1,503 @@
+---
+title: "Tesis"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# 1. Materiales de apoyo
+
+-   ¿Qué es la ENOE?: INEGI (2019)
+-   Grupos ocupacionales: INEGI(2020b)
+-   Áreas y carreras técnicas y universitarias: INEGI(2016) **DESCARGADO**
+-   Clasificación geográfica: INEGI(2020a) o INEGI(s.f.)
+-   Conocer la estructura de las bases de datos: INEGI(2023) **DESCARGADO**
+-   Metadatos: INEGI(2024) **DESCARGADO**
+
+En INEGI (2019) explica cómo se realiza la ENOE, desde el marco institucional del INEGI, el marco histórico y los aspectos relacionados al diseño y ejecución de la encuesta. Puede darnos una idea general.
+
+En INEGI(2023), presentan los aspectos principales que nos permiten conocer y, principalmente, manipular los datos provenientes de la ENOE tales como relacionar las distintas tablas mediante sus llaves primarias (c.fr. SQL), el total de columnas, los factores de expansión según cada grupo, y el proceso de filtrado que nos permite realizar los cálculos de forma correcta entre distintos grupos. Incluye un ejemplo de la ENOE Q4/2022, puedo realizar el ejemplo para practicar. Recuerda tomar apuntes sintéticos del texto.
+
+**Sitio web**: En "Microdatos", viene hasta el II Trimestre de 2025 en formato CSV.
+
+**Composición de la ENOE**: Según "Estructura de la base de datos", la ENOE está compuesta por cinco tablas:
+
+1.  Vivienda
+2.  Hogar
+3.  Sociodemográfico
+4.  Ocupación y empleo I
+5.  Ocupación y empleo II
+
+# 2. Primeros pasos
+
+En *C:\\Users\\Ramon GC\\Documents\\UNAM_Economia\\Tesis\\Temas\\Sobre-educacion\\Literatura\\Metodologia\\Inegi. ENOE. Estructura de la base de datos.pdf*, tengo los metadatos de la ENOE y asimismo dentro de *Documentos* del sitio web existe una sección *Metadatos (estándar DDI)*
+
+Ya se descargó la ENOE II Trimestre 2025, se encuentra en: *C:\\Users\\Ramon GC\\Documents\\UNAM_Economia\\Tesis\\Temas\\Sobre-educacion\\Datos\\enoe_2025_trim2_csv.zip* Se realizará una prueba en R con la tabla *Sociodemográfico*
+
+## Ejercicio 1: ingreso mensual promedio por carreras
+
+Calcular el ingreso salarial promedio de jóvenes entre carreras universitarias
+
+```{r setup}
+library(tidyverse)
+library(ggthemes)
+# se convierten a caracter para segmentar con mutate
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+```{r}
+sdem %>%
+  filter(
+    cs_p13_1 == "7", # estudios nivel profesional (universitario)
+    cs_p16 == "1", # si egreso 
+    eda12c == "3", # grupo de edad 25 a 29 años
+    !is.na(ingocup), # ingreso 
+    ingocup != "0") %>% 
+  group_by(cs_p14_c) %>% # carrera universitaria
+  summarise(
+    total = sum(ingocup),
+    n = n(),
+    promedio = mean(ingocup)
+  ) %>% 
+  arrange(desc(promedio))
+```
+
+Sí se pudo realizar la prueba satisfactoriamente. Existen algunos problemas al momento de segmentar el archivo, pero en términos generales fue un éxito. Se calculó el ingreso mensual promedio entre distintas carreras profesionistas en el grupo de edad de 25 a 29 años.
+
+# 3. ¿Paquetes en R relacionados al INEGI?
+
+Existen paquetes relacionados al INEGI: ¿R tendrá un paquete relacionado al INEGI?
+
+Encontré la siguiente información:
+
+-   <https://cran.r-project.org/web/packages/importinegi/vignettes/importinegi.html>
+-   <https://rpubs.com/Gus_R_A/INEGI_ENCIG2023_roanGus>
+-   <https://www.inegi.org.mx/contenidos/investigacion/etoe/microdatos/etoe_calc_ind_r.pdf>
+-   <https://rpubs.com/Gus_R_A/INEGI_carpetas_comprimidas>
+
+## 3.1 Paquete `importinegi`
+
+*Jueves 18 de septiembre de 2025*
+
+El paquete `importinegi` permite facilitar el uso y descarga de las siguientes bases de datos públicas del INEGI:
+
+-   Censos de Población y de Gobiernos Municipales (¿?)
+-   ENIGH
+-   ENOE
+
+¿Existe? Vamos a constatar
+
+```{r}
+# system.file(package = "importinegi")
+# install.packages("importinegi", dependencies = TRUE)
+# library(importinegi)
+```
+
+Sí existe el paquete!
+
+**Sintaxis de `importinegi::enoe()`**
+
+-   `catalogo_inegi()`: permite conocer el catálogo y documentación correspondiente de las bases de datos; se puede validar la documentación a una base especifica mediante el argumento `id =`. Dicho argumento nos dirige al sección *Red Nacional de Metadatos* de la página del INEGI
+-   `enoe(year = , trimestre = "trim#", ..., integrar = FALSE)`: descarga las bases de datos de la ENOE desde 2005; `year` establece el año de la encuesta, `trimestre` acepta sólo `trim1`, `trim2`, `trim3`, `trim4`, e `integrar` por defecto descarga una lista con cinco bases de datos separadas
+
+```{r}
+# catalogo_inegi()
+# catalogo_inegi(id = 1121)
+
+# enoe_q2 <- enoe(year = 2023, trimestre = "trim1")
+```
+
+Nos arroja un error, al investigar encontramos [^1] que debemos tener habilitado el paquete `zip` (CRAN R, s.f.) y para verificar si lo tenemos, o no, se utiliza, entre otros, la función `system.file()` (Christian, 2019) que devuelve valor nulo ("") si no encuentra el paquete señalado entre paréntesis
+
+[^1]: "Check Permissions: Ensure R has write permissions to the zipdir. You might need to change the directory or adjust permissions". Fuente: IA de Google, prompt *Warning in utils::unzip(temp.enoe, exdir = zipdir) :error 1 al extraer del archivo zip*
+
+```{r}
+# system.file(package = "zip")
+# se puede realizar un algoritmo mediante IF.. ELSE, pero se deja para otro momento
+# install.packages("zip", dependencies = TRUE)
+# library(zip)
+```
+
+Volvemos a utilizar la función `enoe()`
+
+```{r}
+# enoe(year = 2023, trimestre = "trim1")
+```
+
+Sigue con error, ¿por qué? Una posible sugerencia podría ser cargar el paquete `utils`
+
+```{r}
+# system.file(package = "utils")
+# library(utils)
+
+# enoe(year = 2023, trimestre = "trim1")
+```
+
+¿Se genera el error por parte mía o por la función? Encontré una solución (crenteriam, s.f.), ya tenemos un problema con los paquetes así que desinstalaremos, reiniciaremos R y volveremos a instalar
+
+```{r}
+# remove.packages('importinegi')
+# system.file(package = "importinegi")
+# install.packages("importinegi")
+# library(importinegi)
+# library(devtools)
+# devtools::install_github("Villiem/importinegi")
+# importinegi::enoe(year = 2023, trimestre = "trim1")
+```
+
+Como se observa, genera muchos problemas que, a priori, no puedo resolver así que me voy por otras opciones o sólo importó el archivo o directo desde la URL, como señala (Christian, 2019)
+
+## 3.2 Añadir los datos de entrada desde la URL
+
+*Viernes 19 de septiembre de 2025*
+
+Se intenta extraer el archivo ZIP directamente de la página web del INEGI, como señala (Christian, 2019)
+
+```{r}
+# system.file(package = "utils")
+# library(utils)
+
+# zip_file <- "https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/microdatos/enoe_2025_trim2_csv.zip"
+
+# unzip(zip_file, exdir = "C:\\Prog\\tesis")
+
+# egresados <- read_csv("https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/microdatos/enoe_2025_trim2_csv.zip")
+```
+
+Como se observa, arroja el mismo error por lo que me quedo con la opción predeterminada: descargar, descomprimir y anexar a la carpeta.
+
+# 4. Mostrar los valores del campo de estudio (`cs_p14_c`) en texto
+
+*Domingo 14 de septiembre de 2025*
+
+Como se observa, las carreras universitarias se encuentran registradas mediante códigos (caracteres) númericos por lo que debo modificarlas a texto, ¿cómo? Al inicio busqué **Código de carreras profesionistas**, pero no obtuve éxito. Después obtuve el documento [Clasificación mexicana de planes de estudio por campos de formación académica 2016. Educación superior y media superior] (<https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825003335>). Habrá que validar.
+
+*Miércoles 17 de septiembre de 2025*
+
+Se me ocurre una manera de mostrar las carreras universitarias en texto, y no en variables categóricas: crear tibbles con dichos valores y unir los dos tibbles.
+
+*Viernes 19 de septiembre de 2025*
+
+En la base de datos de la ENOE, por ejemplo, se observa que el nivel de estudios se encuentra registrado como números, pero si quiero realizar una gráfica o tabla que muestre no el número sino el nivel educativo en forma de texto ¿cómo lo hago?
+
+### Ejercicio 1.2: validar valores de ciertos factores
+
+En este espacio se ejecutarán las siguientes acciones:
+
+-   Verificar los valores registrados asociados al:
+    -   Grado escolar `CS_P_13_1`
+    -   Clave de la carrera `CS_P14_C`
+    -   Si terminó los estudios: `CS_P16`
+
+```{r}
+# valores del grado escolar
+unique(sdem$cs_p13_1)
+
+# conteo de grado escolar
+sdem %>% 
+  group_by(cs_p13_1) %>% 
+  count()
+
+# conteo de carreras profesionales
+sdem %>% 
+  group_by(cs_p14_c) %>% 
+  count()
+
+# conteo de carreras prof por grado escolar
+sdem %>% 
+  group_by(cs_p13_1, cs_p14_c) %>% 
+  count()
+
+# conteo de carreras prof universitarias
+sdem %>% 
+  group_by(cs_p13_1, cs_p14_c) %>% 
+  filter(cs_p13_1 == 7) %>% 
+  count() %>% 
+  arrange(cs_p14_c)
+
+# conteo de carreras prof universitarias
+sdem %>% 
+  group_by(cs_p13_1, cs_p14_c) %>% 
+  filter(cs_p13_1 == 7) %>% 
+  count() %>% 
+  arrange(desc(cs_p14_c))
+```
+
+En `cs_p14_c` contiene los códigos de las carreras profesionales a 6 dígitos donde los primeros dos corresponde al campo amplio, el tercero al campo específico, el cuarto al campo detallado y los restantes (quinto y sexto) al campo unitario, véase INEGI(2016c: 13-15) para más información. Por ejemplo, el código `104200` corresponde al campo de Servicios (amplio) \> Servicios de seguridad (específico) \> Servicios militares (detallado); por otra parte el código `011000` al campo amplio de Educación \> Ciencias de la educación (específico) \> Planes multidisciplinarios (detallado).
+
+Sin embargo, se observa que en algunos casos dicha columna (variable) contiene 5 o 6 dígitos cuando forzosamente deben ser seis, ¿por qué? Se debe a la segmentación, es decir, la variable `cs_p14_c` tiene como tipo de dato `doble` (*double*, real o decimal) por lo que al tener ese tipo de dato elimina el cero a la izquierda. ¿Cómo solucionarlo? Segmentar la variable como caracter o categórica.
+
+# 5. Segmentar el archivo
+
+De acuerdo a @wickham2017, se segmenta un archivo de la siguiente manera:
+
+1.   Especificar el tipo de dato (segmentar) cada columna con el argumento `col_types`
+2.  Segmentar todas las columnas como tipo caracter y utilizar la función `type_convert`
+
+En caso de existir varios problemas al momento de la segmentación, podemos visualizarlos con la función `problems`.
+
+Por su parte, se segmenta un vector con la función `parse_tipo`.
+
+Por último, para mostrar sólo una variable de un tibble se utiliza: 1. `tibble$nom_columna` o `tibble %>% .$nom_columna`, aunque los autores sugieren utilizar `filter` o `select`.
+
+### Ejercicio 1.3: trabajar con `problems`
+
+En primer lugar, intentaremos trabajar con la función `problems`.
+
+```{r}
+# lista de cols con su tipo de dato
+spec(sdem)
+
+# cols con problemas de segmentación
+problems(sdem)
+
+# muestra en forma de vector
+# sdem$loc
+
+# muestra en forma de tibble
+sdem %>% select(loc)
+
+# ver cuántas col fallan
+fallas <- problems(sdem)
+unique(fallas$col)
+```
+Se observa que existe un problema de segmentación únicamente con la columna `cs_p23_des` (columna número 48), la mayoría de las columnas las segmentó a tipo *double* (número real o decimal), excepto `loc` y `cs_p23_des`. Al revisar INEGI(2024), se observa:
+
+* `loc`tiene valores omitidos por confidencialidad, véase p. 15
+* `cs_p23_des` indica una columna de tipo texto que señala otros motivos por los que el encuestado se fue a otro estado o país.
+
+Así que podemos eliminar la columna `loc` e intentaremos segmentar sólo la columna `cs_p23_des` a texto.
+
+```{r}
+sdem %>% select(!loc)
+
+# sdem %>% parse_character(cs_p23_des)
+```
+
+Se elimina la columna con el verbo `select` junto con el operador lógico NO (con el signo !), pero no puedo segmentar la columna con `parse_character`. Según mis notas del libro, se hace con el verbo `mutate` más la función `is.tipo`
+
+```{r}
+sdem %>% 
+  select(!loc) %>% 
+  mutate(
+  cs_p23_des = as.character(cs_p23_des)
+) 
+```
+
+Como se observa, se eliminó la col `loc` y se convirtió la col `cs_p23_des` a texto. Entonces, para resolver el *Ejercicio 1* conservó sólo las columnas que utilizaré, después segmentó las columnas requeridas. 
+
+### Ejercicio 1.4: seleccionar variables de interés
+
+1. Se conservan las variables identificadoras (INEGI, 2024: IV): `tipo`, `mes_cal`, `cd_a`, `ent`, `con`, `v_sel`, `n_hog`, `h_mud`, `n_ren`.
+2. Edad de 25 a 29 años `eda12c`
+3. Características individuales: sexo `sex`
+4. Relacionadas a la educación: grado aprobado (`cs_p13_1`), clave de la carrera (`cs_p14_c`), si terminó los estudios de dicha carrera (`cs_p16`)
+5. Vinculadas al ingreso: ingreso mensual (`ingocup`)
+
+```{r}
+# se convierten a caracter para segmentar con mutate
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# se calcula el ingreso mensual promedio del grupo de edad 25 a 29
+ingreso_promedio <- sdem %>% 
+  select(tipo, mes_cal, cd_a:con, v_sel:h_mud, n_ren, sex, eda12c, cs_p13_1, cs_p14_c, cs_p16, ingocup) %>% 
+  mutate(ingocup = as.double(ingocup)) %>% 
+  # sólo se considera a los que terminaron sus estudios 
+  filter(cs_p13_1 == "7" & cs_p16 == "1" & ingocup != 0) %>% 
+  group_by(cs_p14_c) %>% 
+  summarise(
+    n = n(),
+    total = sum(ingocup),
+    promedio = mean(ingocup)
+  ) 
+```
+
+Se observa que, el código `101200`, esto es, el campo detallado de *Servicios funerarios* (INEGI, 2016:26) reporta el ingreso mensual promedio más bajo, seguido del campo detallado de *Salud pública* (`95600`) que se ubica dentro del campo amplio *Ciencias de la salud*. Cabe señalar que dicho ingreso se encuentra debajo del salario mínimo mensual $278.80 * 365 / 12 = 8,480.16$. 
+
+Por otra parte, se nota un avance en la ejecución del código y en los resultados del mismo. ¡Enhorabuena!
+
+Por último, el tema del tamaño de los valores de la columna `cs_p14_c` viene desde el archivo de entrada, es decir, desde el archivo CSV contiene 5 o 6 dígitos. **Importante a considerar**
+
+¿Qué sigue? Leer sobre **datos relacionales** y **caracteres**
+
+# 6. Trabajar con el factor códigos de carrera
+
+*Domingo 5 de octubre de 2025*
+
+### Ejercicio 1.5: crear las 10 carreras amplias
+
+Se trabajará con el tibble `ingreso_promedio` para mostrar una tabla y gráfica del ingreso promedio de jóvenes profesionistas de 25 a 29 años entre los 10 campos amplios de formación académica (INEGI, 2016). 
+
+```{r}
+ingreso_promedio2 <- ingreso_promedio %>% 
+  mutate(
+    # todos los valores tendrán 6 caracteres
+    cs_p14_c = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    cs_p14_c,
+    # convertir a factor y modificar los niveles
+    into = c("campo_amplio", "campo_especifico"),
+    sep = 2
+  ) %>% 
+  mutate(
+    campo_amplio = factor(campo_amplio), 
+    # véase INEGI(2016)
+    campo_amplio = fct_recode(
+      campo_amplio,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10",
+      # nivel no registrado en INEGI(2016)
+      "Otro" = "99"
+    )
+  ) 
+```
+
+Se dividió la variable `código_carrera` en dos para distinguir los campos amplios y específico. Solamente me gustaría hacer la siguiente aclaración. Aparece el valor `99` dentro de los niveles del factor `campo_amplio` y al buscar dentro de la fuente de datos se observa el `999999` como uno de los códigos de carrera. 
+
+```{r}
+sdem %>% 
+  filter(cs_p14_c == 999999 & ingocup != 0) %>%
+  select(cs_p14_c, ingocup) %>% 
+  head(10)
+```
+
+Se revisa en INEGI(2016), en la [Red Nacional de Metadatos]<https://www.inegi.org.mx/rnm/index.php/catalog/1121/study-description> e incluso en el cuestionario sociodemográfico perteneciente al Segundo Trimestre de 2025 y no aparece información relacionada a dicho código por lo que se decide asignarle el nivel "Otro".
+
+### Ejercicio 1.6: crear la gráfica
+
+Por último, se realiza una gráfica adecuada a publicación:
+
+```{r}
+ingreso_promedio2 %>% 
+  group_by(campo_amplio) %>% 
+  summarise(
+    # mostrar ingreso promedio por carrera
+    promedio_amplio =  mean(promedio)
+  ) %>% 
+  mutate(
+    # reordenar de forma descendente (mayor a menor)
+    campo_amplio = fct_reorder(campo_amplio, promedio_amplio)
+  ) %>% 
+  ggplot(aes(promedio_amplio, campo_amplio)) +
+  geom_col() + 
+  theme_clean() + 
+  labs(
+    title = "Ingreso mensual promedio",
+    subtitle = "Jóvenes profesionistas de 25 a 29 años",
+    x = "Ingreso mensual promedio",
+    y = "Carreras universitarias",
+    caption = "Fuente: elaboración propia con datos del INEGI, ENOE(2025)"
+  )
+```
+
+Como se observa, la gráfica realizada tiene una estética que puede compartirse y publicarse fuera de la bitácora. ¡Enhorabuena! En otras palabras, ya se resolvió el ejercicio 1 en toda la extensión de la palabra, es decir, desde importar hasta la creación de una gráfica publicable. 
+
+No obstante, quisiera añadir lo siguiente. Al validar el **[Cuestionario Sociodemográfico de la ENOE]**<https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/c_sdem_v5a.pdf> se observa en la pregunta 14 que "si se trata de estudios de maestría o doctorado pasa a la pregunta 16" p. 4. En otras palabras, ¿la pregunta 16 también aplicará a aquellos con estudios profesionales? Vamos a averiguar.
+
+### Ejercicio 1.7: ¿terminó los estudios aplica para profesionistas?
+
+```{r}
+sdem %>% 
+  select(cs_p13_1:cs_p16) %>% 
+  filter(cs_p13_1 == 7) %>% 
+  count(cs_p13_1, cs_p16) %>% 
+  mutate(
+    prop = n / sum(n)
+  )
+```
+
+Se observa que el 73% de los encuestados con estudios profesionales respondió que sí terminó sus estudios o materias. En otras palabras, la pregunta 16 también aplica para los profesionistas.
+
+¿Qué sigue? Realizar la actividad **3. Leer la documentación relacionada a la ENOE** y su correspondiente subactividad. Dicha actividad se hará en una nota de Obsidian. 
+
+¡Vamos súper bien!
+
+# 7. Conociendo la ENOE
+
+Ejercicio 2: validar si las llaves primarias que señala INEGI (2023) lo son en verdad.
+
+```{r}
+# Validar si son llaves primarias
+sdem %>% 
+  count(tipo, mes_cal, cd_a, ent, con, v_sel, n_hog, h_mud, n_ren) %>% 
+  filter(n > 1)
+```
+
+Se observa que sí lo son.
+
+*Miércoles 15 de octubre de 2025*
+
+Se crea una nueva nota para el apunte de INEGI(2023)
+
+*Jueves 16 de octubre de 2025*
+
+Se empieza el análisis descriptivo de la ENOE. ¡Que emoción! 
+
+Nota: se deben respetar los criterios establecidos en INEGI(2023).
+
+# Actividades
+
+1. Descargar e importar fuente de datos. **REALIZADO**
+2. Realizar el ejercicio 1: calcular el ingreso promedio de jóvenes profesionistas de 25 a 29 años por carreras profesionales. **REALIZADO**
+3. Leer la documentación relacionada a la ENOE **REALIZADO**
+  1. Realizar el ejemplo INEGI(2023:21). **REALIZADO**
+4. Segmentar correctamente el archivo. **REALIZADO**
+5. Leer *Datos relacionales* y *Caracteres* de @Wickham2017. **REALIZADO**
+6. Leer información relacionada a la SCIAN
+7. Leer el COE I y II
+
+
+# Dudas
+
+1. "El COE [Cuestionario de Ocupación y Empleo] tiene dos versiones, la ampliada que se aplica los primeros trimestres de cada año y la básica que se aplica en el resto de los trimestres del año" p. IV" [¿A qué se refiere con primeros trimestres? Al I y II, o sólo I? ¿Cuál es la diferencia entre cuestionario básico y ampliado? Según, los Documentos los cuestionarios ampliados se realizan cada I trimestre de cada año. Se revisó, grosso modo, los cuestionarios ampliados y básicos, para mis fines no existen tantas diferencias entre ambas. Cabe mencionar que sólo se enfoca en temas de ocupación y empleo. En cuanto al cuestionario sociodemográfico, si incluye las variables de mi interés como edad, sexo, nivel de estudios] **RESUELTO**
+2. ¿Cómo segmentar una variable al momento de importar? Se segmenta dentro de `mutate`. **RESUELTO**
+3. ¿Cómo trabajar con la función `problems()`? Indica las columnas que tuvieron problemas al momento de segmentar. **RESUELTO**
+4. ¿Cómo añadir un caracter a la variale `cs_p14_c` si tiene 5 caracteres? Véase caso práctico de datos ordenados de @wickham2017 
+5. ¿Podré separar los caracteres de la variable `cs_p14_c` para agrupar por campos de estudio amplios? Véase datos ordenados de @wickham2017 Sí con `mutate` + `if_else` + `str_length` + `str_c` **RESUELTO**
+6. ¿Cómo unir el tibble `enoe` con los valores en texto para mostrar ya sea en tabla o en gráfica no el número sino el texto de los campos de estudio amplios? Sí con `fct_recode` **RESUELTO**
+7. Cambiar el nombre de la variable `enoe` 
+
+# Notas al pie de página
+
+
+# Referencias
+
+Christian (2019, octubre 23). Check if a package is installed in R. *Statistics, Science, Random Ramblings. A blog about data and other interesting things*. <https://hohenfeld.is/posts/check-if-a-package-is-installed-in-r>
+
+CRAN R Project. (s.f.). zip. <https://cran.r-project.org/web/packages/zip/readme/README.html>
+
+crenteriam. (s.f.). `importinegi`. *Github*. <https://github.com/crenteriam/importinegi>
+
+Geeks for Geeks. (2025, julio 23). How to Read Zip Files into R. *Geeks for Geeks*. <https://www.geeksforgeeks.org/r-language/how-to-read-zip-files-into-r>
+
+INEGI (Instituto Nacional de Estadística y Geografía) (2016c). Clasificación mexicana de planes de estudio por campos de formación académica 2016 : educación superior y media superior. México: INEGI <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825003335>
+
+-- (2019). Encuesta Nacional de Ocupación y Empleo. Cómo se hace la ENOE : métodos y procedimientos (2da. ed.). México: INEGI. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825190613>
+
+-- (2020a). Clasificación de países, entidades federativas y municipios de los Estados Unidos Mexicanos 2020. México: INEGI <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825197285>
+
+-- (2020b). Sistema Nacional de Clasificación de Ocupaciones 2019 : SINCO. México: INEGI <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825198411>
+
+-- (2023). Encuesta Nacional de Ocupación y Empleo (ENOE). Conociendo la base de datos de la ENOE <https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/con_basedatos_proy2010.pdf>
+
+-- (2024). Encuesta Nacional de Ocupación y Empleo (ENOE). Estructura de la base de datos <https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/enoe_123_fd_c_bas_amp.pdf>
+
+-- (s.f.). Catálogo Único de Claves de Áreas Geoestadísticas Estatales, Municipales y Localidades. <https://www.inegi.org.mx/app/ageeml/>
+
+

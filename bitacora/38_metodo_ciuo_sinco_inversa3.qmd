@@ -1,0 +1,507 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(writexl)
+library(readxl)
+
+sinco11_ciuo08 <- read_csv(
+  "C:/Prog/tesis/datos/sinco11_a_ciuo08.csv",
+  col_types = "c"
+)
+
+sinco19_11 <- read_csv(
+  "C:/Prog/tesis/datos/sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character())
+)
+
+ciuo08 <- read_xlsx(
+  "C:/Prog/tesis/datos/ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+SINCO-11
+
+```{r}
+# valores únicos de sinco-11
+sinco11 <- sinco19_11 |> 
+  select(sinco_11, sinco_19) |> 
+  filter(str_length(sinco_11) == 4) |> 
+  group_by(sinco_11) |> 
+  mutate(
+    sinco_11 = as.character(sinco_11),
+    id = row_number()
+  ) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19
+  )
+
+# se une con tabla comparativa entre sinco11 y ciuo08
+sinco11_ciuo08_2 <- sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11"))
+```
+
+CIUO-08
+
+```{r}
+# tabla de ciuo08
+ciuo08 <- ciuo08 |> 
+    mutate(
+      skill_level = case_when(
+        # skill level 4
+        sub_major == "11" | sub_major == "12" |
+          sub_major == "13" | major == "2" |
+          sub_major == "01" ~ "4",
+        # skill level 3
+        sub_major == "14" | major == "3" ~ "3",
+        # skill level 2
+        major == "4" | major == "5" |
+          major == "6" | major == "7" |
+          major == "8" | sub_major == "02" ~ "2",
+        # skill level 1
+        major == "9" | sub_major == "03" ~ "1",
+        TRUE ~ NA,
+      )
+    ) |> 
+    # seleccionamos unit y skill_level
+    select(unit, skill_level) |> 
+    # se renombran variables
+    rename("c08_unit" = "unit")
+
+# unión con tabla comparativa entre sinco11 y ciuo08
+sinco11_ciuo08_2 <- sinco11_ciuo08_2 |> 
+  left_join(ciuo08, by = c("ciuo08" = "c08_unit"))
+```
+
+SINCO-19
+
+```{r}
+# tabla con nivel de competencia
+sinco19 <- sinco11_ciuo08_2 |>
+  pivot_longer(
+    s19_1:s19_9,
+    values_to = "sinco19"
+  ) |> 
+  select(sinco19, skill_level) |> 
+  filter(!is.na(sinco19))
+
+# se pivotea a lo ancho para tener valores únicos de grupo unitario
+sinco19_pivot <- sinco19 |> 
+    distinct(sinco19, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(dummy = "1") |> 
+    pivot_wider(
+      id_cols = sinco19,
+      names_from = skill_level,
+      names_prefix = "skill_",
+      names_sort = TRUE,
+      values_from = skill_level,
+      values_fill = ""
+    ) |> 
+    select(-skill_NA)
+```
+
+Se intenta otra manera de asignar nivel educativo
+
+```{r}
+sinco19_pivot <- sinco19_pivot |> 
+  mutate(
+    skill_level = str_c(skill_1, skill_2, skill_3, skill_4),
+    skill_min = str_sub(skill_level, 1, 1),
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(sinco19, contains("edu_"))
+```
+
+Por último,
+
+```{r}
+sinco19_edu_req <- sinco19_11 |> 
+  left_join(sinco19_pivot, by = c("sinco_19" = "sinco19")) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  distinct(sinco_19, descripcion_sinco19, edu_req_min, edu_req_max)
+```
+
+Se valida
+
+```{r}
+sinco19_edu_req |> 
+  filter(is.na(edu_req_min))
+```
+
+Al parecer está correcto
+
+Se puede simplificar la asignación del nivel de competencia en vez de `ciuo08` a `sinco11_ciuo08`
+
+```{r}
+glimpse(sinco11_ciuo08)
+```
+
+```{r}
+sinco11_ciuo08 |> 
+  mutate(
+    ciuo08_major = str_sub(ciuo08, 1, 1),
+    ciuo08_submajor = str_sub(ciuo08, 1, 2),
+    skill_level = case_when(
+        # skill level 4
+        ciuo08_submajor == "11" | ciuo08_submajor == "12" |
+          ciuo08_submajor == "13" | ciuo08_major == "2" |
+          ciuo08_submajor == "01" ~ "4",
+        # skill level 3
+        ciuo08_submajor == "14" | ciuo08_major == "3" ~ "3",
+        # skill level 2
+        ciuo08_major == "4" | ciuo08_major == "5" |
+          ciuo08_major == "6" | ciuo08_major == "7" |
+          ciuo08_major == "8" | ciuo08_submajor == "02" ~ "2",
+        # skill level 1
+        ciuo08_major == "9" | ciuo08_submajor == "03" ~ "1",
+        TRUE ~ NA,
+      )
+  )
+  
+```
+
+Se intenta pivotear
+
+```{r}
+df <- sinco11_ciuo08 |> 
+  mutate(
+    ciuo08_major = str_sub(ciuo08, 1, 1),
+    ciuo08_submajor = str_sub(ciuo08, 1, 2),
+    skill_level = case_when(
+        # skill level 4
+        ciuo08_submajor == "11" | ciuo08_submajor == "12" |
+          ciuo08_submajor == "13" | ciuo08_major == "2" |
+          ciuo08_submajor == "01" ~ "4",
+        # skill level 3
+        ciuo08_submajor == "14" | ciuo08_major == "3" ~ "3",
+        # skill level 2
+        ciuo08_major == "4" | ciuo08_major == "5" |
+          ciuo08_major == "6" | ciuo08_major == "7" |
+          ciuo08_major == "8" | ciuo08_submajor == "02" ~ "2",
+        # skill level 1
+        ciuo08_major == "9" | ciuo08_submajor == "03" ~ "1",
+        TRUE ~ NA,
+      )
+  )
+
+df |> 
+  filter(str_length(sinco11) == 4) |> 
+  group_by(sinco11) |> 
+  mutate(id = row_number()) |> 
+  pivot_wider(
+    id_cols = sinco11,
+    names_from = id,
+    names_prefix = "skill_",
+    values_from = skill_level,
+    values_fill = ""
+  )
+  # mutate(
+  #   skill_level = str_c(skill_1, skill_2, skill_3, skill_4, skill_5, skill_6, skill_7)
+  # )
+```
+
+Incluso se puede hacer en uno solo
+
+```{r}
+df <- sinco11_ciuo08 |> 
+  filter(str_length(sinco11) == 4) |>
+  mutate(
+    c08_major = str_sub(ciuo08, 1, 1),
+    c08_submajor = str_sub(ciuo08, 1, 2),
+    skill_level = case_when(
+        # skill level 4
+        c08_submajor == "11" | c08_submajor == "12" |
+          c08_submajor == "13" | c08_major == "2" |
+          c08_submajor == "01" ~ "4",
+        # skill level 3
+        c08_submajor == "14" | c08_major == "3" ~ "3",
+        # skill level 2
+        c08_major == "4" | c08_major == "5" |
+          c08_major == "6" | c08_major == "7" |
+          c08_major == "8" | c08_submajor == "02" ~ "2",
+        # skill level 1
+        c08_major == "9" | c08_submajor == "03" ~ "1",
+        TRUE ~ NA
+      ) 
+  ) |>  
+  group_by(sinco11) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco11,
+    names_from = id,
+    names_prefix = "skill_",
+    values_from = skill_level,
+    values_fill = ""
+  )
+
+df
+```
+
+Después se une con la tabla sinco19-sinco11
+
+```{r}
+df2 <- sinco19_11 |> 
+  left_join(df, by = c("sinco_11" = "sinco11")) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  group_by(sinco_19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_19,
+    names_from = id,
+    values_from = skill_1:skill_7,
+    values_fill = ""
+  ) |> 
+  # concatena distintas columnas
+  unite("skill_level", skill_1_1:skill_7_2, sep = "") |> 
+  mutate(
+    # extrae el primer caracter
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(sinco_19, contains("edu_req"))
+
+df2
+```
+
+Por último, se añade descripción
+
+```{r}
+df2 <- df2 |> 
+  left_join(sinco19_11, by = "sinco_19") |> 
+  select(contains("19"), contains("edu"))
+
+df2
+```
+
+Incluso me atrevería a decir que se puede hacer en una sola instrucción
+
+```{r}
+sinco19_11 |> 
+  left_join(df, by = c("sinco_11" = "sinco11")) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  group_by(sinco_19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_19,
+    names_from = id,
+    values_from = skill_1:skill_7,
+    values_fill = ""
+  ) |> 
+  # concatena distintas columnas
+  unite("skill_level", skill_1_1:skill_7_2, sep = "") |> 
+  mutate(
+    # extrae el primer caracter
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  # añadir descripción
+  left_join(sinco19_11, by = "sinco_19") |> 
+  select(contains("19"), contains("edu"))
+```
+
+Incluso se puede corregir el tema del guión
+
+```{r}
+df2 |> 
+  mutate(
+    descripcion_sinco19 = str_remove(descripcion_sinco19, "- ")
+  )
+```
+
+Por tanto, el código puede quedar así
+
+```{r}
+sinco19_11 |> 
+  left_join(df, by = c("sinco_11" = "sinco11")) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  group_by(sinco_19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_19,
+    names_from = id,
+    values_from = skill_1:skill_7,
+    values_fill = ""
+  ) |> 
+  # concatena distintas columnas
+  unite("skill_level", skill_1_1:skill_7_2, sep = "") |> 
+  mutate(
+    # extrae el primer caracter
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  # añadir descripción
+  left_join(sinco19_11, by = "sinco_19", multiple = "any") |>
+  mutate(
+    descripcion_sinco19 = str_remove(descripcion_sinco19, "- ")
+  ) |>
+  select(contains("19"), contains("edu"))
+```
+
+Se valida
+
+```{r}
+df3 <- sinco19_11 |> 
+  left_join(df, by = c("sinco_11" = "sinco11")) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  group_by(sinco_19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_19,
+    names_from = id,
+    values_from = skill_1:skill_7,
+    values_fill = ""
+  ) |> 
+  # concatena distintas columnas
+  unite("skill_level", skill_1_1:skill_7_2, sep = "") |> 
+  mutate(
+    # extrae el primer caracter
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  # añadir descripción
+  left_join(sinco19_11, by = "sinco_19", multiple = "any") |>
+  mutate(
+    descripcion_sinco19 = str_remove(descripcion_sinco19, "- ")
+  ) |>
+  select(contains("19"), contains("edu"))
+```
+
+```{r}
+df3 |> 
+  filter(is.na(edu_req_min))
+```
+
+Se pone en un nuevo documento la versión final

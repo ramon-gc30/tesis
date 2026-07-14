@@ -1,0 +1,851 @@
+---
+title: "Efecto salarial 2"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+7.  C:/Prog/tesis/5_Sobre-educacion_2.Rmd
+8.  C:/Prog/tesis/5_Sobre-educacion_3.Rmd
+9.  C:/Prog/tesis/5_Sobre-educacion_4.Rmd
+10. C:/Prog/tesis/5_Sobre-educacion_5.Rmd
+11. C:/Prog/tesis/6_Efecto_salarial_1.Rmd
+
+# Instalación
+
+```{r setup}
+# paquetes ==========================================================
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# # calcular la moda
+# library(DescTools)
+# # coeficiente de asimetría
+# library(moments)
+# library(EnvStats)
+library(modelr)
+
+# importación =======================================================
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación ======================================================
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  escolaridad = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  escolaridad = if_else(escolaridad != 99, escolaridad, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ing_mensual = as.double(ingocup),
+  # 0 pasa a NA ya que 0==NA en p6b2
+  ing_mensual = if_else(ing_mensual != 0, ing_mensual, NA),
+  # promedio de ingreso por hora
+  ing_hora = as.double(ing_x_hrs),
+  # 0 pasa a NA ya que 0==NA en p6b2 y en dur9c == 1 & 9
+  ing_hora = if_else(ing_hora != 0, ing_hora, NA)
+)
+
+# construcción de variables =========================================
+# grupos de edad OECD(2019: 135)
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12 INEGI(2024:16)
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12 INEGI(2024:16)
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitaria INEGI(2016: 13)
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales INEGI(2019: 22)
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# creación de tablas ================================================
+# población total INEGI(2023:21)
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe INEGI(2023:9)
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más INEGI(2023:21)
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+
+# sobre-educación ===================================================
+
+# con el grupo división INEGI(2020: 22) -----------------------------
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu1 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(escolaridad) - sd(escolaridad),
+    vv_pos_ocu1 = mean(escolaridad) + sd(escolaridad),
+    mediana_ocu1 = median(escolaridad)
+  )
+
+# método: moda
+edu_req2_ocu1 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion1, escolaridad) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu1" = "escolaridad") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu1, by = "ocupacion1") %>% 
+  left_join(edu_req2_ocu1, by = "ocupacion1") %>% 
+  mutate(
+    escolaridad = as.double(escolaridad), 
+    moda_ocu1 = as.double(moda_ocu1),
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      # required
+      between(escolaridad, vv_neg_ocu1, vv_pos_ocu1) ~ 0,
+      # over
+      escolaridad > vv_pos_ocu1 ~ 1,
+      # under
+      escolaridad < vv_neg_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu1 = case_when(
+      # required
+      escolaridad == mediana_ocu1 ~ 0,
+      # over
+      escolaridad > mediana_ocu1 ~ 1,
+      # under
+      escolaridad < mediana_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu1 = case_when(
+      # required
+      escolaridad == moda_ocu1 ~ 0,
+      # over
+      escolaridad > moda_ocu1 ~ 1,
+      # under
+      escolaridad < moda_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias 
+    # media
+    over_vv_ocu1 = if_else(escolaridad > vv_pos_ocu1, 1, 0),
+    req_vv_ocu1 = if_else(between(escolaridad, vv_neg_ocu1, vv_pos_ocu1), 1, 0),
+    under_vv_ocu1 = if_else(escolaridad < vv_neg_ocu1, 1, 0),
+    # mediana
+    over_med_ocu1 = if_else(escolaridad > mediana_ocu1, 1, 0),
+    req_med_ocu1 = if_else(escolaridad == mediana_ocu1, 1, 0),
+    under_med_ocu1 = if_else(escolaridad < mediana_ocu1, 1, 0),
+    # moda
+    over_mod_ocu1 = if_else(escolaridad > moda_ocu1, 1, 0),
+    req_mod_ocu1 = if_else(escolaridad == moda_ocu1, 1, 0),
+    under_mod_ocu1 = if_else(escolaridad < moda_ocu1, 1, 0),
+    # variables de años de sobre o infra
+    # mediana
+    so_med_ocu1 = if_else(escolaridad > mediana_ocu1, escolaridad - mediana_ocu1, 0),
+    sr_med_ocu1 = if_else(escolaridad == mediana_ocu1, escolaridad, 0),
+    su_med_ocu1 = if_else(escolaridad < mediana_ocu1, mediana_ocu1 - escolaridad, 0),
+    # moda
+    so_mod_ocu1 = if_else(escolaridad > moda_ocu1, escolaridad - moda_ocu1, 0),
+    sr_mod_ocu1 = if_else(escolaridad == moda_ocu1, escolaridad, 0),
+    su_mod_ocu1 = if_else(escolaridad < moda_ocu1, moda_ocu1 - escolaridad, 0)
+  )
+
+# con el grupo principal INEGI(2020: 22) ----------------------------
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu2 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion2) %>%
+  summarise(
+    vv_neg_ocu2 = mean(escolaridad) - sd(escolaridad),
+    vv_pos_ocu2 = mean(escolaridad) + sd(escolaridad),
+    mediana_ocu2 = median(escolaridad)
+  )
+
+# método: moda
+edu_req2_ocu2 <- ocupada %>%
+  filter(!is.na(escolaridad)) %>% 
+  group_by(ocupacion2, escolaridad) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu2" = "escolaridad") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu2, by = "ocupacion2") %>% 
+  left_join(edu_req2_ocu2, by = "ocupacion2") %>% 
+  mutate(
+    escolaridad = as.double(escolaridad), 
+    moda_ocu2 = as.double(moda_ocu2),
+    # verdugo y verdugo
+    edu_mis_vv_ocu2 = case_when(
+      # required
+      between(escolaridad, vv_neg_ocu2, vv_pos_ocu2) ~ 0,
+      # over
+      escolaridad > vv_pos_ocu2 ~ 1,
+      # under
+      escolaridad < vv_neg_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu2 = case_when(
+      # required
+      escolaridad == mediana_ocu2 ~ 0,
+      # over
+      escolaridad > mediana_ocu2 ~ 1,
+      # under
+      escolaridad < mediana_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu2 = case_when(
+      # required
+      escolaridad == moda_ocu2 ~ 0,
+      # over
+      escolaridad > moda_ocu2 ~ 1,
+      # under
+      escolaridad < moda_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias
+    # media
+    over_vv_ocu2 = if_else(escolaridad > vv_pos_ocu2, 1, 0),
+    req_vv_ocu2 = if_else(between(escolaridad, vv_neg_ocu2, vv_pos_ocu2), 1, 0),
+    under_vv_ocu2 = if_else(escolaridad < vv_neg_ocu2, 1, 0),
+    # mediana
+    over_med_ocu2 = if_else(escolaridad > mediana_ocu2, 1, 0),
+    req_med_ocu2 = if_else(escolaridad == mediana_ocu2, 1, 0),
+    under_med_ocu2 = if_else(escolaridad < mediana_ocu2, 1, 0),
+    # moda
+    over_mod_ocu2 = if_else(escolaridad > moda_ocu2, 1, 0),
+    req_mod_ocu2 = if_else(escolaridad == moda_ocu2, 1, 0),
+    under_mod_ocu2 = if_else(escolaridad < moda_ocu2, 1, 0),
+    # variables de años de sobre o infra
+    # mediana
+    so_med_ocu2 = if_else(escolaridad > mediana_ocu2, escolaridad - mediana_ocu2, 0),
+    sr_med_ocu2 = if_else(escolaridad == mediana_ocu2, escolaridad, 0),
+    su_med_ocu2 = if_else(escolaridad < mediana_ocu2, mediana_ocu2 - escolaridad, 0),
+    # moda
+    so_mod_ocu2 = if_else(escolaridad > moda_ocu2, escolaridad - moda_ocu2, 0),
+    sr_mod_ocu2 = if_else(escolaridad == moda_ocu2, escolaridad, 0),
+    su_mod_ocu2 = if_else(escolaridad < moda_ocu2, moda_ocu2 - escolaridad, 0)
+  )
+
+# otras variables explicativas ======================================
+
+ocupada <- ocupada %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si eda == 98, se convierte a NA
+    # experiencia = edad - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exp_lab = eda.x - escolaridad - 6,
+    exp_lab = if_else(exp_lab > 0 & eda.x != 98, exp_lab, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exp_lab2 = exp_lab ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casado
+    casad = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jef_hog = if_else(par_c == 101, 1, 0)
+  )
+```
+
+# Comprobación
+
+## `ocupacion1`
+
+Media
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Moda
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Mediana
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+## `ocupacion2`
+
+Media
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Moda
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_mod_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Mediana
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_med_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+# Jóvenes profesionistas
+
+## Licenciatura, maestría y doctorado
+
+`ocupacion1`
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & (cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & (cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)) %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & (cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)) %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+`ocupacion2`
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & (cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)) %>% 
+  group_by(edu_mis_vv_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & (cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)) %>% 
+  group_by(edu_mis_mod_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & (cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)) %>% 
+  group_by(edu_mis_med_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+## Licenciatura
+
+`ocupacion1`
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7) %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7) %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+`ocupacion2`
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7) %>% 
+  group_by(edu_mis_vv_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7) %>% 
+  group_by(edu_mis_mod_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7) %>% 
+  group_by(edu_mis_med_ocu2) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+# Análisis econométrico
+
+## Modelo Mincer
+
+```{r}
+mod_mincer <- lm(log(ing_hora) ~ escolaridad + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_mincer)
+```
+
+El modelo es estadísticamente significativo y todas las variables también lo son de forma individual al 99.9% de confianza (tres asteriscos a lado del p-valor). La tasa de retorno de la educación es 6.4%, que señala que si aumenta un año la educación del individuo su ingreso incrementará 6.4%, por su parte al aumentar un año la experiencia laboral (potencial) el ingreso incrementará un 2%, su cuadrado tiene el signo esperado, no puedo interpretar los resultado de la variable `horas_lab` en forma de logaritmo natural.
+
+En promedio, el ingreso de los hombres es aproximadamente 20% superior al de las mujeres, controlando las demás variables. 
+
+```{r}
+mod_mincer2 <- lm(log(ing_mensual) ~ escolaridad + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_mincer2)
+```
+
+Cuando se considera el ingreso mensual como variable objetivo, incrementa $R^2$ de 0.2655 a 0.4005.
+
+## Modelo original
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 G_i S_i^o + \phi_4 H_i S_i^u + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+Con
+
+$$
+S^o_i = S_i - S^R_i; S_i > S^R_i \\
+S^u_i = S^R_i - S_i; S_i < S^R_i
+$$
+
+Donde:
+
+$y_i$: logaritmo natural del ingreso,\
+$S_i^R$: años de educación requerida,\
+$S_i^o$: años de sobre-educación,\
+$S_i^u$: años de infra-educación,\
+$G_i$: variable dicotómica que indica sobre-educación,\
+$H_i$: variable dicotómica que indica infra-educación,\
+$\sum_{j = 1}^J L_{ij}$: variables dicotómicas de las $J$ ocupaciones,\
+$X_i$: variables exógenas como edad, experiencia laboral, género, región de residencia, horas trabajadas, etc.
+
+## Modelo a utilizar 1
+
+No se consideran las variables $G_i$ y $H_i$, por lo que el modelo queda así:
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 S_i^o + \phi_4 S_i^u + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+Se me olvidó construir las variables asociadas a las ocupaciones, de momento se estima sin esas variables:
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 S_i^o + \phi_4 S_i^u + \gamma X_i + \epsilon_i
+$$
+
+
+
+### Modelo ORU con moda
+
+```{r}
+mod_oru_mod_ocu1 <- lm(log(ing_hora) ~ so_mod_ocu1 + sr_mod_ocu1 + su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_mod_ocu1)
+```
+
+Al igual que el modelo Mincer, el modelo y las variables son estadísticamente significativas al 99.9% de confianza, sin embargo la medida de bondad de ajuste ($R^2$) es menor en este modelo (0.1707) que en el de Mincer (0.2655). Se observa que la tasa de retorno de la sobre-educación (2.3%) es superior a la tasa de la educación requerida (0.5%) lo que no coincide con los resultados esperados. Las demás variables tienen el signo esperado.
+
+### Modelo ORU con mediana
+
+```{r}
+mod_oru_med_ocu1 <- lm(log(ing_hora) ~ so_med_ocu1 + sr_med_ocu1 + su_med_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_med_ocu1)
+```
+
+Se presenta la misma situación del caso del modelo ORU con moda, es decir, la tasa de retorno de sobre-educación (2.5%) es superior a la educación requerida (0.6%), ¿por qué?
+
+### Modelo ORU con moda
+
+```{r}
+mod_oru_mod_ocu2 <- lm(log(ing_hora) ~ so_mod_ocu2 + sr_mod_ocu2 + su_mod_ocu2 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_mod_ocu2)
+```
+
+La tasa de retorno de sobre-educación es superior (3%) al de educación requerida (1%).
+
+### Modelo ORU con mediana
+
+```{r}
+mod_oru_med_ocu2 <- lm(log(ing_hora) ~ so_med_ocu2 + sr_med_ocu2 + su_med_ocu2 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_med_ocu2)
+```
+
+La tasa de retorno de sobre-educación es superior (2%) al de educación requerida (0.8%).
+
+## Modelo a utilizar 2
+
+Se consideran las variables $G_i$ y $H_i$, por lo que el modelo queda así:
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 G_i S_i^o + \phi_4 H_i S_i^u + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+Se me olvidó construir las variables asociadas a las ocupaciones, de momento se estima sin esas variables:
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 G_i S_i^o + \phi_4 H_i S_i^u + \gamma X_i + \epsilon_i
+$$
+
+Se observa que $G_i$ y $H_i$ son variables binarias que interactuan con una variable cuantitiva.
+
+### Modelo ORU con moda
+
+```{r}
+mod_oru_mod_ocu1_2 <- lm(log(ing_hora) ~ over_mod_ocu1 * so_mod_ocu1 + sr_mod_ocu1 + under_mod_ocu1 * su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_mod_ocu1_2)
+```
+
+No sé como interpretar los resultados de este modelo, sólo entiendo que arroja un error al incluir términos de interacción. 
+
+## Modelo a utilizar 3
+
+Se utilizará el modelo de @verdugoyverdugo1989
+
+$$
+y_i = \phi_1 + \phi_2 educ + \phi_3 over + \phi_4 under + \gamma X_i + \epsilon_i
+$$
+
+Donde
+
+$over$: variable binaria donde 1 indica que está sobre-educado,\
+$under$: variable binaria donde 1 indica que está infra-educado
+
+Se espera que $\phi_3$ y $\phi_4$ sean menores a cero 
+
+### Modelo Verdugo y Verdugo con media
+
+```{r}
+mod_vv_vv_ocu1 <- lm(log(ing_hora) ~ escolaridad + over_vv_ocu1 + under_vv_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_vv_vv_ocu1)
+```
+
+Modelo y variables significativas al 99.9% de confianza, signos esperados y se observa que la tasa de retorno de educación será 25% menor si la persona se encuentra sobre-educada con respecto a una persona que no lo está en un mismo puesto de trabajo, por su parte, la tasa de retorno de una persona infra-educada será 31% superior con respecto a una persona con su mismo nivel educativo pero ocupada en un puesto acorde a su formación. 
+
+```{r}
+mod_vv_vv_ocu1_men <- lm(log(ing_mensual) ~ escolaridad + over_vv_ocu1 + under_vv_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_vv_vv_ocu1_men)
+```
+
+¿Qué pasa si utilizo el ingreso mensual como lo hacen @zamudioeislas1999?
+
+## Utilizando `ing_mensual`
+
+### Modelo ORU con moda
+
+```{r}
+mod_oru_mod_ocu1_men <- lm(log(ing_mensual) ~ so_mod_ocu1 + sr_mod_ocu1 + su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_mod_ocu1_men)
+```
+
+### Modelo ORU con mediana
+
+```{r}
+mod_oru_med_ocu1_men <- lm(log(ing_mensual) ~ so_med_ocu1 + sr_med_ocu1 + su_med_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = ocupada)
+summary.lm(mod_oru_med_ocu1_men)
+```
+
+En ambos casos, $S_0 > S_r$, ¿por qué?
+
+# Jóvenes profesionistas de licenciatura
+
+```{r}
+jov_prof <- ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7)
+
+mod_oru_mod_ocu1_jov_prof <- lm(log(ing_mensual) ~ so_mod_ocu1 + sr_mod_ocu1 + su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = jov_prof)
+summary.lm(mod_oru_mod_ocu1_jov_prof)
+```
+
+Cuando sólo se consideran a jóvenes profesionistas (sólo licenciatura) de 25 a 34 años, los signos no son los esperados ¿por qué?
+
+```{r}
+jov_prof <- ocupada %>% 
+  filter(edad_7g == 3 & cs_p13_1 == 7)
+
+mod_vv_vv_ocu1_jov_prof <- lm(log(ing_mensual) ~ escolaridad + over_vv_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog, data = jov_prof)
+summary.lm(mod_vv_vv_ocu1_jov_prof)
+```
+
+# Modelo ORU ampliado
+
+## Modelo
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 S_i^o + \phi_4 S_i^u + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+En primer lugar, debo construir las variables binarias se hará con una nueva tabla `ocupada2`
+
+```{r}
+ocupada2 <- ocupada %>% 
+  mutate(
+    div1 = if_else(ocupacion1 == 1, 1, 0),
+    div2 = if_else(ocupacion1 == 2, 1, 0),
+    div3 = if_else(ocupacion1 == 3, 1, 0),
+    div4 = if_else(ocupacion1 == 4, 1, 0),
+    div5 = if_else(ocupacion1 == 5, 1, 0),
+    div6 = if_else(ocupacion1 == 6, 1, 0),
+    div7 = if_else(ocupacion1 == 7, 1, 0),
+    div8 = if_else(ocupacion1 == 8, 1, 0),
+    div9 = if_else(ocupacion1 == 9, 1, 0)
+  )
+```
+
+Se realiza la estimación
+
+## Moda
+
+```{r}
+mod_oru_amp_mod_ocu1 <- lm(log(ing_mensual) ~ so_mod_ocu1 + sr_mod_ocu1 + su_mod_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = ocupada2)
+summary.lm(mod_oru_amp_mod_ocu1)
+```
+
+## Mediana
+
+```{r}
+mod_oru_amp_med_ocu1 <- lm(log(ing_mensual) ~ so_med_ocu1 + sr_med_ocu1 + su_med_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = ocupada2)
+summary.lm(mod_oru_amp_med_ocu1)
+```
+
+Aún después de añadir las variables dicotómicas asociadas a las distintas ocupaciones, se observa que $S_o > S_r$, ¿por qué?
+
+# Considerando `escolaridad`
+
+## Mediana
+
+```{r}
+mod_oru_amp_med_ocu1_3 <- lm(log(ing_mensual) ~ escolaridad + so_med_ocu1 + sr_med_ocu1 + su_med_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = ocupada2)
+summary.lm(mod_oru_amp_med_ocu1_3)
+```
+
+Los signos ya no son los esperados al añadir `escolaridad`, ¿por qué?
+
+# Referencias
+
+
+

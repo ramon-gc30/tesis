@@ -1,0 +1,100 @@
+---
+date: today
+---
+
+```{r}
+source("scripts/26_importacion_v11.R")
+source("scripts/26_construccion_tablas_v14.R")
+source("scripts/26_construccion_variables_v2.R")
+source("scripts/26_metodologia_v1.R")
+source("scripts/26_incidencia_v1.R")
+source("scripts/26_cuadros_v1.R")
+source("scripts/26_figuras_v1.R")
+
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+# Crea la tabla de la población objetivo
+jovenes <- seleccionar_jov(general)
+
+# se pasan a factores
+jovenes <- convertir_a_factor(jovenes)
+
+# se define como encuesta compleja
+jovenes_svy <- definir_encuesta(jovenes)
+```
+
+Se crean funciones para crear tablas
+
+```{r}
+
+crear_tbl_est_des_ing <- function(datos){
+  datos_procesados <- datos |> 
+    mutate(variable = ingreso_mensual) |>
+    obtener_est_descriptivos() |> 
+    mutate(variable = "ingreso_mensual") |> 
+    relocate(variable, .before = minimo)
+  return(datos_procesados)
+}
+
+crear_tbl_est_des_ing(jovenes_svy)
+```
+
+Por flojera, quería evitar duplicar el código de la función `crear_tbl_est_des_ing` para cada una de las variables, al investigar con Gémini dicha cuestión recomienda usar el paquete `rlang`.
+
+```
+library(dplyr)
+library(rlang)
+
+crear_tbl_est_des <- function(datos, var_seleccionada){
+  
+  # 1. Capturamos el nombre de la variable como texto (string)
+  nombre_var <- as_label(enquo(var_seleccionada))
+  
+  # 2. Aplicamos tu flujo usando {{ }} para inyectar la variable real
+  datos_procesados <- datos |> 
+    mutate(variable = {{ var_seleccionada }}) |>
+    obtener_est_descriptivos() |> 
+    mutate(variable = nombre_var) |> 
+    relocate(variable, .before = minimo)
+  
+  return(datos_procesados)
+}
+```
+Incluso puede aplicarse a `obtener_est_descriptivos`
+
+
+```
+# 1. Optimizamos la función base
+obtener_est_descriptivos <- function(datos, var){
+  datos |> 
+    summarise(
+      minimo = min({{ var }}, na.rm = TRUE),
+      promedio = survey_mean({{ var }}, na.rm = TRUE, vartype = NULL),
+      desv_est = survey_sd({{ var }}, na.rm = TRUE),
+      maximo = max({{ var }}, na.rm = TRUE)
+    )
+}
+
+# 2. Simplificamos la función creadora de tablas
+crear_tbl_est_des <- function(datos, var_seleccionada){
+  nombre_var <- as_label(enquo(var_seleccionada))
+  
+  datos |> 
+    # Calculamos directamente sobre la variable elegida
+    obtener_est_descriptivos({{ var_seleccionada }}) |> 
+    # Añadimos la columna con el nombre
+    mutate(variable = nombre_var) |> 
+    relocate(variable, .before = minimo)
+}
+```
+
+Cabe señalar que en `scripts/26_construccion_tablas_v14.R` se añadió la función que crea la tabla de encuesta compleja
+
+
+
+

@@ -1,0 +1,296 @@
+---
+date: today
+format: html
+---
+
+En este documento se realizarán las gráficas finales de la versión 3-4 del capítulo 3.
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+library(srvyr)
+library(scales)
+
+source("scripts/0_funciones_v9.R")
+sinco19 <- read_rds("datos/descriptivo_sinco19.rds")
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+```
+
+Gráfica del SINCO-19 por división
+
+```{r}
+sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  ggplot(aes(s19_div, prop, fill = edu_req_aprox)) +
+  geom_col() +
+  coord_flip()
+```
+
+¿Al revés?
+
+```{r}
+sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  ggplot(aes(s19_div, prop, fill = edu_req_aprox)) +
+  geom_col()
+```
+
+Vamos a hacer la vertical
+
+```{r}
+sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  filter(prop <= 0.03)
+```
+
+
+
+```{r}
+etiquetas_var1 <- c(
+  "1"	 = 	"1 Funcionarios, directores y jefes",
+  "2"	 = 	"2 Profesionistas y técnicos",
+  "3"	 = 	"3 Trabajadores auxiliares en actividades administrativas",
+  "4"	 = 	"4 Comerciantes, empleados en ventas y agentes de ventas",
+  "5"	 = 	"5 Trabajadores en servicios personales y de vigilancia",
+  "6"	 = 	"6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca",
+  "7"	 = 	"7 Trabajadores artesanales, en la construcción y otros oficios",
+  "8"	 = 	"8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte",
+  "9"	 = 	"9 Trabajadores en actividades elementales y de apoyo"
+)
+
+etiquetas_var2 <- c(
+  "0" = "Menor a básica",
+  "1" = "Básica a \nmedia superior",
+  "2" = "Superior",
+  "3" = "Otros",
+  "NA" = "No especificado"
+)
+
+sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(
+    prop = n / sum(n),
+    prop_label = if_else(prop > 0.03, percent(prop, accuracy = 1), ""),
+  ) |> 
+  ggplot(aes(s19_div, prop, fill = edu_req_aprox, group = edu_req_aprox)) +
+  geom_col() + 
+  geom_text(aes(label = prop_label), position = position_stack(0.5)) + 
+  scale_x_discrete(labels = label_wrap(30)(etiquetas_var1)) +
+  scale_y_continuous(breaks = NULL, expand = 0) +
+  # scale_fill_discrete(palette = "Paired", labels = etiquetas_var2) + 
+  scale_fill_brewer(
+    palette = "Paired", 
+    direction = -1, 
+    name = "Educación \nrequerida",
+    labels = etiquetas_var2,
+    # relleno para valores nulos 
+    na.value = "grey50"
+  ) + 
+  theme_classic(base_size = 10, base_family = "Trebuchet MS") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    axis.line = element_blank(),
+    axis.ticks = element_blank()
+  ) + 
+  labs(x = NULL, y = NULL)
+```
+
+Listo! Se guarda
+
+```{r}
+etiquetas_var1 <- c(
+  "1"	 = 	"1 Funcionarios, directores y jefes",
+  "2"	 = 	"2 Profesionistas y técnicos",
+  "3"	 = 	"3 Trabajadores auxiliares en actividades administrativas",
+  "4"	 = 	"4 Comerciantes, empleados en ventas y agentes de ventas",
+  "5"	 = 	"5 Trabajadores en servicios personales y de vigilancia",
+  "6"	 = 	"6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca",
+  "7"	 = 	"7 Trabajadores artesanales, en la construcción y otros oficios",
+  "8"	 = 	"8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte",
+  "9"	 = 	"9 Trabajadores en actividades elementales y de apoyo"
+)
+
+etiquetas_var2 <- c(
+  "0" = "Menor a básica",
+  "1" = "Básica a \nmedia superior",
+  "2" = "Superior",
+  "3" = "Otros",
+  "NA" = "No especificado"
+)
+
+fig_edu_req_s19_div <- sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(
+    prop = n / sum(n),
+    prop_label = if_else(prop > 0.03, percent(prop, accuracy = 1), ""),
+  ) |> 
+  ggplot(aes(s19_div, prop, fill = edu_req_aprox, group = edu_req_aprox)) +
+  geom_col() + 
+  geom_text(aes(label = prop_label), position = position_stack(0.5)) + 
+  scale_x_discrete(labels = label_wrap(30)(etiquetas_var1)) +
+  scale_y_continuous(breaks = NULL, expand = 0) +
+  # scale_fill_discrete(palette = "Paired", labels = etiquetas_var2) + 
+  scale_fill_brewer(
+    palette = "Paired", 
+    direction = -1, 
+    name = "Educación \nrequerida",
+    labels = etiquetas_var2,
+    # relleno para valores nulos 
+    na.value = "grey50"
+  ) + 
+  theme_classic(base_size = 10, base_family = "Trebuchet MS") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    axis.line = element_blank(),
+    axis.ticks = element_blank()
+  ) + 
+  labs(x = NULL, y = NULL)
+
+guardar_figura(fig_edu_req_s19_div, "figuras/fig_edu_req_s19_div.png")
+```
+
+Listo!
+
+Proporción por división
+
+```{r}
+argumentos <- tribble(
+  ~datos, ~grupo,
+  # ---
+  "jovenes_ocu", "mujer",
+  "jovenes_ocu", "educacion",
+  "jovenes_ocu", "campo_amplio",
+  "jovenes_ocu", "regiones",
+  "jovenes_ocu", "ent",
+  "jovenes_ocu", "sector_eco",
+  "jovenes_ocu", "tamanio",
+  "jovenes_ocu", "division",
+  "jovenes_ocu", "informal",
+  "jovenes_ocu", "jornada",
+  "jovenes_ocu", "ingreso_nivel"
+)
+
+descriptivo_prop <- pmap(argumentos, calcular_prop_map) |> 
+  list_rbind()
+```
+
+Se crea la gráfica
+
+```{r}
+etiquetas_var1 <- c(
+  "1"	 = 	"1 Funcionarios, directores y jefes",
+  "2"	 = 	"2 Profesionistas y técnicos",
+  "3"	 = 	"3 Trabajadores auxiliares en actividades administrativas",
+  "4"	 = 	"4 Comerciantes, empleados en ventas y agentes de ventas",
+  "5"	 = 	"5 Trabajadores en servicios personales y de vigilancia",
+  "6"	 = 	"6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca",
+  "7"	 = 	"7 Trabajadores artesanales, en la construcción y otros oficios",
+  "8"	 = 	"8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte",
+  "9"	 = 	"9 Trabajadores en actividades elementales y de apoyo"
+  # "99" = "No especificado"
+)
+
+descriptivo_prop |> 
+  filter(grupo == "division" & valor != "99") |> 
+  mutate(
+    valor_label = factor(valor, labels = etiquetas_var1),
+    prop_label = percent(prop, accuracy = 1)
+  ) |> 
+  ggplot(aes(fct_reorder(valor_label, -prop), prop)) +
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.03, label = prop_label)) + 
+  scale_x_discrete(labels = label_wrap(30)) +
+  scale_y_continuous(
+    breaks = NULL,
+    expand = expansion(mult = c(0, 0.1))
+  ) + 
+  theme_classic(base_size = 11, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    axis.line = element_blank(),
+    axis.ticks = element_blank()
+  ) +
+  labs(x = NULL, y = NULL)
+```
+
+Listo! Se guarda
+
+```{r}
+etiquetas_var1 <- c(
+  "1"	 = 	"1 Funcionarios, directores y jefes",
+  "2"	 = 	"2 Profesionistas y técnicos",
+  "3"	 = 	"3 Trabajadores auxiliares en actividades administrativas",
+  "4"	 = 	"4 Comerciantes, empleados en ventas y agentes de ventas",
+  "5"	 = 	"5 Trabajadores en servicios personales y de vigilancia",
+  "6"	 = 	"6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca",
+  "7"	 = 	"7 Trabajadores artesanales, en la construcción y otros oficios",
+  "8"	 = 	"8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte",
+  "9"	 = 	"9 Trabajadores en actividades elementales y de apoyo"
+  # "99" = "No especificado"
+)
+
+fig_prop_division <- descriptivo_prop |> 
+  filter(grupo == "division" & valor != "99") |> 
+  mutate(
+    valor_label = factor(valor, labels = etiquetas_var1),
+    prop_label = percent(prop, accuracy = 1)
+  ) |> 
+  ggplot(aes(fct_reorder(valor_label, -prop), prop)) +
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.03, label = prop_label)) + 
+  scale_x_discrete(labels = label_wrap(30)) +
+  scale_y_continuous(
+    breaks = NULL,
+    expand = expansion(mult = c(0, 0.1))
+  ) + 
+  theme_classic(base_size = 11, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    axis.line = element_blank(),
+    axis.ticks = element_blank()
+  ) +
+  labs(x = NULL, y = NULL)
+
+guardar_figura(fig_prop_division, "figuras/fig_prop_division.png")
+```
+
+Calcular proporción de jóvenes por educación requerida
+
+```{r}
+jovenes_ocu |> 
+  establecer_edu_req_aprox(edu_requerida) |> 
+  calcular_prop(edu_req_aprox)
+```
+
+Listo!
+
+```{r}
+calcular_total(jovenes_ocu)
+
+descriptivo_prop |> 
+  filter(grupo == "ingreso_nivel")
+
+
+15138 - 6999
+```
+
+```{r}
+sinco19 |> 
+  count(edu_req_aprox) |> 
+  mutate(prop = n / sum(n))
+```
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "division")
+```
+

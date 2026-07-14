@@ -1,0 +1,276 @@
+---
+date: today
+format: html
+---
+
+## INTRODUCCIÓN
+
+Este documento es una continuación de: "C:/Prog/tesis/30_c3_v3_analisis_descrip_4.qmd" con las actualizaciones registradas en "C:/Prog/tesis/31_codigo_con_rds.qmd".
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+# trabajar encuesta compleja dentro de tidyverse 
+library(srvyr)
+# regresión a encuesta compleja
+library(survey)
+# convertir a porcentaje dentro de mutate
+library(scales) 
+# operador entre llaves 
+library(rlang)
+
+source("C:/Prog/tesis/scripts/funciones_v3.R")
+
+pob_15ymas <- read_rds("C:/Prog/tesis/datos/pob_15ymas.rds")
+jovenes_tot <- read_rds("C:/Prog/tesis/datos/jovenes_tot.rds")
+jovenes_svy <- read_rds("datos/jovenes_normativo.rds")
+```
+
+Se valida tamaño de la muestra para confirmar que la tabla está correcta
+
+```{r}
+# obtener_tamanio_muestra(jovenes_tot)
+```
+
+Está incorrecto!! ¿Por qué?
+
+En "C:/Prog/tesis/scripts/preparacion_datos.R"
+
+```
+## Población total
+pob_total_proc <- construir_variables_ind(pob_total)
+pob_total_proc <- definir_encuesta(pob_total_proc)
+
+## Población de 15 años y más
+pob_15ymas_proc <- construir_variables_ind(pob_15ymas)
+pob_15ymas_proc <- definir_encuesta(pob_15ymas_proc)
+
+## Jóvenes (25-34) egresados de educación superior 
+jovenes_tot <- seleccionar_jov(pob_15ymas_proc)
+```
+
+La educación no está definido en términos del CINE-11. Se realiza dicha modificación.
+
+AHORA
+
+```
+## Población total
+pob_total_proc <- construir_variables_ind(pob_total)
+pob_total_proc <- construir_educacion_cine11(pob_total_proc)
+pob_total_proc <- definir_encuesta(pob_total_proc)
+
+## Población de 15 años y más
+pob_15ymas_proc <- construir_variables_ind(pob_15ymas)
+pob_15ymas_proc <- construir_educacion_cine11(pob_15ymas_proc)
+pob_15ymas_proc <- definir_encuesta(pob_15ymas_proc)
+
+## Jóvenes (25-34) egresados de educación superior 
+jovenes_tot <- seleccionar_jov(pob_15ymas_proc)
+```
+
+Los cambios se realizaron en:
+
+* "C:/Prog/tesis/scripts/preparacion_datos_v2.R"
+* "C:/Prog/tesis/scripts/funciones_v3.R"
+
+Se valida
+
+```{r}
+obtener_tamanio_muestra(jovenes_tot)
+```
+
+Ahora sí está correcto
+
+También se valida la incidencia de la población objetivo
+
+```{r}
+calcular_incidencia_svy_tot(jovenes_svy, edu_mismatch_obj)
+```
+
+También está correcto!!!
+
+Previamente, en "C:/Prog/tesis/30_c3_v3_analisis_descrip_4.qmd" nos quedamos con la población desocupada. 
+
+## DESOCUPADA
+
+Duración del desempleo
+
+```{r}
+jovenes_tot |> 
+  filter(clase1 == 1 & clase2 == 2) |> 
+  obtener_tot_svy(dur_des)
+```
+
+El 37.5% de jóvenes egresados de educación superior (total), lleva más de un mes hasta tres meses desocupado. Seguido de 28.9% que lleva hasta un mes y el 20.8% más de tres meses hasta seis. 
+
+Por género
+
+```{r}
+jovenes_tot |> 
+  filter(clase1 == 1 & clase2 == 2) |> 
+  obtener_subtot_svy(mujer, d_ant_lab)
+```
+
+En cuanto a antecedentes laborales, no existen diferencias por género
+
+```{r}
+jovenes_tot |> 
+  filter(clase1 == 1 & clase2 == 2) |> 
+  obtener_subtot_svy(mujer, dur_des)
+```
+
+Solamente existe diferencia significativa en "Más de tres meses hasta seis". En hombres es del 16.7% y en mujeres 24.4%
+
+```{r}
+jovenes_tot |> 
+  filter(clase1 == 1 & clase2 == 2 & d_ant_lab == 1) |> 
+  obtener_subtot_svy(mujer, d_cexp_est)
+```
+
+Hay diferencias en "Perdió o terminó su empleo anterior". Hombres: 51.0% y mujeres 59.2%
+
+## OCUPADA 
+
+Ahora continuamos con la población ocupada. Con base en INEGI y OECD (2019), tengo en mente trabajar con los siguientes indicadores:
+
+* tasa de ocupación: `PO / PEA` 
+* tasa de desocupación: `PD / PEA`
+* tasa de condiciones críticas de ocupación: `PCCO / PO`
+* tasa de informalidad laboral 1: `POI / PO` 
+* proporción: `%`
+* tasa de participación: `PEA / pob total`
+* tasa de inactividad: `PNEA / pob total`
+
+Por
+
+* Género
+* Nivel educativo
+* Carreras
+* Entidades
+
+Primero calculemos las tasas mostradas en INEGI. Para lo cual se modifica la función `calcular_t_ocup_gpo` para que pueda realizarse de forma agregada
+
+```{r}
+# calcular tasas complementarias de ocupación y desocupación
+calcular_tasas_ocup <- function(datos, ponderador, campo, condicion, valor){
+  # concatenar
+  filtro <- paste(campo, condicion, valor)
+
+  datos |>
+    mutate(ponderador = as.double({{ ponderador }})) |>
+    summarise(
+      numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Se calcula tasa de participación
+
+```{r}
+calcular_tasas_ocup(pob_15ymas, fac_tri, "clase1", "==", "1")
+```
+
+Está correcto!!!
+
+Ahora lo que quiero es ponerle nombre
+
+```{r}
+# # calcular tasas complementarias de ocupación y desocupación
+# funcion_vgr <- function(datos, nombre, campo, condicion, valor){
+# 
+#   # concatenar
+#   filtro <- paste(campo, condicion, valor)
+#   
+#   datos |> 
+#     mutate(ponderador = as.double(fac_tri)) |> 
+#     summarise(
+#       variable = nombre,
+#       numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+#       denominador = sum(ponderador),
+#       tasa = numerador / denominador
+#     )
+# }
+```
+
+Se valida
+
+```{r}
+# funcion_vgr(pob_15ymas, "tp", "clase1", "==", "1")
+```
+
+Platicando con Gemini, en este caso que sólo deseo una columna adicional que muestre el nombre de la tasa no es necesario añadir ninguna función extra. R por defecto almacena dicho argumento como texto y lo asigna a la variable que yo especifico como tipo caracter.
+
+Por otro lado, sugiere eliminar el uso del operador, es decir, utilizar como argumentos solo el campo y el valor. En ese sentido, tiene razón ya que mi función sólo aplica para el cálculo de tasas complementarias de ocupación y desocupación y los criterios son solamente de igualdad.
+
+Se valida en (INEGI, 2023) y la única que cambia el criterio es con TCCO donde "Población en Condiciones Críticas de Ocupación (TCCO=1 a 3)". 
+
+Se podría añadir una variable con `mutate` en este caso para utilizar la función. Por tanto, se modifica
+
+```{r}
+# calcular tasas complementarias de ocupación y desocupación
+calcular_tasas_ocup <- function(datos, nombre, campo, valor){
+
+  datos |>
+    mutate(ponderador = as.double(fac_tri)) |>
+    summarise(
+      nombre = nombre,
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Se valida
+
+```{r}
+calcular_tasas_ocup(pob_15ymas, "tp", clase1, 1)
+```
+
+Listo!!!!
+
+Para el caso de calcular las tasas por grupos, se modifican la función
+
+ANTES
+
+```
+# TIL1 vs % over por estados
+calcular_t_ocup_gpo <- function(datos, grupo, ponderador, poblacion, condicion, valor){
+  # concatenar
+  filtro <- paste(poblacion, condicion, valor)
+  
+  datos |> 
+    mutate(ponderador = as.double({{ ponderador }})) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+AHORA
+
+```{r}
+# tasas complementarios de ocupación y desocupación por grupos
+calcular_tasas_ocu_sub <- function(datos, nombre, grupo, campo, valor){
+
+  datos |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      nombre = nombre,
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Se modifican dichas funciones en "C:/Prog/tesis/scripts/funciones_v3.R" y se guardan en "C:/Prog/tesis/scripts/funciones_v4.R"

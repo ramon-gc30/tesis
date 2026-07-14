@@ -1,0 +1,390 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_funciones_construir_variables_v4.R")
+source("scripts/4_funciones_normativo_ilo_v1.R")
+source("scripts/5-1_funciones_analisis_descriptivo_v5.R")
+```
+
+Ahora se construye tabla que contiene población objetivo
+
+```{r}
+pob_15ymas |> 
+  select(contains("eda"), contains("fac_tri"), p3) |> 
+  head(5)
+```
+
+Recordemos que `pob_15ymas` ya contiene los datos de ocupación, por tanto puedo aplicar la función de construcción de variables
+
+```{r}
+pob_15ymas <- construir_variables(pob_15ymas)
+```
+
+También se define educación en términos de CINE-11
+
+```{r}
+pob_15ymas <- construir_educacion_cine11(pob_15ymas)
+```
+
+Se convierten las variables a factor
+
+```{r}
+pob_15ymas <- convertir_a_factor(pob_15ymas)
+```
+
+Se define como encuesta compleja
+
+```{r}
+pob_15ymas_svy <- definir_encuesta(pob_15ymas)
+```
+
+Tamaño de la muestra
+
+```{r}
+obtener_tamanio_muestra(pob_15ymas_svy)
+```
+
+
+
+Se hace un último ejemplo de los datos reportados por el INEGI
+
+```{r}
+obtener_tot_svy(pob_15ymas_svy, clase1)
+```
+
+Ahora, quiero saber los grupos de edad
+
+```{r}
+obtener_tot_svy(pob_15ymas_svy, edad_7g)
+```
+
+Representa el 18.1% de la población de 15 años y más (población en edad legal para trabajar)
+
+Otra manera de calcularlo
+
+```{r}
+pob_15ymas |> 
+  summarise(
+    tot_jov = sum(fac_tri[edad_7g == 2]),
+    tot = sum(fac_tri),
+    prop_jov = tot_jov / tot
+  )
+```
+
+Estoy en lo correcto!!!
+
+Por educación
+
+```{r}
+obtener_tot_svy(pob_15ymas_svy, educacion)
+```
+
+```{r}
+pob_15ymas |> 
+  mutate(
+    educacion = as.integer(educacion),
+    edu_tipo = case_when(
+        # Menor a básica
+        between(educacion, 0, 1) ~ 0,
+        # Básica
+        between(educacion, 2, 3) ~ 1,
+        # Media superior
+        educacion == 4 ~ 2, 
+        # Superior
+        between(educacion, 6, 9) ~ 3,
+        TRUE ~ NA
+      )
+    ) |> 
+  select(educacion, edu_tipo)
+```
+
+Como se observa, al pasar de factor a entero aparece el número `5`. La solución está en "Aprende escribiendo/convertir un factor a numero en r"
+
+```{r}
+pob_15ymas |> 
+  mutate(
+    # pasar de factor a número
+    educacion = as.integer(levels(educacion))[educacion],
+      edu_tipo = case_when(
+        # Menor a básica
+        between(educacion, 0, 1) ~ 0,
+        # Básica
+        between(educacion, 2, 3) ~ 1,
+        # Media superior
+        educacion == 4 ~ 2, 
+        # Superior
+        between(educacion, 6, 9) ~ 3,
+        TRUE ~ NA
+      )
+    ) |> 
+  select(educacion, edu_tipo)
+```
+
+Se crea función para variable que contiene tipo de educación del individuo
+
+```{r}
+establecer_edu_tipo <- function(datos){
+  datos |>
+    mutate(
+      educacion = as.integer(levels(educacion))[educacion],
+      edu_tipo = case_when(
+        # Menor a básica
+        between(educacion, 0, 1) ~ 0,
+        # Básica
+        between(educacion, 2, 3) ~ 1,
+        # Media superior
+        educacion == 4 ~ 2,
+        # Superior
+        between(educacion, 6, 9) ~ 3,
+        TRUE ~ NA
+      )
+    )
+}
+```
+
+Se valida
+
+```{r}
+establecer_edu_tipo(pob_15ymas_svy) |> 
+  obtener_tot_svy(edu_tipo)
+```
+
+Ahora sí. El 17.6% de la población de 15 años y más cuenta con estudios de tipo superior
+
+JÓVENES 25-34 AÑOS
+
+```{r}
+pob_15ymas_svy |> 
+  filter(edad_7g == 2) |> 
+  establecer_edu_tipo() |> 
+  obtener_tot_svy(edu_tipo)
+```
+
+De jóvenes 25-34 años, el 28.9% tiene estudios de tipo superior
+
+```{r}
+pob_15ymas_svy |> 
+  filter(edad_7g == 2) |> 
+  obtener_tot_svy(educacion) |> 
+  arrange(desc(prop))
+```
+
+El 35.5% tiene estudios de preparatoria, el 26.8% estudios de licenciatura y el 26.2% estudios de secundaria
+
+```{r}
+0.3545031737 + 0.2681867908	+ 0.2619548335
+```
+
+Juntos suman el 88.5%
+
+Ahora sí, seleccionamos la población objetivo
+
+```{r}
+jovenes_svy <- seleccionar_jov(pob_15ymas_svy)
+```
+
+Tamaño de la muestra
+
+```{r}
+obtener_tamanio_muestra(jovenes_svy)
+```
+
+Está correcto
+
+De la población de 15 años y más, es decir, la población en edad legal para trabajar, la población objetivo se compone de 18,324 observaciones que corresponde a una población de 5,377,852 jóvenes de 25 a 34 años egresados de educación superior
+
+```{r}
+5377852 / 102615200
+```
+
+La población TOTAL de jóvenes de 25 a 34 años egresados de educación superior apenas representa el 5.2% de la población de 15 años y más
+
+
+Se realizan los cálculos
+
+```{r}
+obtener_tot_svy(jovenes_svy, clase1)
+```
+
+De la población objetivo, 4.7 millones son económicamente activos (86.5%) y 0.7 millones son no económicamente activos (13.5%)
+
+PEA
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 1) |> 
+  obtener_tot_svy(clase2)
+```
+
+De la PEA de la población objetivo, 4.5 millones se encuentran ocupados (95.7%) y 0.2 millones están desocupados (4.3%)
+
+PNEA
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 2) |> 
+  obtener_tot_svy(clase2)
+```
+
+De la PNEA de la población objetivo, 111 mil están disponibles (15.4%) y 614 mil están no disponibles (84.6%)
+
+POR GÉNERO
+
+Muestra
+
+```{r}
+obtener_tot_svy(jovenes_svy, mujer)
+```
+
+El 55.3% son mujeres y el 44.7% son hombres
+
+
+```{r}
+jovenes_svy |> 
+  group_by(mujer, clase1) |> 
+  summarise(
+    n = n(),
+    tot = survey_total(vartype = NULL),
+    prop = survey_prop(vartype = NULL)
+  )
+```
+
+Del total de mujeres, 79.8% son PEA mientras que del total de hombres 94.8% son PEA. Caso contrario, el 20.2% de las mujeres son PNEA comparado con 5.2% de los hombres
+
+Se crea una función nueva que muestra el total por grupos
+
+```{r}
+obtener_tot_svy_sub <- function(datos, grupo, variable){
+  datos |>
+    group_by({{  grupo  }}, {{  variable  }}) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    )
+}
+```
+
+PEA
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 1) |> 
+  obtener_tot_svy_sub(mujer, clase2)
+```
+
+No existen grandes diferencias de población ocupada por género: mujeres: 95.6% y hombres: 95.6%
+
+PNEA
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 2) |> 
+  obtener_tot_svy_sub(mujer, clase2)
+```
+
+El 12.4% de las mujeres PNEA están disponibles, y 87.6% no lo están. En el caso de los hombres, el 29.8% lo está y 70.2% no lo están. 
+
+Es decir, hay más mujeres no disponibles que hombres no disponibles, diferencia de 
+
+```{r}
+0.8762943 - 0.7015427
+```
+
+17.5 puntos porcentuales
+
+¿por qué?
+
+Vamos a enfocarnos en la PNEA
+
+Disponible
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 2 & clase2 == 3) |> 
+  obtener_tot_svy(pnea_est)
+```
+
+Del 100% de pnea disponible, el 93.5% está disponible para trabajar que no busca empleo por considerar que no tiene posibilidades
+
+Mientras que el 6.5% está disponible para trabajar pero ha desistido de buscar empleo
+
+No disponible
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 2 & clase2 == 4) |> 
+  obtener_tot_svy(pnea_est)
+```
+
+El 77.8% de la población no disponible está sin interés de trabajar por atender otras obligaciones. Mientras que, el 12.5% está con interés para trabajar, pero bajo un contexto que le impide hacerlo
+
+Por género
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 2 & clase2 == 3) |> 
+  obtener_tot_svy_sub(mujer, pnea_est)
+```
+
+No existen diferencias en cuanto a la población PNEA disponible
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 2 & clase2 == 4) |> 
+  obtener_tot_svy_sub(mujer, pnea_est)
+```
+
+De la PNEA no disponible, sí existe una diferencia por género en cuanto a "Sin interés para trabajar por atender otras obligaciones". En el caso de las mujeres, 80.9% no presenta interés debido a que atiende otras obligaciones. En el caso de los hombres, es del 59.3%
+
+También hay una diferencia de "Con interés para trabajar, pero bajo un contexto que le impide hacerlo". En el caso de las mujeres es del 14.0% y en el caso de los hombres del 3.2%
+
+¿Por qué? Los hijos?
+
+```{r}
+jovenes_svy |> 
+  filter(mujer == 1) |> 
+  obtener_tot_svy(hij5c)
+```
+
+El 61.2% de las mujeres no tiene hijos y el 35.9% tiene 1 a 2 hijos
+
+```{r}
+jovenes_svy |> 
+  filter(mujer == 1 & clase1 == 2 & clase2 == 4) |> 
+  obtener_tot_svy_sub(hij5c, pnea_est)
+```
+
+Del total de mujeres que no tienen hijos, el 80.9% "Sin interés para trabajar por atender otras obligaciones" mientras de las que tienen 1 a 2 hijos, es del 81.2%.
+
+Lo que sí cambia es el porcentaje de "Con interés para trabajar, pero bajo un contexto que le impide hacerlo". Sin hijos es del 10.3%, de 1 a 2 hijos del 16.0% y de 3 a 5 hijos del 20.1%
+
+Parece que se relaciona el número de hijos y el interés en trabajar pero no pueden por el contexto.
+
+Desocupada
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 1 & clase2 == 2) |> 
+  obtener_tot_svy(d_ant_lab)
+```
+
+Del 100% de PEA desocupada, el 89.3% tiene experiencia y el 10.7% no
+
+```{r}
+jovenes_svy |> 
+  filter(clase1 == 1 & clase2 == 2) |> 
+  obtener_tot_svy(d_cexp_est)
+```
+
+Del total de jóvenes desocupados, el 49.4% perdió o terminó su empleo anterior. Y el 35.3% reporta insatisfacción con el empleo anterior
+

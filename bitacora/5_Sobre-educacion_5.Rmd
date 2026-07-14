@@ -1,0 +1,1342 @@
+---
+title: "Sobre-educación (5)"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+7.  C:/Prog/tesis/5_Sobre-educacion_2.Rmd
+8.  C:/Prog/tesis/5_Sobre-educacion_3.Rmd
+9.  C:/Prog/tesis/5_Sobre-educacion_4.Rmd
+
+# Paquetes requeridos
+
+```{r setup}
+# paquetes ==========================================================
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# calcular la moda
+library(DescTools)
+# coeficiente de asimetría
+library(moments)
+library(EnvStats)
+
+# importación =======================================================
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación ======================================================
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  anios_esc = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_esc = if_else(anios_esc != 99, anios_esc, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # 0 pasa a NA ya que es equivalente en p6b2
+  # ingocup = if_else(ingocup != 0, ingocup, NA),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+  # 0 pasa a NA ya que es equivalente en p6b2 y en dur9c == 1 y 9
+  # ing_x_hrs = if_else(ing_x_hrs != 0, ing_x_hrs, NA) 
+)
+
+# construcción de variables =========================================
+# grupos de edad
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitarias
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# creación de tablas ================================================
+# población total
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+
+# sobre-educación ===================================================
+
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu1 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_ocu1 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu1" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu1, by = "ocupacion1") %>% 
+  left_join(edu_req2_ocu1, by = "ocupacion1") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_ocu1 = as.double(moda_ocu1),
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      # required
+      between(anios_esc, vv_neg_ocu1, vv_pos_ocu1) ~ 0,
+      # over
+      anios_esc > vv_pos_ocu1 ~ 1,
+      # under
+      anios_esc < vv_neg_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu1 = case_when(
+      # required
+      anios_esc == mediana_ocu1 ~ 0,
+      # over
+      anios_esc > mediana_ocu1 ~ 1,
+      # under
+      anios_esc < mediana_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu1 = case_when(
+      # required
+      anios_esc == moda_ocu1 ~ 0,
+      # over
+      anios_esc > moda_ocu1 ~ 1,
+      # under
+      anios_esc < moda_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # media
+    over_vv_ocu1 = if_else(anios_esc > vv_pos_ocu1, 1, 0),
+    req_vv_ocu1 = if_else(between(anios_esc, vv_neg_ocu1, vv_pos_ocu1), 1, 0),
+    under_vv_ocu1 = if_else(anios_esc < vv_neg_ocu1, 1, 0),
+    # mediana
+    over_med_ocu1 = if_else(anios_esc > mediana_ocu1, 1, 0),
+    req_mod_ocu1 = if_else(anios_esc == mediana_ocu1, 1, 0),
+    under_mod_ocu1 = if_else(anios_esc < mediana_ocu1, 1, 0),
+    # moda
+    over_mod_ocu1 = if_else(anios_esc > moda_ocu1, 1, 0),
+    req_mod_ocu1 = if_else(anios_esc == moda_ocu1, 1, 0),
+    under_mod_ocu1 = if_else(anios_esc < moda_ocu1, 1, 0)
+  )
+```
+
+# Incidencia
+
+## Sobre-educación
+
+### Media
+
+```{r}
+ocupada %>% 
+  group_by(over_vv_ocu1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+# ¿Valor `NA` en `edu_mis`?
+
+Al observar los resultados, observo que dentro de los valores de `over_vv_ocu1` (que toma el valor `1` si la persona está sobre-educada) aparece el valor `NA`, recordemos que dicho valor representa los casos cuando las personas no especificaron sus años de escolaridad, véase @inegienoebd2024 p. 25. No obstante, no represente dichos casos cuando cree la variable que señala el desajuste educativo `edu_mis` por lo que el valor `0` considera dichos casos. Se realiza la modificación de, por ejemplo:
+
+```
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      anios_esc > vv_pos_ocu1 ~ 1,
+      anios_esc < vv_neg_ocu1 ~ 2,
+      TRUE ~ 0
+    ),
+```
+A la siguiente modificación:
+
+```
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      # required
+      between(anios_esc, vv_neg_ocu1, vv_pos_ocu1) ~ 0,
+      # over
+      anios_esc > vv_pos_ocu1 ~ 1,
+      # under
+      anios_esc < vv_neg_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+```
+
+Se espera que no existan grandes modificaciones debido a que el valor `99` en `anios_esc` representa apenas el 0.2% de la muestra, véase "Sobre-educación (3)". Dichas modificaciones se realizan en el bloque `setup`.
+
+# Requerida
+
+## Media
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Comparando con "Sobre-educación (4)", se observa una disminución mínima de requeridos de 76%  (0.7518498) a 75% (0.74931316), se espera que el ingreso mensual promedio no haya cambiado.
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    tot = sum(fac_tri.x),
+    promedio = mean(ingocup),
+    maximo = max(ingocup),
+    minimo = min(ingocup)
+  )
+```
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    tot = sum(fac_tri.x),
+    promedio_n = mean(ingocup),
+    ing_tot = sum(ingocup),
+    prom_tot = ing_tot / tot,
+    maximo = max(ingocup),
+    minimo = min(ingocup)
+  ) %>% 
+  mutate(s_tot = sum(tot))
+```
+
+# ¿Valores `0` en `ingocup`?
+
+Antes de continuar, ¿por qué existen valores `0` en `ingocup` que pertenece a la tabla `ocupada`? ¿De dónde provienen? ¿existen valores nulos?
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  )
+```
+
+```{r}
+ocupada %>% 
+  filter(is.na(ingocup)) %>% 
+  group_by(clase2) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  )
+```
+
+Obviamente, pertenecen a la PEA y, en específico, a la población ocupada, entonces ¿de dónde provienen? se valida con `clase3`
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  group_by(clase3) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+El 96% se encuentra ocupada de forma plena. ¿Cuál es la proporción de personas que reportan ingreso mensual `0`?
+
+```{r}
+ocupada %>% 
+  group_by(ing7c) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+El 5% (2,784,614) reporta no recibir ingresos cifra que no coincida con el número de personas que reportar un ingreso mensual de 0 pesos (25,722,853).
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  group_by(ing7c) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    pob_tot = sum(tot),
+    prop = tot / sum(tot)
+  )
+```
+
+El 41% de las personas que reportan un ingreso mensual de 0 pesos, se encuentra en el nivel "No especificado" (7), y sólo el 11% en "No recibe ingresos" (6), pero el otro 42% se ubica en "Hasta un salario mínimo" (1) y "Más de 1 hasta 2 salarios mínimos" (2). La duda que surge es: ¿qué parte de la población reporta 0 pesos?
+
+```{r}
+ocupada %>% 
+  ggplot(aes(ingocup)) +
+  geom_histogram(binwidth = 1000)
+```
+
+Un elevado número de personas reportan un ingreso mensual de 0 pesos, ¿será inversamente proporcional al año escolar?
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  group_by(anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot / sum(tot)
+  ) %>% 
+  ggplot(aes(anios_esc, prop)) + 
+  geom_col()
+```
+
+No se observa ninguna relación entre años de escolaridad y proporción de personas que reportaron ingreso mensual igual a cero. ¿De dónde provienen?
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  group_by(pos_ocu) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    pob_tot = sum(tot),
+    prop = tot / sum(tot)
+  )
+```
+
+El 62% pertenece a Trabajadores subordinados y remunerados (1), y sólo el 8% a "Trabajadores sin pago" (4).
+
+Por clasificación de ocupación:
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  group_by(c_ocu11c) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    pob_tot = sum(tot),
+    prop = tot / sum(tot)
+  ) %>% 
+  arrange(desc(prop))
+```
+
+El 21% pertenece a "Trabajadores industriales artesanos y ayudantes" (5) y el 20% a "Comerciantes" (6).
+
+Grupos de edad
+
+```{r}
+ocupada %>% 
+  filter(ingocup == 0) %>% 
+  group_by(edad_7g) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    pob_tot = sum(tot),
+    prop = tot / sum(tot)
+  )
+```
+
+## ¿El valor cero es igual a `NA`? 
+
+Validemos con la tabla `completo`
+
+```{r}
+completo %>% 
+  filter(ingocup == 0 | is.na(ingocup)) %>% 
+  group_by(ingocup) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  )
+```
+
+```{r}
+ocupada %>% 
+  filter(is.na(ingocup)) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) 
+```
+
+```{r}
+completo %>% 
+  filter(is.na(ingocup)) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  )
+```
+
+```{r}
+sdem %>% 
+  filter(is.na(ingocup)) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Se observa que en `ingocup` no existen valores `NA`. @inegienoebd2024 señala que "El valor registrado en esta variable es el mismo captado en la pregunta 6B" p. 25, se valida en `coe` y se basa en la pregunta `p6b2`. Se valida valores extremos de ambas variables.
+
+```{r}
+completo %>%
+  # filter(!is.na(p6b2)) %>% 
+  mutate(p6b2 = as.double(p6b2)) %>% 
+  summarise(
+    maximo1 = max(ingocup),
+    maximo2 = max(p6b2),
+    minimo1 = min(ingocup),
+    minimo2 = min(p6b2)
+  )
+```
+
+Se observa que no coinciden debido a que hay `NA` en `p6b2`, se elimina valor
+
+```{r}
+completo %>%
+  filter(!is.na(p6b2)) %>%
+  mutate(p6b2 = as.double(p6b2)) %>% 
+  summarise(
+    maximo1 = max(ingocup),
+    maximo2 = max(p6b2),
+    minimo1 = min(ingocup),
+    minimo2 = min(p6b2)
+  )
+```
+
+Los valores ahora sí coinciden
+
+```{r}
+completo %>%
+  filter(ingocup == 0) %>%
+  select(ingocup, p6b2)
+  # mutate(
+  #   match = if_else(ingocup == 0 & is.na(p6b2), 1, 0)
+  # ) %>% 
+  # group_by(match) %>% 
+  # summarise(n = n())
+```
+
+Se valida los casos en que `0 == NA`
+
+```{r}
+completo %>%
+  filter(ingocup == 0) %>%
+  select(ingocup, p6b2) %>%
+  mutate(
+    match = if_else(ingocup == 0 & is.na(p6b2), 1, 0)
+  ) %>%
+  group_by(match) %>%
+  summarise(n = n())
+```
+
+Se confirma que el valor `0` en `ingocup` equivale al valor `NA` de `p6b2` por lo que se modifica dicho valor a `NA` en el bloque de `setup` en el documento siguiente. 
+
+# Ingreso mensual promedio con ponderador trimestral
+
+Por último, se calcula ingreso mensual promedio con la ponderación trimestral. 
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    ing_tot = sum(ing_x_fac_tri),
+    pob_tot = sum(fac_tri.x),
+    ing_medio = ing_tot / pob_tot
+  ) %>% 
+  mutate(prop = pob_tot / sum(pob_tot))
+```
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(
+    ing_tot = sum(ing_x_fac_tri),
+    pob_tot = sum(fac_tri.x),
+    ing_medio = ing_tot / pob_tot
+  ) %>% 
+  mutate(prop = pob_tot / sum(pob_tot))
+```
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(
+    ing_tot = sum(ing_x_fac_tri),
+    pob_tot = sum(fac_tri.x),
+    ing_medio = ing_tot / pob_tot
+  ) %>% 
+  mutate(prop = pob_tot / sum(pob_tot))
+```
+
+El ingreso mensual promedio cuando se eliminan los valores faltantes y se considera la ponderación trimestral cambian marginalmente con respecto a cuando se considera a la muestra de la población. ¿Cómo será cuando se considera sólo a la muestra?
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    n = n(),
+    ing_medio = mean(ingocup)
+  ) %>% 
+  mutate(prop = n / sum(n))
+```
+
+# ¿Sobre-educados ganan más que ajustados?
+
+Por último, considero que los sobre-educados que ganan más que los ajustados se presenta en el caso de niveles de esudios superiores
+
+## Nivel de estudios
+
+Media
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(cs_p13_1, edu_mis_vv_ocu1) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) %>% 
+  mutate(prop = round(pob / sum(pob), digits = 4))
+```
+
+De forma gráfica
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_vv_ocu1)
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(cs_p13_1, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) %>% 
+  mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  ggplot(aes(cs_p13_1, promedio, color = desajuste, group = desajuste)) + 
+  geom_point() + 
+  geom_line()
+```
+
+## Años de escolaridad
+
+Media + p3
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_vv_ocu1),
+    escolaridad = factor(anios_esc)
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(escolaridad, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) %>% 
+  mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  ggplot(aes(escolaridad, promedio, color = desajuste, group = desajuste)) + 
+  geom_point() + 
+  geom_line()
+```
+
+Moda + 
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_mod_ocu1),
+    escolaridad = factor(anios_esc)
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(escolaridad, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) %>% 
+  mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  ggplot(aes(escolaridad, promedio, color = desajuste, group = desajuste)) + 
+  geom_point() + 
+  geom_line()
+```
+
+Mediana  
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_med_ocu1),
+    escolaridad = factor(anios_esc)
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(escolaridad, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) %>% 
+  mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  ggplot(aes(escolaridad, promedio, color = desajuste, group = desajuste)) + 
+  geom_point() + 
+  geom_line()
+```
+
+## Grupos de edad en profesionistas
+
+Por grupos de edad en el caso de profesionistas
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_med_ocu1),
+    escolaridad = factor(cs_p13_1)
+  ) %>% 
+  filter(!is.na(ingocup) & (escolaridad == 7 | escolaridad == 8 | escolaridad == 9)) %>% 
+  group_by(escolaridad, edad_7g, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) 
+  # mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  # ggplot(aes(edad_7g, promedio, color = desajuste, group = desajuste)) +
+  # geom_point() +
+  # geom_line()
+```
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_vv_ocu1),
+    escolaridad = factor(cs_p13_1)
+  ) %>% 
+  filter(!is.na(ingocup) & (escolaridad == 7 | escolaridad == 8 | escolaridad == 9)) %>% 
+  group_by(escolaridad, edad_7g, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) 
+  # mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  # ggplot(aes(edad_7g, promedio, color = desajuste, group = desajuste)) +
+  # geom_point() +
+  # geom_line()
+```
+
+Con p3
+
+```{r}
+# métodos: verdugo y verdugo, y mediana
+edu_req1_p3 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(p3) %>%
+  summarise(
+    vv_neg_p3 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_p3 = mean(anios_esc) + sd(anios_esc),
+    mediana_p3 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_p3 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(p3, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_p3" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_p3, by = "p3") %>% 
+  left_join(edu_req2_p3, by = "p3") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_p3 = as.double(moda_p3),
+    # verdugo y verdugo
+    edu_mis_vv_p3 = case_when(
+      between(anios_esc, vv_neg_ocu1, vv_pos_ocu1) ~ 0,
+      anios_esc > vv_pos_p3 ~ 1,
+      anios_esc < vv_neg_p3 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_p3 = case_when(
+      anios_esc == mediana_p3 ~ 0,
+      anios_esc > mediana_p3 ~ 1,
+      anios_esc < mediana_p3 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_p3 = case_when(
+      anios_esc == moda_p3 ~ 0,
+      anios_esc > moda_p3 ~ 1,
+      anios_esc < moda_p3 ~ 2,
+      TRUE ~ NA
+    )
+  )
+```
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    ing_x_fac_tri = ingocup * fac_tri.x,
+    desajuste = factor(edu_mis_vv_p3),
+    escolaridad = factor(cs_p13_1)
+  ) %>% 
+  filter(!is.na(ingocup) & (escolaridad == 7 | escolaridad == 8 | escolaridad == 9)) %>% 
+  group_by(escolaridad, edad_7g, desajuste) %>% 
+  summarise(
+    ing = sum(ing_x_fac_tri),
+    pob = sum(fac_tri.x),
+    promedio = ing / pob
+  ) 
+  # mutate(prop = round(pob / sum(pob), digits = 4)) %>% 
+  # ggplot(aes(edad_7g, promedio, color = desajuste, group = desajuste)) +
+  # geom_point() +
+  # geom_line()
+```
+
+El ingreso mensual promedio de sobre-educación es superior en años de escolaridad superior, y en específico en maestría y doctorado en grupos de edad de 55 años en adelante. En especial, doctorado todos se registran como sobre-educados no hay ajustados. 
+
+¿Cómo será cuando utilice `cs_p13_1` y no `anios_esc`? Forzosamente debe utilizarse `anios_esc`, por ejemplo véase la metodología de @zamudioeislas1999: "Los años de educación formal es una variable que se construyó a partir de las variables de educación de la ENEU de tal manera que se creó una variable continua (16). (p. 10)".
+
+# Distribución de años de escolaridad por `ocupacion2`
+
+División 1
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 1) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 2
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 2) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 3
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 3) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 4
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 4) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 5
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 5) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 6
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 6) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 7
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 7) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 8
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 8) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+División 9
+
+```{r}
+ocupada %>% 
+  filter(ocupacion1 == 9) %>%
+  ggplot(aes(ocupacion2, anios_esc)) + 
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 24, by = 1))
+```
+
+# Valor 0 en `anios_esc`
+
+Destaco que existen valores `0` en `anios_esc`, y según @inegienoebd2024 p. 25 sólo son válidos los siguientes valores:
+* 1 al 24: De uno hasta 24 años de escolaridad
+* 99: no especificado
+
+Actualmente el valor `99` tiene el valor `NA`, ¿pero qué representa el valor `0`? Se valida con `cs_p13_1`
+
+```{r}
+ocupada %>% 
+  filter(anios_esc == 0) %>%
+  mutate(escol = anios_esc) %>% 
+  group_by(cs_p13_1, escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  )
+```
+
+Corresponde al grado escolar "ninguna" (0) y preescolar (1), ¿cuánto representa de la población ocupada?
+
+```{r}
+ocupada %>% 
+  mutate(escol = anios_esc) %>% 
+  group_by(escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = round(tot / sum(tot), digits = 4))
+```
+
+Apenas representa el 3% (0.0265) de la población ocupada, ¿cuál es su ingreso promedio?
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(escol) %>% 
+  summarise(
+    ing_tot = sum(ing_x_fac_tri),
+    tot = sum(fac_tri.x),
+    promedio = ing_tot / tot
+  ) %>% 
+  mutate(prop = round(tot / sum(tot), digits = 4))
+```
+
+Hay una relación positiva entre años de escolaridad y el ingreso mensual promedio
+
+# relación entre escolaridad y el ingreso mensual promedio
+
+`ocupacion1`
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(ocupacion1 == 1 & !is.na(ingocup)) %>% 
+  group_by(ocupacion2, escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x),
+    promedio_f = sum(ing_x_fac_tri) / tot,
+    promedio_m = mean(ingocup)
+  ) 
+```
+
+Las personas con los años de menor escolaridad, incluso ninguno (valor 0), presenta el ingreso mensual promedio más alto en "13 Directores y gerentes en producción, tecnología y transporte". Se cree que son personas con mayor edad.
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(ocupacion2 == 13 & !is.na(ingocup)) %>% 
+  group_by(edad_7g, escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x),
+    promedio_f = sum(ing_x_fac_tri) / tot,
+    promedio_m = mean(ingocup)
+  ) 
+```
+
+Desde el grupo de 35 a 44 años (4), se observa que en sujetos con años de escolaridad bajos tienen un ingreso mensual promedio superior, por ejemplo de 51,600 pesos mensuales. ¿Qué sucede cuando considero el ingreso por hora? Porque al final de cuentas, el ingreso mensual puede estar relacionado con el número de horas trabajadas a la semana, es decir, a más horas trabajadas se percibirá un mayor ingreso.
+
+```{r}
+# ocupada %>% 
+#   group_by(dur9c, ing7c) %>% 
+#   summarise(tot = sum(fac_tri.x)) %>% 
+#   ggplot(aes(dur9c, ing7c)) + 
+#   geom_tile(aes(fill = tot)) 
+
+# ocupada %>% 
+#   ggplot(aes(dur9c, ing7c)) +
+#   geom_count() + 
+#   scale_size_area()
+
+ocupada %>% 
+   mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA)
+   ) %>% 
+  ggplot(aes(dur9c, ingocup)) + 
+  geom_lv()
+```
+
+Por los valores extremos, se observa una cierta relación entre duración de la jornada laboral y el ingreso mensual
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingocup = if_else(ingocup != 0, ingocup, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingocup * fac_tri.x
+  ) %>% 
+  filter(!is.na(ingocup)) %>% 
+  group_by(dur9c) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x),
+    promedio_f = sum(ing_x_fac_tri) / tot,
+    promedio_m = mean(ingocup)
+  ) %>% 
+  ggplot(aes(dur9c, promedio_f)) + 
+  geom_point()
+```
+
+Existe una relación positiva entre el ingreso mensual promedio y la duración de la jornada laboral por lo que se calcula con salario por hora trabajada. Pero, ¿tiene valor `0`?
+
+# Valor 0 en `ing_x_hrs`
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs == 0) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  )
+```
+
+Es diferente a cuando `ingocup == 0` (25,722,853), se valida si hay valores `NA`
+
+```{r}
+ocupada %>% 
+  filter(is.na(ing_x_hrs)) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  )
+```
+
+No los hay, se valida con `p6b2`
+
+```{r}
+ocupada %>% 
+  mutate(
+    p6b2 = as.double(p6b2),
+    vald = if_else(ing_x_hrs == 0 & is.na(p6b2), 1, 0)
+  ) %>% 
+  group_by(vald) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  )
+```
+
+Si representa el total de valores `NA` de `p6b2` (25,722,853), pero todavía faltan:
+
+```{r}
+77505 - 73832
+# 26693406 - 25722853
+```
+
+Se valida con `dur9c`
+
+```{r}
+ocupada %>% 
+  mutate(
+    p6b2 = as.double(p6b2),
+    vald = if_else(ing_x_hrs == 0 & is.na(p6b2), 1, 0)
+  ) %>% 
+  filter(ing_x_hrs == 0 & !is.na(p6b2)) %>% 
+  group_by(dur9c) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x)
+  )
+```
+
+Los 3,673 pertenecen al grupo 1 "Ausentes temporales con vínculo laboral" y al grupo 9 "No especificado" por lo que se puede hacer lo mismo que en `ingocup`, es decir, se puede transformar el valor `0` a `NA`.
+
+# Trabajando con `ing_x_hrs`
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingreso = if_else(ing_x_hrs != 0, ing_x_hrs, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingreso * fac_tri.x
+  ) %>% 
+  filter(ocupacion1 == 1 & !is.na(ingreso)) %>% 
+  group_by(ocupacion2, escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x),
+    promedio_f = sum(ing_x_fac_tri) / tot,
+    promedio_m = mean(ingreso)
+  ) 
+```
+
+Ya no es tan marcado cuando se considera el ingreso por hora trabajada promedio, se valida por grupos de edad
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingreso = if_else(ing_x_hrs != 0, ing_x_hrs, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingreso * fac_tri.x
+  ) %>% 
+  filter(ocupacion1 == 1 & !is.na(ingreso)) %>% 
+  group_by(edad_7g, escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x),
+    promedio_f = sum(ing_x_fac_tri) / tot,
+    promedio_m = mean(ingreso)
+  ) %>% 
+  ggplot(aes(edad_7g, escol)) + 
+  geom_boxplot()
+```
+
+En los grupos de mayor edad, desde los 45 años, presentan los años de escolaridad más bajos y al mismo el ingreso por hora trabajada promedio más elevado.
+
+```{r}
+ocupada %>% 
+  mutate(
+    ingreso = if_else(ing_x_hrs != 0, ing_x_hrs, NA),
+    escol = anios_esc,
+    ing_x_fac_tri = ingreso * fac_tri.x
+  ) %>% 
+  filter(ocupacion1 == 1 & !is.na(ingreso) & escol < 4) %>% 
+  group_by(edad_7g, escol) %>% 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri.x),
+    promedio_f = sum(ing_x_fac_tri) / tot,
+    promedio_m = mean(ingreso)
+  ) %>% 
+  mutate(
+    edad_7g = as.integer(edad_7g),
+    escol = factor(escol)
+  ) %>% 
+  ggplot(aes(edad_7g, promedio_f, color = escol)) + 
+  geom_point() + 
+  geom_line()
+```
+
+# Efecto generacional de años de edu requeridos
+
+Entonces:
+
+1. no se elimina `anios_educ == 0` ya que si tiene validez y no representa valores `NA`.
+2. Puede llevarse a cabo la sugerencia de @zamudioeislas1999: 
+
+"La educación es una variable que presenta fuertes efectos generacionales, las generaciones jóvenes tienen promedios de educación significativamente superiores a los de las generaciones más viejas. En este contexto es de esperar que los requerimientos de educación por ocupación sean diferentes entre generaciones. Por tal motivo en el presente trabajo se hizo una diferenciación de la distribución condicional de educación para hacer que esta dependiera tanto de la ocupación como de la generación, de esta manera, la educación requerida, que es la mediana de la distribución, va a ser diferente dependiendo tanto de la ocupación como de la generación. Con este propósito dividimos a la muestra en dos grupos de edad, el primer grupo (2l) comprende a individuos entre 20 y 40 años de edad, mientras que en el segundo a individuos entre 41 y 65 años (22)." p. 11
+
+General
+
+```{r}
+ocupada %>%
+  mutate(edad_7g = as.integer(edad_7g)) %>% 
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+```
+
+Grupo de 15 a 44 años 
+
+```{r}
+ocupada %>%
+  mutate(edad_7g = as.integer(edad_7g)) %>% 
+  filter(!is.na(anios_esc) & between(edad_7g, 2, 4)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+```
+
+Grupo de 44 años en adelante 
+
+```{r}
+ocupada %>%
+  # mutate(edad_7g = as.integer(edad_7g)) %>% 
+  filter(!is.na(anios_esc) & edad_7g > 4) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+```
+
+Por último, si sólo considero a jóvenes profesionistas?
+
+```{r}
+ocupada %>%
+  # mutate(edad_7g = as.integer(edad_7g)) %>% 
+  filter(!is.na(anios_esc) & edad_7g == 3) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+```
+
+# Resumen
+
+* Modificar valor `0` en `ingocup` porque representa `NA` en `p6b2`
+* Modificar valor `0` en `ing_x_hrs` porque representa `NA` en `p6b2` y `dur9c == 1 & 9`.
+* Trabajar con `ing_x_hrs` debido a que hay una relación positiva entre el ingreso mensual promedio y el número de horas trabajadas
+* No eliminar el valor `0` en `anios_esc` ya que es un valor válido
+* Trabajar con `ocupacion1` e incluso con `ocupacion2` para determinar los años de educación requeridos.
+* Realizar un subapartado que divida los años de educación requeridos por grupos de edad generacionales, como Zamudio e Islas (1999).
+* Crear variables dicotómicas para el modelo a utilizar tales como: 
+experiencia laboral potencial (11) , 
+  * el cuadrado de esta variable (12), 
+  * logaritmo natural de las horas trabajadas, 
+  * género (13), 
+  * estado civil (14) y 
+  * situación relativa en el hogar (15). 
+* Validar si utilizar el ingreso mensual o el ingreso por horas trabajadas, yo me decantaría por la segunda opción
+* Crear n-1 variables dicotómicas para las ocupaciones.
+* Construir `S_r`, `S_o`, y `S_u` para los años ORU
+* Validar $G_i$ y $H_i$, variables dicotómicas “para los casos en que las discrepancias en educación sean positivas o negativas” (Zamudio and Islas (1999) p. 7).
+* Validar si utilizar un cuadro comparativo con los tres métodos: media, mediana y moda, o quedarse con uno, por ejemplo, la moda. 
+
+"11 Se calcula como Edad - Años de Educación Formal - 6. 
+12 Se incluye para modelar trayectorias de ingreso en forma de "'U'' invertida. 
+13 Variable dicotómica que toma el valor unitario cuando i es hombre y cero si i es mujer." 
+14 Variable dicotómica que indica si el individuo es casado. 
+15 Variable dicotómica que indica si el individuo es jefe de hogar."
+(Zamudio y Islas, 1999, p. 10) [notas al pie de página]  
+
+# Referencias
+
+
+
+

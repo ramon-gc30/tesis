@@ -1,0 +1,740 @@
+---
+title: "9. Determinar años requeridos con método objetivo"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+En este documento se intentará determinar los años de educación requeridos en cada grupo ocupacional mediante el método objetivo que establece la Organización Internacional de Trabajo (ILO, por sus siglas en inglés) y que, a su vez, utiliza para los [Indicadores de Educación y Desajuste](https://ilostat.ilo.org/methods/concepts-and-definitions/description-education-and-mismatch-indicators) (EMI, por sus siglas en inglés). Para ver un ejemplo de la utilización del método, véase @ilo2021 la cual señala un desajuste de 50% a nivel mundial. 
+
+# Librerías
+
+```{r setup}
+# paquetes ==========================================================
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# # calcular la moda
+# library(DescTools)
+# # coeficiente de asimetría
+# library(moments)
+# library(EnvStats)
+library(modelr)
+# análisis de residuos
+library(performance)
+library(car)
+library(stats)
+library(nortest)
+library(moments)
+library(lmtest)
+library(see)
+```
+
+# Importación
+
+```{r}
+# importación =======================================================
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+# Segmentación
+
+```{r}
+# segmentación ======================================================
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  escolaridad = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  escolaridad = if_else(escolaridad != 99, escolaridad, NA),
+  # grado escolar
+  grado_esc = as.integer(cs_p13_1),
+  # 99 pasa a NA para evitar 99 - edu_req
+  grado_esc = if_else(grado_esc != 99, grado_esc, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ing_mensual = as.double(ingocup),
+  # 0 pasa a NA ya que 0==NA en p6b2
+  ing_mensual = if_else(ing_mensual != 0, ing_mensual, NA),
+  # promedio de ingreso por hora
+  ing_hora = as.double(ing_x_hrs),
+  # 0 pasa a NA ya que 0==NA en p6b2 y en dur9c == 1 & 9
+  ing_hora = if_else(ing_hora != 0, ing_hora, NA)
+)
+```
+
+
+Carrera técnica
+
+```{r}
+sdem %>% 
+  filter(grado_esc >= 5) %>% 
+  count(grado_esc, escolaridad)
+```
+
+Hay valores desde `0` en `escolaridad`, ¿qué pasa si considero a sólo los que terminaron sus estudios?
+
+```{r}
+sdem %>% 
+  filter(grado_esc >= 5) %>% 
+  select(contains("cs_p13"), cs_p16, anios_esc, escolaridad) %>% 
+  arrange(anios_esc)
+```
+
+¿Qué representa el valor `0` en `anios_esc`?
+
+```{r}
+sdem %>% 
+  select(contains("cs_p13"), cs_p16, anios_esc, escolaridad) %>% 
+  filter(anios_esc == 0) %>% 
+  count(cs_p13_1)
+
+# sdem %>% 
+#   select(contains("cs_p13"), cs_p16, anios_esc, escolaridad) %>% 
+#   filter(anios_esc == 0)
+```
+
+¿Es un error de código al multiplicar `cs_p13_1` con `cs_p13_2`? Se registra duda como actividad a realizar en Notion.
+
+**AQUÍ ME QUEDÉ**
+
+# Construcción de variables
+
+```{r}
+# construcción de variables =========================================
+# grupos de edad OECD(2019: 135)
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12 INEGI(2024:16)
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12 INEGI(2024:16)
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitaria INEGI(2016: 13)
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales INEGI(2019: 22)
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3,
+    ocupacion3 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    ocupacion3,
+    into = c("ocupacion3", "res"),
+    sep = 3
+  ) %>%
+  select(-res)
+```
+
+Comprobación
+
+```{r}
+# carreras universitarias
+sdem %>% 
+  filter(!is.na(cs_p14_c)) %>% 
+  select(cs_p14_c, contains("carrera"))
+
+# grupos ocupacionales 
+coe1 %>% 
+  filter(!is.na(p3)) %>% 
+  select(p3, contains("ocupacion"))
+```
+
+# Creación de tablas
+
+```{r}
+# creación de tablas ================================================
+# población total INEGI(2023:21)
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe INEGI(2023:9)
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más INEGI(2023:21)
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+```
+
+# Sobre-educación
+
+## Construcción de educación requerida en las ocupaciones
+
+De acuerdo a la Organización Internacional del Trabajo (*ILO*, por sus siglas en inglés), se determina el grado escolar requerido a 1 dígito de las ocupaciones, es decir, mediante el grupo **división** @inegisinco2019 p. 29. La ILO utiliza el método objetivo, también conocido como método normativo, para determinar el grado escolar, y no los años de escolaridad, requeridos en cada grupo ocupacional para los [Indicadores de Educación y Desajuste](https://ilostat.ilo.org/methods/concepts-and-definitions/description-education-and-mismatch-indicators) (*EMI*, por sus siglas en inglés). La siguiente tabla describe el nivel de competencia (*skill level*) requerido, o adecuado, para cada grupo ocupacional, según la  Clasificación Internacional Uniforme de Ocupaciones (CIUO, o ISCO por sus siglas en inglés) y, a su vez, se especifica el nivel escolar (*level of education*) equivalente de acuerdo al nivel de competencia, según la Clasificación Internacional Normalizada de la Educación (CINE, o ISCED por sus siglas en inglés).
+
+| ISCO-08 skill level | ISCED-11                                                                                                                                                  | ISCO-08                                                                                                                                        |
+| ------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill level 3 and 4 | 3:<br>5. Short-cycle tertiary education<br>4: <br>6. Bachelor’s or equivalent level<br>7. Master’s or equivalent level<br>8. Doctoral or equivalent level | 1 Managers <br>(Personal directivo de la administración pública y de empresas y miembros del poder ejecutivo y de los cuerpos<br>legislativos) |
+| Skill level 4       | 6. Bachelor’s or equivalent level<br>7. Master’s or equivalent level<br>8. Doctoral or equivalent level                                                   | 2 Professionals<br>(Profesionales científicos e intelectuales)                                                                                 |
+| Skill level 3       | 5. Short-cycle tertiary education                                                                                                                         | 3 Technicians and Associate Professionals<br>(Técnicos profesionales de nivel medio)                                                           |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 4 Clerical Support Workers<br>(Empleados administrativos de oficina)                                                                           |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 5 Services and Sales Workers<br>(Trabajadores de los servicios y vendedores de comercios y mercados)                                           |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 6 Skilled Agricultural, Forestry and Fishery Workers<br>(Agricultores y trabajadores califi cados agropecuarios, forestales y pesqueros)       |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 7 Craft and Related Trades Workers<br>(Oficiales, operarios y artesanos de artes mecánicas y de otros oficios)                                 |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 8 Plant and Machine Operators and Assemblers<br>(Operadores de instalaciones y máquinas, y montadores)                                         |
+| Skill level 1       | 1. Primary education                                                                                                                                      | 9 Elementary Occupations<br>(Trabajadores no calificados)                                                                                      |
+
+Fuente: ILO; ISCO; ISCED
+Nota: traducción de las ocupaciones basadas en INEGI(2011: 277-278)
+
+Según @inegi2016c (pp. 75-76), el grado escolar del Sistema Educativo Nacional equivalente a cada nivel escolar de CINE-11 que, a su vez, corresponde con cada valor de `cs_p13_1` @inegienoebd2024 p. 16; cabe señalar que para hacer el emparejamiento con cada valor de `cs_p13_1` nos basamos en el cuadro mostrado en @inegi2016c p. 11.
+
+| ISCO-08 skill level | ISCED-11 levels of education             | Sistema Educativo Nacional de México                                                                                                     | `cs_p13_1`                 |
+| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+|                     | X. No schooling                          |                                                                                                                                          | 0 Ninguna                  |
+|                     | 0. Early childhood education             | Preescolar                                                                                                                               | 1 Preescolar               |
+| Skill level 1       | 1. Primary education                     | Primaria                                                                                                                                 | 2 Primaria                 |
+| Skill level 2       | 2. Lower secondary education             | Secundaria                                                                                                                               | 3 Secundaria               |
+| Skill level 2       | 3. Upper secondary education             | Tipo medio superior<br>Bachillerato general<br>Profesional técnico, <br>profesional técnico bachiller y bachillerato tecnológico         | 4 Preparatoria             |
+| Skill level 2       | 4. Post-secondary non-tertiary education | No hay equivalente                                                                                                                       |                            |
+| Skill level 3       | 5. Short-cycle tertiary education        | Tipo superior<br>Técnico superior <br>(incluye: <br>profesional asociado, <br>técnico superior universitario y <br>licencia profesional) | 6 Carrera técnica          |
+| Skill level 4       | 6. Bachelor’s or equivalent level        | Licenciatura (normal, universitaria y tecnológica)                                                                                       | 5 Normal <br>7 Profesional |
+| Skill level 4       | 7. Master’s or equivalent level          | Maestría                                                                                                                                 | 8 Maestría                 |
+| Skill level 4       | 8. Doctoral or equivalent level          | Doctorado                                                                                                                                | 9 Doctorado                |
+| Skill level 4       | 9. Not elsewhere classified              |                                                                                                                                          | 99 No sabe                 |
+
+Fuente: ISCED; INEGI (2016: pp. 11; 75-76)
+
+
+Ahora, se debe convertir los grupos ocupacionales de CUIO-08 a SINCO-19; para esto no existe un documento que nos oriente a realizar la conversión, solamente @inegisinco2019 señala que la SINCO-19 tiene como principio de clasificación: "Se apega, en la medida de lo posible, a la CIUO de 2008 de la OIT y considera de las clasificaciones de ocupaciones de Canadá y Estados Unidos de América, los aspectos teóricos y metodológicos en los que coinciden con la internacional." p. 17. Y en cuanto a SINCO-11 (INEGI, 2011: 277-278) sólo muestra la traducción al español de los grupos de CUIO-08, pero NO su ocupación equivalente a SINCO. Por lo que se propone la siguiente conversión con su respectivo grado escolar correspondiente:
+
+| ISCO-08 skill level | ISCO-08                                                                                                                                        | SINCO-19                                                                                                          | Grado escolar                                                                                   | `cs_p13_1`                                                                   |
+| ------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| Skill level 3 and 4 | 1 Managers <br>(Personal directivo de la administración pública y de empresas y miembros del poder ejecutivo y de los cuerpos<br>legislativos) | 1 Funcionarios, directores y jefes                                                                                | Técnico superior<br>Licenciatura (normal, universitaria y tecnológica)<br>Maestría<br>Doctorado | 6 Carrera técnica<br>5 Normal <br>7 Profesional<br>8 Maestría<br>9 Doctorado |
+| Skill level 4       | 2 Professionals<br>(Profesionales científicos e intelectuales)                                                                                 | 2 Profesionistas y técnicos                                                                                       | Licenciatura (normal, universitaria y tecnológica)<br>Maestría<br>Doctorado                     | 5 Normal <br>7 Profesional<br>8 Maestría<br>9 Doctorado                      |
+| Skill level 3       | 3 Technicians and Associate Professionals<br>(Técnicos profesionales de nivel medio)                                                           | 2 Profesionistas y técnicos                                                                                       | Técnico superior                                                                                | 6 Carrera técnica                                                            |
+| Skill level 2       | 4 Clerical Support Workers<br>(Empleados administrativos de oficina)                                                                           | 3 Trabajadores auxiliares en actividades administrativas                                                          | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 5 Services and Sales Workers<br>(Trabajadores de los servicios y vendedores de comercios y mercados)                                           | 4 Comerciantes, empleados en ventas y agentes de ventas<br>5 Trabajadores en servicios personales y de vigilancia | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 6 Skilled Agricultural, Forestry and Fishery Workers<br>(Agricultores y trabajadores calificados agropecuarios, forestales y pesqueros)        | 6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca                                      | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 7 Craft and Related Trades Workers<br>(Oficiales, operarios y artesanos de artes mecánicas y de otros oficios)                                 | 7 Trabajadores artesanales, en la construcción y otros oficios                                                    | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 8 Plant and Machine Operators and Assemblers<br>(Operadores de instalaciones y máquinas, y montadores)                                         | 8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte                        | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 1       | 9 Elementary Occupations<br>(Trabajadores no calificados)                                                                                      | 9 Trabajadores en actividades elementales y de apoyo                                                              | Primaria                                                                                        | 2 Primaria                                                                   |
+
+Fuente: elaboración propia con datos de ILO, ISCO-08, ISCED-11, INEGI(2011; 2016; 2020)
+
+En resumen, el nivel de educación, grado escolar, requerida para cada grupo ocupacional a 1 dígito es el siguiente:
+
+| SINCO-19                                                                                                          | `cs_p13_1`                                                                   |
+| :---------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| 1 Funcionarios, directores y jefes                                                                                | 5 Normal <br>6 Carrera técnica<br>7 Profesional<br>8 Maestría<br>9 Doctorado |
+| 2 Profesionistas y técnicos                                                                                       | 5 Normal <br>6 Carrera técnica<br>7 Profesional<br>8 Maestría<br>9 Doctorado |
+| 3 Trabajadores auxiliares en actividades administrativas                                                          | 3 Secundaria<br>4 Preparatoria                                               |
+| 4 Comerciantes, empleados en ventas y agentes de ventas<br>5 Trabajadores en servicios personales y de vigilancia | 3 Secundaria<br>4 Preparatoria                                               |
+| 6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca                                      | 3 Secundaria<br>4 Preparatoria                                               |
+| 7 Trabajadores artesanales, en la construcción y otros oficios                                                    | 3 Secundaria<br>4 Preparatoria                                               |
+| 8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte                        | 3 Secundaria<br>4 Preparatoria                                               |
+| 9 Trabajadores en actividades elementales y de apoyo                                                              | 2 Primaria                                                                   |
+
+Fuente: elaboración propia con datos de ILO, ISCO-08, ISCED-11, INEGI(2011; 2016; 2020)
+
+Ahora, se procede a realizar el código para agregar la educación requerida.
+
+```{r}
+# sobre-educación ===================================================
+
+# con el grupo división INEGI(2020: 22) -----------------------------
+# método: objetivo
+edu_req3_ocu1 <- ocupada %>%
+  count(ocupacion1) %>% 
+  mutate(
+    objetivo_min = case_when(
+      ocupacion1 == 1 ~ 5,
+      ocupacion1 == 2 ~ 5,
+      ocupacion1 == 3 ~ 3,
+      ocupacion1 == 4 ~ 3,
+      ocupacion1 == 5 ~ 3,
+      ocupacion1 == 6 ~ 3,
+      ocupacion1 == 7 ~ 3,
+      ocupacion1 == 8 ~ 3,
+      ocupacion1 == 9 ~ 2,
+      TRUE ~ NA
+    ),
+    objetivo_max = case_when(
+      ocupacion1 == 1 ~ 9,
+      ocupacion1 == 2 ~ 9,
+      ocupacion1 == 3 ~ 4,
+      ocupacion1 == 4 ~ 4,
+      ocupacion1 == 5 ~ 4,
+      ocupacion1 == 6 ~ 4,
+      ocupacion1 == 7 ~ 4,
+      ocupacion1 == 8 ~ 4,
+      ocupacion1 == 9 ~ 2,
+      TRUE ~ NA
+    ),
+    objetivo_min = as.integer(objetivo_min),
+    objetivo_max = as.integer(objetivo_max)
+  ) %>% 
+  select(-n)
+```
+
+Comprobación
+
+```{r}
+edu_req3_ocu1
+```
+
+## Determinación de la incidencia
+
+Comprobación
+
+```{r}
+ocupada %>% left_join(edu_req3_ocu1, by = "ocupacion1") %>%  
+  mutate(
+    # objetivo
+    edu_mis_obj_ocu1 = case_when(
+      # required
+      between(grado_esc, objetivo_min, objetivo_max) ~ 0,
+      grado_esc > objetivo_max ~ 1,
+      grado_esc < objetivo_min ~ 2,
+      TRUE ~ NA
+    )
+  ) %>% 
+  select(ocupacion1, grado_esc, contains("objetivo_"), edu_mis_obj_ocu1)
+```
+
+
+```{r}
+# variable de desajuste educativo
+# desajuste_educativo <- 
+ocupada %>% left_join(edu_req3_ocu1, by = "ocupacion1") %>%  
+  mutate(
+    # objetivo
+    edu_mis_obj_ocu1 = case_when(
+      # required
+      between(grado_esc, objetivo_min, objetivo_max) ~ 0,
+      grado_esc > objetivo_max ~ 1,
+      grado_esc < objetivo_min ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias
+    # objetivo
+    over_obj_ocu1 = if_else(grado_esc > objetivo_max, 1, 0),
+    req_obj_ocu1 = if_else(between(grado_esc, objetivo_min, objetivo_max), 1, 0),
+    under_obj_ocu1 = if_else(grado_esc < objetivo_max, 1, 0)
+    # variables de años de sobre o infra
+    # con el objetivo no se puede obtener ya que son grados y están en intervalos
+  ) %>% 
+  select(ocupacion1, grado_esc, objetivo_min:under_obj_ocu1)
+```
+
+```{r}
+# variable de desajuste educativo
+desajuste_educativo <- ocupada %>% left_join(edu_req3_ocu1, by = "ocupacion1") %>%  
+  mutate(
+    # objetivo
+    edu_mis_obj_ocu1 = case_when(
+      # required
+      between(grado_esc, objetivo_min, objetivo_max) ~ 0,
+      grado_esc > objetivo_max ~ 1,
+      grado_esc < objetivo_min ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias
+    # objetivo
+    over_obj_ocu1 = if_else(grado_esc > objetivo_max, 1, 0),
+    req_obj_ocu1 = if_else(between(grado_esc, objetivo_min, objetivo_max), 1, 0),
+    under_obj_ocu1 = if_else(grado_esc < objetivo_max, 1, 0)
+    # variables de años de sobre o infra
+    # objetivo: no se puede obtener ya que son grados y están en intervalos
+  )
+```
+
+# Construcción de las demás variables explicativas
+
+```{r}
+# otras variables explicativas ======================================
+
+desajuste_educativo <- desajuste_educativo %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si eda == 98, se convierte a NA
+    # experiencia = edad - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exp_lab = eda.x - escolaridad - 6,
+    exp_lab = if_else(exp_lab > 0 & eda.x != 98, exp_lab, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exp_lab2 = exp_lab ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casado
+    casad = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jef_hog = if_else(par_c == 101, 1, 0)
+  )
+
+# variables dicotómicas para los grupos ocupacionales
+# grupo de referencia: 9 INEGI(2020: 27)
+desajuste_educativo <- desajuste_educativo %>% 
+  mutate(
+    div1 = if_else(ocupacion1 == 1, 1, 0),
+    div2 = if_else(ocupacion1 == 2, 1, 0),
+    div3 = if_else(ocupacion1 == 3, 1, 0),
+    div4 = if_else(ocupacion1 == 4, 1, 0),
+    div5 = if_else(ocupacion1 == 5, 1, 0),
+    div6 = if_else(ocupacion1 == 6, 1, 0),
+    div7 = if_else(ocupacion1 == 7, 1, 0),
+    div8 = if_else(ocupacion1 == 8, 1, 0),
+    div9 = if_else(ocupacion1 == 9, 1, 0)
+  )
+```
+
+# Incidencia
+
+General
+
+Objetivo
+
+```{r}
+desajuste_educativo %>% 
+  count(edu_mis_obj_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Por género
+
+Nota: proporción por tipo de desajuste por género
+
+```{r}
+desajuste_educativo %>% 
+  group_by(edu_mis_obj_ocu1, sex) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Por grupos de edad
+
+Nota: proporción por tipo de desajuste por grupos de edad
+
+```{r}
+desajuste_educativo %>% 
+  group_by(edu_mis_obj_ocu1, edad_7g) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop = n / sum(n)) %>% 
+  filter(edu_mis_obj_ocu1 == 1)
+```
+
+Por nivel de estudios (grado escolar)
+
+Nota: proporción por tipo de desajuste por nivel escolar
+
+```{r}
+desajuste_educativo %>% 
+  group_by(edu_mis_obj_ocu1, grado_esc) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop = n / sum(n)) %>% 
+  filter(edu_mis_obj_ocu1 == 1)
+```
+
+Jóvenes profesionistas
+
+```{r}
+# Se considera licenciatura, maestría y doctorado
+jov_prof <- desajuste_educativo %>% 
+  mutate(grado_esc = as.integer(cs_p13_1)) %>% 
+  filter(between(grado_esc, 7, 9) & edad_7g == 3)
+```
+
+Objetivo
+
+```{r}
+jov_prof %>% 
+  count(edu_mis_obj_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Por carreras universitarias
+
+Nota: proporción por tipo de desajuste por carrera
+
+```{r}
+jov_prof %>% 
+  group_by(carrera1, edu_mis_obj_ocu1) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop = n / sum(n)) %>%  
+  filter(edu_mis_obj_ocu1 == 1)
+```
+
+Por ocupaciones
+
+Nota: proporción del total de sobre-educados
+
+```{r}
+jov_prof %>% 
+  group_by(ocupacion1, edu_mis_obj_ocu1) %>% 
+  summarise(n = n()) %>% 
+  filter(edu_mis_obj_ocu1 == 1) %>% 
+  ungroup() %>% 
+  mutate(prop = n / sum(n)) 
+```
+
+# Ingreso mensual promedio
+
+## General
+
+Método: Objetivo
+
+```{r}
+desajuste_educativo %>% 
+  filter(!is.na(ing_mensual)) %>% 
+  group_by(edu_mis_obj_ocu1) %>% 
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+## Jóvenes profesionistas
+
+Método: Objetivo
+
+```{r}
+jov_prof %>% 
+  filter(!is.na(ing_mensual)) %>% 
+  group_by(edu_mis_obj_ocu1) %>%
+  summarise(ing_medio = mean(ing_mensual))
+```
+
+# Efecto salarial
+
+## General
+
+Objetivo
+
+Con `escolaridad`
+
+```{r}
+modelo_obj_ocu1_amp <- lm(log(ing_mensual) ~ escolaridad + over_obj_ocu1 + under_obj_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = desajuste_educativo)
+summary.lm(modelo_obj_ocu1_amp)
+```
+
+Con `grado_esc`
+
+```{r}
+# modelo_obj_ocu1_amp <- lm(log(ing_mensual) ~ grado_esc + over_obj_ocu1 + under_obj_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = desajuste_educativo)
+# summary.lm(modelo_obj_ocu1_amp)
+```
+
+Se decide dejar la variable `escolaridad`
+
+## Jóvenes profesionistas
+
+Objetivo
+
+```{r}
+modelo_obj_jov_prof_amp <- lm(log(ing_mensual) ~ escolaridad + over_obj_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div2 + div3 + div4 + div5 + div6 + div7 + div8, data = jov_prof)
+summary.lm(modelo_obj_jov_prof_amp)
+```
+
+```{r}
+# modelo_obj_jov_prof_amp <- lm(log(ing_mensual) ~ escolaridad + over_obj_ocu1 + exp_lab + exp_lab2 + log(horas_lab) + hombre + casad + jef_hog + div1 + div3 + div4 + div5 + div6 + div7 + div8, data = jov_prof)
+# summary.lm(modelo_obj_jov_prof_amp)
+```
+
+Después de eliminar estimador no significativo, no cambian los coeficientes de los demás estimadores.
+
+# Análisis de residuos
+
+## Jóvenes
+
+Objetivo
+
+```{r}
+mean(modelo_obj_jov_prof_amp$residuals)
+```
+
+Gráficas
+
+```{r}
+# par(mfrow = c(2, 2))
+plot(modelo_obj_jov_prof_amp, 1)
+```
+
+* Los residuos de distribuyen de forma aleatoria alrededor de 0
+* La línea tiene una ligera tendencia creciente al inicio de los valores ajustados (predichos), pero a partir del valor 8.5 tiene un comportamiento horizontal
+* Crece la dispersión de los residuos conforme aumenta el valor ajustado (predicho), lo que parece indicar presencia de heterocedasticidad.
+* Existen valores atípicos concentrados desde 9.0 hasta 9.5 del valor ajustado.
+
+```{r}
+# par(mfrow = c(2, 2))
+plot(modelo_obj_jov_prof_amp, 2)
+```
+
+* Hay desviaciones en los extremos de la gráfica lo que parece indicar una distribución anormal de los residuos
+
+```{r}
+# par(mfrow = c(2, 2))
+plot(modelo_obj_jov_prof_amp, 3)
+```
+
+* La banda tiene forma de "U", lo que parece indicar una varianza no constante de los residuos
+
+```{r}
+# par(mfrow = c(2, 2))
+plot(modelo_obj_jov_prof_amp, 4)
+```
+
+* Existen tres observaciones con residuos grandes: 12,249, 17,351 y 17,470. 
+
+Histograma
+
+```{r}
+hist(modelo_obj_jov_prof_amp$residuals, prob = TRUE)
+lines(density(modelo_obj_jov_prof_amp$residuals))
+```
+
+* Parece que los residuos presentan una distribución normal con una media cercana al 0.
+
+```{r}
+moments::skewness(resid(modelo_obj_jov_prof_amp))
+```
+
+* El coeficiente de asimetría indica que la distribución de los residuos está ligeramente sesgado a la izquierda
+
+Pruebas estadísticas
+
+```{r}
+# normalidad
+moments::jarque.test(resid(modelo_obj_jov_prof_amp))
+nortest::ad.test(resid(modelo_obj_jov_prof_amp))
+# stats::shapiro.test(resid(modelo_obj_jov_prof_amp))
+
+# homocedasticidad
+lmtest::bptest(modelo_obj_jov_prof_amp)
+
+# autocorrelación
+lmtest::dwtest(modelo_obj_jov_prof_amp)
+```
+
+* Se rechaza la hipótesis nula en las pruebas de normalidad (Anderson-Darling y Jarque-Bera), es decir, los residuos no se distribuyen normalmente
+* Se rechaza la hipótesis nula en la prueba Breusch-Pagan, los residuos son heterocedásticos
+* No se rechaza la hipótesis nula en la prueba Durbin-Watson, no hay presencia de autocorrelación de primer orden
+
+Al momento de ejecutar la función `shapiro.test`, arroja un error por lo que se decide no utilizarla.
+
+```
+Error en stats::shapiro.test(resid(modelo_obj_jov_prof_amp)): 
+  sample size must be between 3 and 5000
+```
+# Referencias
+
+ILO (2023). The International Standard Classification of Occupations (ISCO-08) companion guide. <https://www.ilo.org/publications/international-standard-classification-occupations-isco-08-companion-guide>
+
+ILO (s.f.). Education and Mismatch Indicators (EMI database). ILOSTAT database description. <https://ilostat.ilo.org/methods/concepts-and-definitions/description-education-and-mismatch-indicators>
+
+ILO (s.f.). International Standard Classification of Occupations (ISCO). ILOSTAT. <https://ilostat.ilo.org/methods/concepts-and-definitions/classification-occupation>
+
+INEGI. (2011). Sistema Nacional de Clasificación de Ocupaciones 2011. SINCO. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825003336> 
+
+INEGI. (2016). Clasificación mexicana de planes de estudio por campos de formación académica 2016. Educación superior y media superior. México: INEGI. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825003335>
+
+INEGI. (2020). Sistema Nacional de Clasificación de Ocupaciones 2019. SINCO. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825198411>
+
+INEGI. (2024). Encuesta Nacional de Ocupación y Empleo (ENOE). Estructura de la base de datos. <https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/enoe_123_fd_c_bas_amp.pdf>
+
+OECD. (2019). Educación superior en México: Resultados y relevancia para el mercado laboral. París: OECD Publishing. <https://doi.org/10.1787/a93ed2b7-es>
+
+UNESCO (2013). Clasificación Internacional Normalizada de la Educación CINE 2011. <https://unesdoc.unesco.org/ark:/48223/pf0000220782> 
+

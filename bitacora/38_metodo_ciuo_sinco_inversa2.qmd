@@ -1,0 +1,310 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(writexl)
+library(readxl)
+
+sinco11_ciuo08 <- read_csv(
+  "C:/Prog/tesis/datos/sinco11_a_ciuo08.csv",
+  col_types = "c"
+)
+
+sinco19_11 <- read_csv(
+  "C:/Prog/tesis/datos/sinco19_a_sinco11.csv",
+  col_types = "c"
+)
+
+ciuo08 <- read_xlsx(
+  "C:/Prog/tesis/datos/ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+Primero se crea la tabla `sinco11` con ocupaciones de `sinco19`
+
+```{r}
+glimpse(sinco19_11)
+```
+
+```{r}
+sinco19_11 |> 
+  select(sinco_11, sinco_19) |> 
+  filter(str_length(sinco_11) == 4) |> 
+  group_by(sinco_11) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19
+  )
+```
+
+Se crea tabla
+
+```{r}
+sinco11 <- sinco19_11 |> 
+  select(sinco_11, sinco_19) |> 
+  filter(str_length(sinco_11) == 4) |> 
+  group_by(sinco_11) |> 
+  mutate(
+    sinco_11 = as.character(sinco_11),
+    id = row_number()
+  ) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19
+  )
+```
+
+Ahora se une con `sinco11_ciuo08`
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11"))
+```
+
+Se guarda
+
+```{r}
+sinco11_ciuo08_2 <- sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11"))
+```
+
+Ahora se crea tabla `ciuo08`
+
+```{r}
+glimpse(sinco11_ciuo08_2)
+```
+
+```{r}
+sinco11_ciuo08_2 |> 
+  filter(str_length(ciuo08) == 4) |> 
+  select(ciuo08, sinco11, contains("s19_"))
+```
+
+Se pivotea
+
+```{r}
+sinco11_ciuo08_2 |> 
+  filter(str_length(ciuo08) == 4) |> 
+  select(ciuo08, sinco11, contains("s19_")) |> 
+  group_by(ciuo08) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = ciuo08,
+    names_from = id,
+    names_prefix = "s11_",
+    values_from = sinco11
+  )
+```
+
+Se pierden las columnas relacionadas a SINCO-19. Se guarda código anterior en la tabla `ciuo08`
+
+```{r}
+ciuo08_2 <- sinco11_ciuo08_2 |> 
+  filter(str_length(ciuo08) == 4) |> 
+  select(ciuo08, sinco11, contains("s19_")) |> 
+  group_by(ciuo08) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = ciuo08,
+    names_from = id,
+    names_prefix = "s11_",
+    values_from = sinco11
+  )
+```
+
+Se añade nivel de competencia
+
+```{r}
+ciuo08 <- ciuo08 |> 
+    mutate(
+      skill_level = case_when(
+        # skill level 4
+        sub_major == "11" | sub_major == "12" |
+          sub_major == "13" | major == "2" |
+          sub_major == "01" ~ "4",
+        # skill level 3
+        sub_major == "14" | major == "3" ~ "3",
+        # skill level 2
+        major == "4" | major == "5" |
+          major == "6" | major == "7" |
+          major == "8" | sub_major == "02" ~ "2",
+        # skill level 1
+        major == "9" | sub_major == "03" ~ "1",
+        TRUE ~ NA,
+      )
+    ) |> 
+    # seleccionamos unit y skill_level
+    select(unit, skill_level) |> 
+    # se renombran variables
+    rename("c08_unit" = "unit")
+```
+
+Ahora se realiza unión
+
+```{r}
+ciuo08_2 <- ciuo08_2 |> 
+  left_join(ciuo08, by = c("ciuo08" = "c08_unit"))
+```
+
+Se une con `sinco11_ciuo08`
+
+```{r}
+sinco11_ciuo08_2 <- sinco11_ciuo08_2 |> 
+  left_join(ciuo08_2, by = "ciuo08")
+```
+
+Ahora se intentará pivotear a lo largo
+
+```{r}
+sinco11_ciuo08_2 |>
+  pivot_longer(
+    s19_1:s19_9,
+    values_to = "sinco19"
+  ) |> 
+  select(sinco19, skill_level) |> 
+  filter(!is.na(sinco19))
+
+sinco19 <- sinco11_ciuo08_2 |>
+  pivot_longer(
+    s19_1:s19_9,
+    values_to = "sinco19"
+  ) |> 
+  select(sinco19, skill_level) |> 
+  filter(!is.na(sinco19))
+```
+
+Ahora necesito pivotear a lo ancho para `skill_level`
+
+```{r}
+sinco19
+```
+
+Pero antes, puedo asignar el nivel educativo del SEN
+
+```{r}
+sinco19 |> 
+  mutate(
+    edu_req_min = case_when(
+      # licenciatura
+      skill_level == "4" ~ "7",
+      # técnico superior
+      skill_level == "3" ~ "6",
+      # secundaria
+      skill_level == "2" ~ "3",
+      # preescolar 
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_level == "4" ~ "9",
+      # técnico superior
+      skill_level == "3" ~ "6",
+      # secundaria
+      skill_level == "2" ~ "4",
+      # preescolar 
+      skill_level == "1" ~ "2",
+      TRUE ~ NA
+    )
+  )
+
+sinco19 <- sinco19 |> 
+  mutate(
+    edu_req_min = case_when(
+      # licenciatura
+      skill_level == "4" ~ "7",
+      # técnico superior
+      skill_level == "3" ~ "6",
+      # secundaria
+      skill_level == "2" ~ "3",
+      # preescolar 
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_level == "4" ~ "9",
+      # técnico superior
+      skill_level == "3" ~ "6",
+      # secundaria
+      skill_level == "2" ~ "4",
+      # preescolar 
+      skill_level == "1" ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+```{r}
+sinco19_pivot <- sinco19 |> 
+  group_by(sinco19) |> 
+  mutate(id = row_number()) |>
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco19,
+    names_from = id,
+    values_from = edu_req_min:edu_req_max
+  )
+```
+
+Vamos a intentar unir
+
+```{r}
+sinco19 |> 
+  distinct(sinco19, edu_req_min, edu_req_max) |> 
+  mutate(dummy = "1") |> 
+  pivot_wider(
+    id_cols = sinco19, 
+    names_from = edu_req_min,
+    names_sort = TRUE,
+    values_from = edu_req_min:edu_req_max,
+    values_fill = ""
+  ) 
+```
+
+Mejor se concatena y después se pivotea
+
+```{r}
+
+sinco19 |> 
+  mutate(
+    edu_req = str_c(edu_req_min, "-", edu_req_max)
+  ) |> 
+  distinct(sinco19, edu_req) |> 
+  mutate(dummy = "1") |> 
+  pivot_wider(
+    id_cols = sinco19,
+    names_from = edu_req,
+    names_sort = TRUE,
+    values_from = edu_req,
+    values_fill = ""
+  ) |> 
+  mutate(
+    edu_req = str_c(`1-2`, `3-4`, `6-6`, `7-9`),
+    edu_req_min = str_sub(edu_req, 1, 1),
+    edu_req_max = str_sub(edu_req, str_length(edu_req))
+  )
+```
+
+Listo!!!
+
+Vamos a integrarlo en un nuevo documento
+

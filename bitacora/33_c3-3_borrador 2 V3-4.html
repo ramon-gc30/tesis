@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-05-25">
+
+<title>c3-3_borrador-2-v3-4</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="33_c3-3_borrador 2 V3-4_files/libs/clipboard/clipboard.min.js"></script>
+<script src="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/popper.min.js"></script>
+<script src="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/anchor.min.js"></script>
+<link href="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="33_c3-3_borrador 2 V3-4_files/libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="33_c3-3_borrador 2 V3-4_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="33_c3-3_borrador 2 V3-4_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="33_c3-3_borrador 2 V3-4_files/libs/bootstrap/bootstrap-efbb37e9afcc02144ebbc7afd12a776f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 25, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(srvyr)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survey)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"scripts/0_funciones_v9.R"</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>jovenes_reg <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"datos/jovenes_normativo_reg.rds"</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>jovenes <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"datos/jovenes_normativo.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Se valida en primer lugar el tamaño de la muestra</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">calcular_total</span>(jovenes_reg)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 2
+      n     tot
+  &lt;int&gt;   &lt;dbl&gt;
+1  7708 1999466</code></pre>
+</div>
+</div>
+<p>Se valida</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>jovenes <span class="sc">|&gt;</span> </span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="sc">!</span><span class="fu">is.na</span>(ingreso_mensual),</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="sc">!</span><span class="fu">is.na</span>(over_obj),</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="sc">!</span><span class="fu">is.na</span>(exper),</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="sc">!</span><span class="fu">is.na</span>(horas_lab)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">calcular_total</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 2
+      n     tot
+  &lt;int&gt;   &lt;dbl&gt;
+1  7708 1999466</code></pre>
+</div>
+</div>
+<p>Correcto!!!</p>
+<p>Se valida <code>fct_relevel</code></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>jovenes_reg <span class="sc">|&gt;</span> </span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">calcular_prop</span>(campo_amplio)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 11 × 4
+   campo_amplio     n    tot    prop
+   &lt;fct&gt;        &lt;int&gt;  &lt;dbl&gt;   &lt;dbl&gt;
+ 1 01             805 206324 0.103  
+ 2 02             291  72411 0.0362 
+ 3 03            1306 358924 0.180  
+ 4 04            1723 456165 0.228  
+ 5 05             190  46637 0.0233 
+ 6 06             463 131853 0.0659 
+ 7 07            1457 365881 0.183  
+ 8 08             129  39848 0.0199 
+ 9 09             999 245331 0.123  
+10 10             330  72725 0.0364 
+11 99              15   3367 0.00168</code></pre>
+</div>
+</div>
+<p>Se valida</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>jovenes_reg <span class="sc">|&gt;</span> </span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">campo_amplio =</span> <span class="fu">fct_relevel</span>(campo_amplio, <span class="st">"10"</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">calcular_prop</span>(campo_amplio)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 11 × 4
+   campo_amplio     n    tot    prop
+   &lt;fct&gt;        &lt;int&gt;  &lt;dbl&gt;   &lt;dbl&gt;
+ 1 10             330  72725 0.0364 
+ 2 01             805 206324 0.103  
+ 3 02             291  72411 0.0362 
+ 4 03            1306 358924 0.180  
+ 5 04            1723 456165 0.228  
+ 6 05             190  46637 0.0233 
+ 7 06             463 131853 0.0659 
+ 8 07            1457 365881 0.183  
+ 9 08             129  39848 0.0199 
+10 09             999 245331 0.123  
+11 99              15   3367 0.00168</code></pre>
+</div>
+</div>
+<p>Sí queda</p>
+<p>Se valida regresión</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>jovenes_reg <span class="ot">&lt;-</span> jovenes_reg <span class="sc">|&gt;</span> </span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">campo_amplio =</span> <span class="fu">fct_relevel</span>(campo_amplio, <span class="st">"10"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_tot <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    educacion <span class="sc">+</span> over_obj <span class="sc">+</span> under_obj <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> casada <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span> campo_amplio <span class="sc">+</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> sector_eco <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_tot)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ educacion + over_obj + 
+    under_obj + exper + I(exper^2) + log(horas_lab) + mujer + 
+    casada + jefe_hogar + regiones + campo_amplio + division + 
+    pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, 
+    design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                 Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)     8.4001463  0.2058300  40.811  &lt; 2e-16 ***
+educacion7      0.1255023  0.0662652   1.894 0.058287 .  
+educacion8      0.2796181  0.0826035   3.385 0.000717 ***
+educacion9      0.3090649  0.1338544   2.309 0.020984 *  
+over_obj       -0.1920406  0.0305944  -6.277 3.72e-10 ***
+under_obj       0.0876670  0.1064898   0.823 0.410406    
+exper           0.0603579  0.0158613   3.805 0.000143 ***
+I(exper^2)     -0.0034309  0.0010870  -3.156 0.001606 ** 
+log(horas_lab)  0.1128129  0.0629934   1.791 0.073371 .  
+mujer          -0.1054234  0.0214187  -4.922 8.82e-07 ***
+casada          0.0362225  0.0236571   1.531 0.125793    
+jefe_hogar      0.1246374  0.0220712   5.647 1.72e-08 ***
+regiones2       0.1211339  0.0308714   3.924 8.83e-05 ***
+regiones3       0.0512817  0.0289779   1.770 0.076837 .  
+regiones4       0.2151976  0.0256920   8.376  &lt; 2e-16 ***
+regiones5       0.0772714  0.0272566   2.835 0.004600 ** 
+campo_amplio01 -0.0804543  0.0457380  -1.759 0.078631 .  
+campo_amplio02 -0.0170946  0.0561875  -0.304 0.760955    
+campo_amplio03 -0.0141580  0.0440406  -0.321 0.747862    
+campo_amplio04  0.0388532  0.0395194   0.983 0.325582    
+campo_amplio05 -0.0466127  0.0796181  -0.585 0.558268    
+campo_amplio06  0.0359169  0.0558316   0.643 0.520051    
+campo_amplio07  0.0570257  0.0410053   1.391 0.164377    
+campo_amplio08 -0.0004958  0.1070031  -0.005 0.996304    
+campo_amplio09  0.0119533  0.0453369   0.264 0.792055    
+campo_amplio99  0.1443023  0.1061898   1.359 0.174233    
+division2      -0.0883098  0.0442331  -1.996 0.045934 *  
+division3      -0.2007216  0.0523407  -3.835 0.000127 ***
+division4      -0.2887672  0.0545703  -5.292 1.26e-07 ***
+division5      -0.1902401  0.0583350  -3.261 0.001117 ** 
+division6      -0.3654821  0.1564001  -2.337 0.019484 *  
+division7      -0.1668219  0.0778345  -2.143 0.032135 *  
+division8      -0.3316900  0.0605442  -5.478 4.49e-08 ***
+division9      -0.4095882  0.0718429  -5.701 1.25e-08 ***
+pos_ocu2        0.4375974  0.0610437   7.169 8.61e-13 ***
+pos_ocu3        0.0861220  0.0488372   1.763 0.077882 .  
+sector_eco2    -0.0921806  0.0732204  -1.259 0.208105    
+sector_eco3    -0.0328159  0.0709333  -0.463 0.643648    
+sector_eco4    -0.1442919  0.1861418  -0.775 0.438272    
+tamanio4        0.0943275  0.0345918   2.727 0.006415 ** 
+tamanio5        0.1467223  0.0396274   3.703 0.000216 ***
+tamanio6        0.2805928  0.0460224   6.097 1.16e-09 ***
+tamanio7        0.3691386  0.0545846   6.763 1.50e-11 ***
+tamanio8        0.0008073  0.0422173   0.019 0.984745    
+informal1      -0.3074100  0.0259197 -11.860  &lt; 2e-16 ***
+jornada3        0.4726507  0.0986636   4.791 1.71e-06 ***
+jornada4        0.5005875  0.1228317   4.075 4.66e-05 ***
+jornada5        0.4899056  0.1394251   3.514 0.000445 ***
+unidad_eco2    -0.1853506  0.0344164  -5.386 7.53e-08 ***
+unidad_eco3    -0.1203393  0.0455825  -2.640 0.008314 ** 
+unidad_eco4    -0.0085580  0.1354041  -0.063 0.949607    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.2365585)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<p>Se valida contraste</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_carrera <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    educacion <span class="sc">+</span> over_obj <span class="sc">*</span> campo_amplio <span class="sc">+</span> under_obj <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> casada <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> sector_eco <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_carrera)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ educacion + over_obj * 
+    campo_amplio + under_obj + exper + I(exper^2) + log(horas_lab) + 
+    mujer + casada + jefe_hogar + regiones + division + pos_ocu + 
+    sector_eco + tamanio + informal + jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                         Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)              8.348023   0.203915  40.939  &lt; 2e-16 ***
+educacion7               0.118971   0.066105   1.800 0.071962 .  
+educacion8               0.277771   0.080940   3.432 0.000604 ***
+educacion9               0.315325   0.136695   2.307 0.021105 *  
+over_obj                -0.124993   0.064543  -1.937 0.052848 .  
+campo_amplio01           0.015226   0.058637   0.260 0.795130    
+campo_amplio02           0.063459   0.074379   0.853 0.393594    
+campo_amplio03           0.024545   0.061498   0.399 0.689819    
+campo_amplio04           0.100931   0.059597   1.694 0.090409 .  
+campo_amplio05          -0.057343   0.135686  -0.423 0.672590    
+campo_amplio06           0.185814   0.085578   2.171 0.029954 *  
+campo_amplio07           0.076976   0.058308   1.320 0.186837    
+campo_amplio08           0.057943   0.130353   0.445 0.656696    
+campo_amplio09           0.083398   0.060751   1.373 0.169879    
+campo_amplio99          -0.108088   0.095424  -1.133 0.257382    
+under_obj                0.056320   0.106404   0.529 0.596614    
+exper                    0.059913   0.015726   3.810 0.000141 ***
+I(exper^2)              -0.003417   0.001079  -3.167 0.001547 ** 
+log(horas_lab)           0.110213   0.062928   1.751 0.079932 .  
+mujer                   -0.108062   0.021209  -5.095 3.61e-07 ***
+casada                   0.036931   0.023577   1.566 0.117315    
+jefe_hogar               0.124283   0.021973   5.656 1.63e-08 ***
+regiones2                0.119881   0.030638   3.913 9.24e-05 ***
+regiones3                0.053485   0.028615   1.869 0.061665 .  
+regiones4                0.215137   0.025760   8.351  &lt; 2e-16 ***
+regiones5                0.078628   0.027623   2.847 0.004437 ** 
+division2               -0.094484   0.045302  -2.086 0.037058 *  
+division3               -0.199560   0.052631  -3.792 0.000151 ***
+division4               -0.286752   0.054835  -5.229 1.77e-07 ***
+division5               -0.191965   0.058346  -3.290 0.001008 ** 
+division6               -0.377079   0.155289  -2.428 0.015205 *  
+division7               -0.180201   0.078522  -2.295 0.021778 *  
+division8               -0.342293   0.061561  -5.560 2.83e-08 ***
+division9               -0.412087   0.072553  -5.680 1.42e-08 ***
+pos_ocu2                 0.440030   0.061110   7.201 6.83e-13 ***
+pos_ocu3                 0.092570   0.048939   1.892 0.058609 .  
+sector_eco2             -0.083320   0.073362  -1.136 0.256117    
+sector_eco3             -0.030531   0.070896  -0.431 0.666747    
+sector_eco4             -0.170347   0.197733  -0.862 0.388999    
+tamanio4                 0.092995   0.034895   2.665 0.007722 ** 
+tamanio5                 0.147943   0.039480   3.747 0.000181 ***
+tamanio6                 0.280971   0.045905   6.121 9.99e-10 ***
+tamanio7                 0.378759   0.055342   6.844 8.57e-12 ***
+tamanio8                 0.006382   0.041802   0.153 0.878657    
+informal1               -0.303922   0.026151 -11.622  &lt; 2e-16 ***
+jornada3                 0.476145   0.098116   4.853 1.25e-06 ***
+jornada4                 0.513112   0.122122   4.202 2.69e-05 ***
+jornada5                 0.500317   0.138603   3.610 0.000309 ***
+unidad_eco2             -0.189408   0.034253  -5.530 3.36e-08 ***
+unidad_eco3             -0.121257   0.045640  -2.657 0.007912 ** 
+unidad_eco4              0.030748   0.134358   0.229 0.818993    
+over_obj:campo_amplio01 -0.142887   0.081381  -1.756 0.079184 .  
+over_obj:campo_amplio02 -0.112110   0.107079  -1.047 0.295151    
+over_obj:campo_amplio03 -0.031731   0.080325  -0.395 0.692832    
+over_obj:campo_amplio04 -0.072619   0.074669  -0.973 0.330822    
+over_obj:campo_amplio05  0.080555   0.151186   0.533 0.594181    
+over_obj:campo_amplio06 -0.256207   0.101531  -2.523 0.011651 *  
+over_obj:campo_amplio07 -0.006431   0.073492  -0.088 0.930268    
+over_obj:campo_amplio08 -0.067231   0.181728  -0.370 0.711431    
+over_obj:campo_amplio09 -0.095625   0.081003  -1.181 0.237845    
+over_obj:campo_amplio99  0.332327   0.135063   2.461 0.013905 *  
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.2354344)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<p>No existen grandes cambios, por tanto se deja como está</p>
+<p>Por último, se validan los estadísticos descriptivos</p>
+<p>Variables discretas</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>argumentos <span class="ot">&lt;-</span> <span class="fu">tribble</span>(</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="sc">~</span>datos, <span class="sc">~</span>grupo,</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ---</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"educacion"</span>,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"over_obj"</span>,</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"under_obj"</span>,</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"mujer"</span>,</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"casada"</span>,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"jefe_hogar"</span>,</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"regiones"</span>,</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"campo_amplio"</span>,</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"division"</span>,</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"pos_ocu"</span>,</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"sector_eco"</span>,</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"tamanio"</span>,</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"informal"</span>,</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"jornada"</span>,</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"unidad_eco"</span></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>prop_jov_reg <span class="ot">&lt;-</span> <span class="fu">pmap</span>(argumentos, calcular_prop_map) <span class="sc">|&gt;</span> </span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>También se aplica para variables continuas, para lo cual se añade la función que lo hace de forma iterativa</p>
+<p>ANTES</p>
+<pre><code># variables continuas
+calcular_descriptivos &lt;- function(datos, variable){
+  # se enmascara nombre de columna
+  nombre_var &lt;- as_label(enquo(variable))
+  
+  datos |&gt; 
+    filter(!is.na({{  variable  }})) |&gt; 
+    summarise(
+      # se inserta nombre de la columna
+      variable = nombre_var, 
+      minimo = min({{  variable  }}),
+      promedio = survey_mean({{  variable  }}, vartype = NULL),
+      desv_est = survey_sd({{  variable  }}),
+      maximo = max({{  variable  }})
+    )
+}</code></pre>
+<p>AHORA</p>
+<pre><code># variables continuas
+calcular_descriptivos &lt;- function(datos, variable){
+
+  poblacion &lt;- get(datos)
+  variable_sym &lt;- sym(variable)
+  
+  datos |&gt; 
+    filter(!is.na(  !!variable_sym  )) |&gt; 
+    summarise(
+      datos = datos,
+      variable = variable, 
+      min = survey_quantile(  
+        !!variable_sym, 
+        quantiles = 0, 
+        vartype = NULL
+      ),
+      media = survey_mean(  !!variable_sym  , vartype = NULL),
+      mediana = survey_median(  !!variable_sym  , varype = NULL),
+      var = survey_var(  !!variable_sym  , vartype = NULL),
+      sd = survey_sd(  !!variable_sym  ),
+      max = survey_quantile(  
+        !!variable_sym, 
+        quantiles = 1, 
+        vartype = NULL
+      )
+    )
+}</code></pre>
+<p>Se valida</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># variables continuas</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>funcion_vgr <span class="ot">&lt;-</span> <span class="cf">function</span>(datos, variable){</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  poblacion <span class="ot">&lt;-</span> <span class="fu">get</span>(datos)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  variable_sym <span class="ot">&lt;-</span> <span class="fu">sym</span>(variable)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  poblacion <span class="sc">|&gt;</span> </span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(  <span class="sc">!!</span>variable_sym  )) <span class="sc">|&gt;</span> </span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>      <span class="at">datos =</span> datos,</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>      <span class="at">variable =</span> variable, </span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>      <span class="at">min =</span> <span class="fu">survey_quantile</span>(  </span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>        <span class="sc">!!</span>variable_sym, </span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">quantiles =</span> <span class="dv">0</span>, </span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>        <span class="at">vartype =</span> <span class="cn">NULL</span></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>      ),</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>      <span class="at">media =</span> <span class="fu">survey_mean</span>(  <span class="sc">!!</span>variable_sym  , <span class="at">vartype =</span> <span class="cn">NULL</span>),</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>      <span class="at">mediana =</span> <span class="fu">survey_median</span>(  <span class="sc">!!</span>variable_sym  , <span class="at">vartype =</span> <span class="cn">NULL</span>),</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>      <span class="co"># var = survey_var(  !!variable_sym  , vartype = NULL),</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>      <span class="at">sd =</span> <span class="fu">survey_sd</span>(  <span class="sc">!!</span>variable_sym  , <span class="at">vartype =</span> <span class="cn">NULL</span>),</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>      <span class="at">max =</span> <span class="fu">survey_quantile</span>(  </span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>        <span class="sc">!!</span>variable_sym, </span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>        <span class="at">quantiles =</span> <span class="dv">1</span>, </span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>        <span class="at">vartype =</span> <span class="cn">NULL</span></span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">funcion_vgr</span>(<span class="st">"jovenes_reg"</span>, <span class="st">"ingreso_mensual"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 7
+  datos       variable        min_q00  media mediana     sd max_q100
+  &lt;chr&gt;       &lt;chr&gt;             &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;  &lt;dbl&gt;    &lt;dbl&gt;
+1 jovenes_reg ingreso_mensual     150 15415.   12900 10903.   200000</code></pre>
+</div>
+</div>
+<p>Listo! Se añade al script <code>funciones</code> y se guarda en “C:/Prog/tesis/scripts/0_funciones_v9.R”</p>
+<p>Se valida</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">calcular_descriptivos_map</span>(<span class="st">"jovenes_reg"</span>, <span class="st">"ingreso_mensual"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 7
+  datos       variable        min_q00  media mediana     sd max_q100
+  &lt;chr&gt;       &lt;chr&gt;             &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;  &lt;dbl&gt;    &lt;dbl&gt;
+1 jovenes_reg ingreso_mensual     150 15415.   12900 10903.   200000</code></pre>
+</div>
+</div>
+<p>Se calcula</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>argumentos <span class="ot">&lt;-</span> <span class="fu">tribble</span>(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="sc">~</span>datos, <span class="sc">~</span>variable,</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ---</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"ingreso_mensual"</span>,</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"exper"</span>,</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"horas_lab"</span>,</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"edad"</span>,</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"jovenes_reg"</span>, <span class="st">"anios_estudios"</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>est_descrip_jov_reg <span class="ot">&lt;-</span> <span class="fu">pmap</span>(argumentos, calcular_descriptivos_map) <span class="sc">|&gt;</span> </span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Se valida</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>prop_jov_reg</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 62 × 6
+   poblacion   grupo     valor     n     tot    prop
+   &lt;chr&gt;       &lt;chr&gt;     &lt;chr&gt; &lt;int&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+ 1 jovenes_reg educacion 6       135   35660 0.0178 
+ 2 jovenes_reg educacion 7      7109 1834237 0.917  
+ 3 jovenes_reg educacion 8       426  118014 0.0590 
+ 4 jovenes_reg educacion 9        38   11555 0.00578
+ 5 jovenes_reg over_obj  0      3387  898406 0.449  
+ 6 jovenes_reg over_obj  1      4321 1101060 0.551  
+ 7 jovenes_reg under_obj 0      7699 1996139 0.998  
+ 8 jovenes_reg under_obj 1         9    3327 0.00166
+ 9 jovenes_reg mujer     0      3700  952398 0.476  
+10 jovenes_reg mujer     1      4008 1047068 0.524  
+# ℹ 52 more rows</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>est_descrip_jov_reg</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 5 × 7
+  datos       variable        min_q00    media mediana        sd max_q100
+  &lt;chr&gt;       &lt;chr&gt;             &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
+1 jovenes_reg ingreso_mensual     150 15415.     12900 10903.      200000
+2 jovenes_reg exper                 0     7.03       7     2.85        14
+3 jovenes_reg horas_lab             1    41.3       40    13.6        112
+4 jovenes_reg edad                 25    29.6       30     2.77        34
+5 jovenes_reg anios_estudios       13    16.5       17     0.833       23</code></pre>
+</div>
+</div>
+<p>Por último, se quita <code>under_obj</code> del modelo</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>jovenes_reg <span class="ot">&lt;-</span> <span class="fu">read_rds</span>(<span class="st">"datos/jovenes_normativo_reg.rds"</span>)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>model_jovenes_tot <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    educacion <span class="sc">+</span> over_obj <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> casada <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span> campo_amplio <span class="sc">+</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> sector_eco <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_tot)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ educacion + over_obj + 
+    exper + I(exper^2) + log(horas_lab) + mujer + casada + jefe_hogar + 
+    regiones + campo_amplio + division + pos_ocu + sector_eco + 
+    tamanio + informal + jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                 Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)     8.3290812  0.2017171  41.291  &lt; 2e-16 ***
+educacion7      0.1171439  0.0608533   1.925 0.054280 .  
+educacion8      0.2710247  0.0786689   3.445 0.000575 ***
+educacion9      0.3007522  0.1311654   2.293 0.021891 *  
+over_obj       -0.1921902  0.0305948  -6.282 3.61e-10 ***
+exper           0.0604030  0.0158572   3.809 0.000141 ***
+I(exper^2)     -0.0034357  0.0010864  -3.163 0.001573 ** 
+log(horas_lab)  0.1135765  0.0629461   1.804 0.071234 .  
+mujer          -0.1055441  0.0214092  -4.930 8.48e-07 ***
+casada          0.0364820  0.0236239   1.544 0.122578    
+jefe_hogar      0.1245636  0.0220689   5.644 1.74e-08 ***
+regiones2       0.1208155  0.0308848   3.912 9.27e-05 ***
+regiones3       0.0508002  0.0289471   1.755 0.079329 .  
+regiones4       0.2148642  0.0256641   8.372  &lt; 2e-16 ***
+regiones5       0.0769790  0.0272570   2.824 0.004758 ** 
+campo_amplio02  0.0636303  0.0510575   1.246 0.212728    
+campo_amplio03  0.0663533  0.0363405   1.826 0.067924 .  
+campo_amplio04  0.1193393  0.0340419   3.506 0.000459 ***
+campo_amplio05  0.0336836  0.0786516   0.428 0.668477    
+campo_amplio06  0.1165249  0.0548241   2.125 0.033597 *  
+campo_amplio07  0.1371249  0.0367833   3.728 0.000195 ***
+campo_amplio08  0.0798877  0.1031593   0.774 0.438722    
+campo_amplio09  0.0920682  0.0380047   2.423 0.015445 *  
+campo_amplio10  0.0801941  0.0457123   1.754 0.079432 .  
+campo_amplio99  0.2247550  0.1036688   2.168 0.030202 *  
+division2      -0.0891561  0.0439644  -2.028 0.042619 *  
+division3      -0.2017076  0.0520925  -3.872 0.000109 ***
+division4      -0.2897565  0.0543353  -5.333 1.01e-07 ***
+division5      -0.1914934  0.0580640  -3.298 0.000980 ***
+division6      -0.3667100  0.1562733  -2.347 0.018982 *  
+division7      -0.1685100  0.0774966  -2.174 0.029717 *  
+division8      -0.3329370  0.0602043  -5.530 3.35e-08 ***
+division9      -0.4111126  0.0714018  -5.758 9.00e-09 ***
+pos_ocu2        0.4372484  0.0610660   7.160 9.15e-13 ***
+pos_ocu3        0.0860509  0.0488214   1.763 0.078031 .  
+sector_eco2    -0.0920380  0.0732289  -1.257 0.208862    
+sector_eco3    -0.0330129  0.0709284  -0.465 0.641636    
+sector_eco4    -0.1444955  0.1862298  -0.776 0.437843    
+tamanio4        0.0942890  0.0345978   2.725 0.006446 ** 
+tamanio5        0.1467767  0.0396319   3.703 0.000215 ***
+tamanio6        0.2807719  0.0460047   6.103 1.11e-09 ***
+tamanio7        0.3691475  0.0545895   6.762 1.50e-11 ***
+tamanio8        0.0008059  0.0422300   0.019 0.984775    
+informal1      -0.3074093  0.0259225 -11.859  &lt; 2e-16 ***
+jornada3        0.4704435  0.0983052   4.786 1.75e-06 ***
+jornada4        0.4980305  0.1224807   4.066 4.85e-05 ***
+jornada5        0.4873528  0.1390971   3.504 0.000463 ***
+unidad_eco2    -0.1853710  0.0344186  -5.386 7.52e-08 ***
+unidad_eco3    -0.1200284  0.0455664  -2.634 0.008459 ** 
+unidad_eco4    -0.0084882  0.1353849  -0.063 0.950010    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.2365698)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<p>Por último,</p>
+<p>Se quita <code>sector_eco</code> y <code>casada</code></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_tot <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    educacion <span class="sc">+</span> over_obj <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span> campo_amplio <span class="sc">+</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_tot)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ educacion + over_obj + 
+    exper + I(exper^2) + log(horas_lab) + mujer + jefe_hogar + 
+    regiones + campo_amplio + division + pos_ocu + tamanio + 
+    informal + jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)     8.292780   0.183806  45.117  &lt; 2e-16 ***
+educacion7      0.118948   0.061096   1.947 0.051597 .  
+educacion8      0.271707   0.077731   3.495 0.000477 ***
+educacion9      0.313137   0.134263   2.332 0.019724 *  
+over_obj       -0.191091   0.030802  -6.204 5.93e-10 ***
+exper           0.061920   0.015963   3.879 0.000106 ***
+I(exper^2)     -0.003481   0.001092  -3.186 0.001451 ** 
+log(horas_lab)  0.109351   0.063251   1.729 0.083894 .  
+mujer          -0.106037   0.021449  -4.944 7.90e-07 ***
+jefe_hogar      0.128301   0.022062   5.816 6.40e-09 ***
+regiones2       0.117474   0.030926   3.799 0.000147 ***
+regiones3       0.047514   0.029346   1.619 0.105484    
+regiones4       0.212700   0.025606   8.307  &lt; 2e-16 ***
+regiones5       0.078924   0.027317   2.889 0.003878 ** 
+campo_amplio02  0.060163   0.051166   1.176 0.239708    
+campo_amplio03  0.067671   0.037203   1.819 0.068973 .  
+campo_amplio04  0.120127   0.033920   3.542 0.000401 ***
+campo_amplio05  0.038580   0.078759   0.490 0.624263    
+campo_amplio06  0.118227   0.055418   2.133 0.032940 *  
+campo_amplio07  0.127785   0.036586   3.493 0.000482 ***
+campo_amplio08  0.092081   0.100089   0.920 0.357615    
+campo_amplio09  0.097673   0.038026   2.569 0.010238 *  
+campo_amplio10  0.081651   0.045909   1.779 0.075373 .  
+campo_amplio99  0.212519   0.102854   2.066 0.038856 *  
+division2      -0.088908   0.044906  -1.980 0.047769 *  
+division3      -0.198123   0.052910  -3.745 0.000183 ***
+division4      -0.279545   0.055445  -5.042 4.76e-07 ***
+division5      -0.184971   0.058968  -3.137 0.001717 ** 
+division6      -0.332909   0.147462  -2.258 0.024011 *  
+division7      -0.204516   0.075227  -2.719 0.006576 ** 
+division8      -0.347353   0.059305  -5.857 4.99e-09 ***
+division9      -0.415986   0.070172  -5.928 3.26e-09 ***
+pos_ocu2        0.436316   0.060564   7.204 6.65e-13 ***
+pos_ocu3        0.094849   0.048344   1.962 0.049821 *  
+tamanio4        0.100590   0.034461   2.919 0.003527 ** 
+tamanio5        0.147638   0.039593   3.729 0.000194 ***
+tamanio6        0.271277   0.044868   6.046 1.58e-09 ***
+tamanio7        0.371933   0.054695   6.800 1.16e-11 ***
+tamanio8        0.006327   0.039487   0.160 0.872708    
+informal1      -0.304889   0.025613 -11.904  &lt; 2e-16 ***
+jornada3        0.473240   0.098443   4.807 1.57e-06 ***
+jornada4        0.498510   0.122562   4.067 4.82e-05 ***
+jornada5        0.490213   0.139405   3.516 0.000441 ***
+unidad_eco2    -0.172914   0.032782  -5.275 1.38e-07 ***
+unidad_eco3    -0.121377   0.045455  -2.670 0.007602 ** 
+unidad_eco4    -0.061771   0.116300  -0.531 0.595344    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.237158)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<p>No modifica mucho</p>
+<p>Listo!</p>
+<p>Términos de interacción</p>
+<p>EDUCACIÓN</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_edu <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    over_obj <span class="sc">*</span> educacion <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span> campo_amplio <span class="sc">+</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_edu)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ over_obj * educacion + 
+    exper + I(exper^2) + log(horas_lab) + mujer + jefe_hogar + 
+    regiones + campo_amplio + division + pos_ocu + tamanio + 
+    informal + jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                     Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)          8.265206   0.185428  44.574  &lt; 2e-16 ***
+over_obj            -0.142646   0.111280  -1.282 0.199946    
+educacion7           0.147441   0.075616   1.950 0.051243 .  
+educacion8           0.319802   0.097284   3.287 0.001018 ** 
+educacion9           0.325243   0.124992   2.602 0.009291 ** 
+exper                0.061295   0.016006   3.829 0.000130 ***
+I(exper^2)          -0.003438   0.001094  -3.142 0.001687 ** 
+log(horas_lab)       0.108577   0.063350   1.714 0.086602 .  
+mujer               -0.105993   0.021490  -4.932 8.37e-07 ***
+jefe_hogar           0.128892   0.021992   5.861 4.88e-09 ***
+regiones2            0.116741   0.030944   3.773 0.000163 ***
+regiones3            0.047558   0.029354   1.620 0.105257    
+regiones4            0.212662   0.025610   8.304  &lt; 2e-16 ***
+regiones5            0.078715   0.027344   2.879 0.004009 ** 
+campo_amplio02       0.060847   0.051216   1.188 0.234869    
+campo_amplio03       0.067447   0.037166   1.815 0.069616 .  
+campo_amplio04       0.119606   0.033830   3.535 0.000411 ***
+campo_amplio05       0.038482   0.079489   0.484 0.628323    
+campo_amplio06       0.118922   0.055404   2.146 0.031883 *  
+campo_amplio07       0.127966   0.036596   3.497 0.000475 ***
+campo_amplio08       0.094669   0.100668   0.940 0.347052    
+campo_amplio09       0.098183   0.037963   2.586 0.009729 ** 
+campo_amplio10       0.080610   0.045865   1.758 0.078883 .  
+campo_amplio99       0.215662   0.099807   2.161 0.030757 *  
+division2           -0.088053   0.044385  -1.984 0.047326 *  
+division3           -0.197911   0.052617  -3.761 0.000171 ***
+division4           -0.279002   0.055173  -5.057 4.41e-07 ***
+division5           -0.183707   0.058495  -3.141 0.001695 ** 
+division6           -0.333913   0.147351  -2.266 0.023485 *  
+division7           -0.205887   0.075102  -2.741 0.006138 ** 
+division8           -0.348010   0.059263  -5.872 4.56e-09 ***
+division9           -0.416703   0.070139  -5.941 3.01e-09 ***
+pos_ocu2             0.435208   0.060490   7.195 7.13e-13 ***
+pos_ocu3             0.094463   0.048347   1.954 0.050771 .  
+tamanio4             0.100761   0.034469   2.923 0.003479 ** 
+tamanio5             0.147958   0.039605   3.736 0.000189 ***
+tamanio6             0.271376   0.044829   6.054 1.51e-09 ***
+tamanio7             0.373293   0.054547   6.844 8.59e-12 ***
+tamanio8             0.005666   0.039552   0.143 0.886101    
+informal1           -0.305402   0.025617 -11.922  &lt; 2e-16 ***
+jornada3             0.474258   0.098482   4.816 1.51e-06 ***
+jornada4             0.500087   0.122703   4.076 4.66e-05 ***
+jornada5             0.492873   0.139591   3.531 0.000418 ***
+unidad_eco2         -0.172672   0.032753  -5.272 1.40e-07 ***
+unidad_eco3         -0.120443   0.045434  -2.651 0.008051 ** 
+unidad_eco4         -0.060894   0.115135  -0.529 0.596904    
+over_obj:educacion7 -0.045587   0.111496  -0.409 0.682653    
+over_obj:educacion8 -0.114897   0.137424  -0.836 0.403152    
+over_obj:educacion9  0.015722   0.367246   0.043 0.965854    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.2370917)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">regTermTest</span>(model_jovenes_edu, <span class="sc">~</span> over_obj<span class="sc">:</span>educacion)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Wald test for over_obj:educacion
+ in svyglm(formula = log(ingreso_mensual) ~ over_obj * educacion + 
+    exper + I(exper^2) + log(horas_lab) + mujer + jefe_hogar + 
+    regiones + campo_amplio + division + pos_ocu + tamanio + 
+    informal + jornada + unidad_eco, design = jovenes_reg)
+F =  0.2972682  on  3  and  5330  df: p= 0.8274 </code></pre>
+</div>
+</div>
+<p>GÉNERO</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_muj <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>    over_obj <span class="sc">*</span> mujer <span class="sc">+</span> educacion <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span> campo_amplio <span class="sc">+</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_muj)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ over_obj * mujer + educacion + 
+    exper + I(exper^2) + log(horas_lab) + jefe_hogar + regiones + 
+    campo_amplio + division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)     8.277925   0.183336  45.152  &lt; 2e-16 ***
+over_obj       -0.166041   0.037114  -4.474 7.84e-06 ***
+mujer          -0.078721   0.032244  -2.441 0.014663 *  
+educacion7      0.117965   0.061070   1.932 0.053459 .  
+educacion8      0.270256   0.077188   3.501 0.000467 ***
+educacion9      0.312611   0.133838   2.336 0.019542 *  
+exper           0.061763   0.015931   3.877 0.000107 ***
+I(exper^2)     -0.003469   0.001090  -3.182 0.001469 ** 
+log(horas_lab)  0.108692   0.063023   1.725 0.084651 .  
+jefe_hogar      0.129344   0.022081   5.858 4.97e-09 ***
+regiones2       0.117823   0.030913   3.811 0.000140 ***
+regiones3       0.048906   0.029322   1.668 0.095397 .  
+regiones4       0.212885   0.025594   8.318  &lt; 2e-16 ***
+regiones5       0.079622   0.027292   2.917 0.003545 ** 
+campo_amplio02  0.061596   0.051210   1.203 0.229104    
+campo_amplio03  0.071406   0.036838   1.938 0.052631 .  
+campo_amplio04  0.122491   0.034218   3.580 0.000347 ***
+campo_amplio05  0.042695   0.078389   0.545 0.586013    
+campo_amplio06  0.122358   0.055435   2.207 0.027341 *  
+campo_amplio07  0.130136   0.036752   3.541 0.000402 ***
+campo_amplio08  0.092755   0.100131   0.926 0.354314    
+campo_amplio09  0.099457   0.038276   2.598 0.009391 ** 
+campo_amplio10  0.082135   0.045810   1.793 0.073039 .  
+campo_amplio99  0.215086   0.100645   2.137 0.032637 *  
+division2      -0.088861   0.044655  -1.990 0.046648 *  
+division3      -0.193277   0.052800  -3.661 0.000254 ***
+division4      -0.277408   0.055236  -5.022 5.27e-07 ***
+division5      -0.183697   0.058742  -3.127 0.001774 ** 
+division6      -0.340999   0.147725  -2.308 0.021018 *  
+division7      -0.209349   0.075150  -2.786 0.005359 ** 
+division8      -0.353810   0.059237  -5.973 2.48e-09 ***
+division9      -0.417074   0.069737  -5.981 2.37e-09 ***
+pos_ocu2        0.439597   0.060750   7.236 5.27e-13 ***
+pos_ocu3        0.096154   0.048521   1.982 0.047564 *  
+tamanio4        0.100246   0.034493   2.906 0.003673 ** 
+tamanio5        0.149594   0.039391   3.798 0.000148 ***
+tamanio6        0.273508   0.044722   6.116 1.03e-09 ***
+tamanio7        0.375632   0.054487   6.894 6.06e-12 ***
+tamanio8        0.006042   0.039483   0.153 0.878376    
+informal1      -0.304536   0.025664 -11.866  &lt; 2e-16 ***
+jornada3        0.474104   0.098027   4.836 1.36e-06 ***
+jornada4        0.498678   0.122159   4.082 4.53e-05 ***
+jornada5        0.490413   0.138969   3.529 0.000421 ***
+unidad_eco2    -0.175870   0.032769  -5.367 8.34e-08 ***
+unidad_eco3    -0.120641   0.045345  -2.661 0.007825 ** 
+unidad_eco4    -0.067243   0.113341  -0.593 0.553021    
+over_obj:mujer -0.049850   0.040030  -1.245 0.213071    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.237017)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="fu">regTermTest</span>(model_jovenes_muj, <span class="sc">~</span> over_obj<span class="sc">:</span>mujer)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Wald test for over_obj:mujer
+ in svyglm(formula = log(ingreso_mensual) ~ over_obj * mujer + educacion + 
+    exper + I(exper^2) + log(horas_lab) + jefe_hogar + regiones + 
+    campo_amplio + division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, design = jovenes_reg)
+F =  1.550808  on  1  and  5332  df: p= 0.21307 </code></pre>
+</div>
+</div>
+<p>CARRERAS EDUCATIVAS</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_car <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>    over_obj <span class="sc">*</span> campo_amplio <span class="sc">+</span> educacion <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> jefe_hogar <span class="sc">+</span> regiones <span class="sc">+</span></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_car)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ over_obj * campo_amplio + 
+    educacion + exper + I(exper^2) + log(horas_lab) + mujer + 
+    jefe_hogar + regiones + division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                         Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)              8.340795   0.183442  45.468  &lt; 2e-16 ***
+over_obj                -0.273274   0.059184  -4.617 3.98e-06 ***
+campo_amplio02           0.039391   0.065887   0.598 0.549959    
+campo_amplio03           0.008622   0.051326   0.168 0.866603    
+campo_amplio04           0.082075   0.050942   1.611 0.107202    
+campo_amplio05          -0.064801   0.132330  -0.490 0.624372    
+campo_amplio06           0.169939   0.084530   2.010 0.044440 *  
+campo_amplio07           0.044443   0.051433   0.864 0.387576    
+campo_amplio08           0.049145   0.122275   0.402 0.687759    
+campo_amplio09           0.071869   0.049246   1.459 0.144515    
+campo_amplio10          -0.018144   0.059191  -0.307 0.759216    
+campo_amplio99          -0.139594   0.092369  -1.511 0.130782    
+educacion7               0.114983   0.060659   1.896 0.058071 .  
+educacion8               0.272614   0.076002   3.587 0.000338 ***
+educacion9               0.320499   0.137110   2.338 0.019448 *  
+exper                    0.061559   0.015832   3.888 0.000102 ***
+I(exper^2)              -0.003470   0.001085  -3.199 0.001386 ** 
+log(horas_lab)           0.106533   0.063199   1.686 0.091919 .  
+mujer                   -0.108511   0.021246  -5.107 3.38e-07 ***
+jefe_hogar               0.127943   0.021963   5.825 6.03e-09 ***
+regiones2                0.116290   0.030684   3.790 0.000152 ***
+regiones3                0.050327   0.028950   1.738 0.082197 .  
+regiones4                0.213030   0.025661   8.302  &lt; 2e-16 ***
+regiones5                0.080434   0.027700   2.904 0.003702 ** 
+division2               -0.095608   0.046055  -2.076 0.037949 *  
+division3               -0.197021   0.053290  -3.697 0.000220 ***
+division4               -0.278056   0.055723  -4.990 6.23e-07 ***
+division5               -0.186538   0.058967  -3.163 0.001568 ** 
+division6               -0.346524   0.146490  -2.366 0.018041 *  
+division7               -0.214355   0.075722  -2.831 0.004660 ** 
+division8               -0.357112   0.060452  -5.907 3.69e-09 ***
+division9               -0.417607   0.070914  -5.889 4.13e-09 ***
+pos_ocu2                 0.439071   0.060661   7.238 5.20e-13 ***
+pos_ocu3                 0.100019   0.048451   2.064 0.039032 *  
+tamanio4                 0.098875   0.034778   2.843 0.004486 ** 
+tamanio5                 0.149029   0.039429   3.780 0.000159 ***
+tamanio6                 0.273211   0.044838   6.093 1.18e-09 ***
+tamanio7                 0.383543   0.055545   6.905 5.60e-12 ***
+tamanio8                 0.010902   0.039222   0.278 0.781066    
+informal1               -0.301968   0.025832 -11.690  &lt; 2e-16 ***
+jornada3                 0.477559   0.097861   4.880 1.09e-06 ***
+jornada4                 0.512394   0.121761   4.208 2.62e-05 ***
+jornada5                 0.501910   0.138519   3.623 0.000293 ***
+unidad_eco2             -0.180055   0.032875  -5.477 4.52e-08 ***
+unidad_eco3             -0.121359   0.045583  -2.662 0.007783 ** 
+unidad_eco4             -0.039527   0.110643  -0.357 0.720922    
+over_obj:campo_amplio02  0.042191   0.100232   0.421 0.673821    
+over_obj:campo_amplio03  0.113896   0.075809   1.502 0.133052    
+over_obj:campo_amplio04  0.077054   0.067254   1.146 0.251963    
+over_obj:campo_amplio05  0.216134   0.147034   1.470 0.141633    
+over_obj:campo_amplio06 -0.111074   0.101693  -1.092 0.274772    
+over_obj:campo_amplio07  0.150826   0.069879   2.158 0.030942 *  
+over_obj:campo_amplio08  0.083666   0.177762   0.471 0.637901    
+over_obj:campo_amplio09  0.047297   0.074536   0.635 0.525753    
+over_obj:campo_amplio10  0.148965   0.081460   1.829 0.067502 .  
+over_obj:campo_amplio99  0.478510   0.135999   3.518 0.000438 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.2359679)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">regTermTest</span>(model_jovenes_car, <span class="sc">~</span> over_obj<span class="sc">:</span>campo_amplio)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Wald test for over_obj:campo_amplio
+ in svyglm(formula = log(ingreso_mensual) ~ over_obj * campo_amplio + 
+    educacion + exper + I(exper^2) + log(horas_lab) + mujer + 
+    jefe_hogar + regiones + division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, design = jovenes_reg)
+F =  2.462716  on  10  and  5323  df: p= 0.0061818 </code></pre>
+</div>
+</div>
+<p>REGIONES</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>model_jovenes_reg <span class="ot">&lt;-</span> <span class="fu">svyglm</span>(</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(ingreso_mensual) <span class="sc">~</span> </span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>    over_obj <span class="sc">*</span> regiones <span class="sc">+</span> educacion <span class="sc">+</span> exper <span class="sc">+</span> <span class="fu">I</span>(exper<span class="sc">**</span><span class="dv">2</span>) <span class="sc">+</span> </span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">log</span>(horas_lab) <span class="sc">+</span> mujer <span class="sc">+</span> jefe_hogar <span class="sc">+</span> campo_amplio <span class="sc">+</span></span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>    division <span class="sc">+</span> pos_ocu <span class="sc">+</span> tamanio <span class="sc">+</span> informal <span class="sc">+</span> </span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>    jornada <span class="sc">+</span> unidad_eco, </span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">design =</span> jovenes_reg</span>
+<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_jovenes_reg)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+svyglm(formula = log(ingreso_mensual) ~ over_obj * regiones + 
+    educacion + exper + I(exper^2) + log(horas_lab) + mujer + 
+    jefe_hogar + campo_amplio + division + pos_ocu + tamanio + 
+    informal + jornada + unidad_eco, design = jovenes_reg)
+
+Survey design:
+Called via srvyr
+
+Coefficients:
+                    Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)         8.295692   0.183436  45.224  &lt; 2e-16 ***
+over_obj           -0.186046   0.042000  -4.430 9.63e-06 ***
+regiones2           0.139844   0.046631   2.999 0.002722 ** 
+regiones3           0.040909   0.041687   0.981 0.326478    
+regiones4           0.198804   0.035423   5.612 2.10e-08 ***
+regiones5           0.078035   0.043437   1.797 0.072470 .  
+educacion7          0.116280   0.061300   1.897 0.057895 .  
+educacion8          0.266171   0.077306   3.443 0.000580 ***
+educacion9          0.311770   0.135383   2.303 0.021324 *  
+exper               0.061990   0.015873   3.905 9.52e-05 ***
+I(exper^2)         -0.003476   0.001086  -3.200 0.001380 ** 
+log(horas_lab)      0.108307   0.063466   1.707 0.087966 .  
+mujer              -0.106144   0.021452  -4.948 7.73e-07 ***
+jefe_hogar          0.127469   0.022290   5.719 1.13e-08 ***
+campo_amplio02      0.059019   0.050907   1.159 0.246366    
+campo_amplio03      0.065086   0.037054   1.757 0.079055 .  
+campo_amplio04      0.116427   0.033840   3.440 0.000585 ***
+campo_amplio05      0.032531   0.078945   0.412 0.680301    
+campo_amplio06      0.112339   0.053985   2.081 0.037487 *  
+campo_amplio07      0.125087   0.036460   3.431 0.000606 ***
+campo_amplio08      0.088739   0.100246   0.885 0.376085    
+campo_amplio09      0.093040   0.037666   2.470 0.013538 *  
+campo_amplio10      0.079333   0.045736   1.735 0.082871 .  
+campo_amplio99      0.213585   0.103432   2.065 0.038973 *  
+division2          -0.086576   0.044211  -1.958 0.050254 .  
+division3          -0.197752   0.052387  -3.775 0.000162 ***
+division4          -0.276660   0.054962  -5.034 4.97e-07 ***
+division5          -0.182503   0.058691  -3.110 0.001883 ** 
+division6          -0.332901   0.145305  -2.291 0.021999 *  
+division7          -0.205020   0.074762  -2.742 0.006121 ** 
+division8          -0.349941   0.058809  -5.950 2.84e-09 ***
+division9          -0.413110   0.069166  -5.973 2.48e-09 ***
+pos_ocu2            0.433870   0.060798   7.136 1.09e-12 ***
+pos_ocu3            0.090685   0.048308   1.877 0.060541 .  
+tamanio4            0.099999   0.034558   2.894 0.003823 ** 
+tamanio5            0.145662   0.039665   3.672 0.000243 ***
+tamanio6            0.270258   0.044898   6.019 1.87e-09 ***
+tamanio7            0.372473   0.055061   6.765 1.48e-11 ***
+tamanio8            0.005625   0.039538   0.142 0.886871    
+informal1          -0.305093   0.025663 -11.888  &lt; 2e-16 ***
+jornada3            0.473931   0.098535   4.810 1.55e-06 ***
+jornada4            0.500414   0.122763   4.076 4.64e-05 ***
+jornada5            0.493810   0.139514   3.540 0.000404 ***
+unidad_eco2        -0.172583   0.032802  -5.261 1.49e-07 ***
+unidad_eco3        -0.117938   0.045477  -2.593 0.009531 ** 
+unidad_eco4        -0.067133   0.112663  -0.596 0.551284    
+over_obj:regiones2 -0.043405   0.061366  -0.707 0.479405    
+over_obj:regiones3  0.013090   0.054030   0.242 0.808577    
+over_obj:regiones4  0.028001   0.046689   0.600 0.548710    
+over_obj:regiones5  0.002462   0.053687   0.046 0.963424    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.2369749)
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="fu">regTermTest</span>(model_jovenes_reg, <span class="sc">~</span> over_obj<span class="sc">:</span>regiones)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Wald test for over_obj:regiones
+ in svyglm(formula = log(ingreso_mensual) ~ over_obj * regiones + 
+    educacion + exper + I(exper^2) + log(horas_lab) + mujer + 
+    jefe_hogar + campo_amplio + division + pos_ocu + tamanio + 
+    informal + jornada + unidad_eco, design = jovenes_reg)
+F =  0.3905665  on  4  and  5329  df: p= 0.81555 </code></pre>
+</div>
+</div>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

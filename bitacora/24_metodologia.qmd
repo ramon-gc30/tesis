@@ -1,0 +1,111 @@
+---
+lang: es
+format: html
+bibliography: C:/Prog/tesis/referencias2.bib
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(kableExtra)
+library(knitr)
+library(scales)
+```
+
+
+# Metodología
+
+En este capítulo se describe la metodología a utilizar en la presente investigación que permitirá calcular la incidencia de la sobrecalificación y su efecto en el ingreso laboral.
+
+## Fuente de datos
+
+La fuente de datos serán los *microdatos* de la Encuesta Nacional de Ocupación y Empleo correspondiente al tercer trimestre de 2025 (ENOE 3T-2025). La ENOE es la principal fuente de información sobre el mercado laboral mexicano que brinda información estadística sobre la fuerza de trabajo, las características ocupacionales y variables sociodemográficas de la población tanto a nivel nacional como a nivel estatal e incluso por ciudades (INEGI, PÁGINA WEB).
+
+La base de datos de la ENOE 3T-2025 se encuentra divida en cinco tablas con la descripción y el número de campos señalados en el cuadro @tbl-tablas-enoe.
+
+```{r}
+# tablas_enoe <- tribble(
+#   ~tabla, ~descrip, ~abrev, ~num,
+#   "`VIVT325`", "Tabla de vivienda", "`VIV`", "25",
+#   "`HOGT325`", "Tabla de hogares", "`HOG`", "37",
+#   "`SDEMT325`", "Tabla de sociodemográfico", "`SDEM`", "114",
+#   "`COE1T325`", "Tabla de cuestionario de ocupación y empleo I", "`COE1`", "172",
+#   "`COE2T325`", "Tabla de cuestionario de ocupación y empleo II", "`COE2`", "82",
+# )
+# 
+# tablas_enoe |> 
+#   kableExtra::kbl(
+#     format = "html",
+#     col.names = c("Tabla de datos", "Descripción", "Abreviatura", "Número de campos"),
+#     align = "l",
+#     escape = FALSE,
+#     booktabs = TRUE
+#   ) |> 
+#   kable_styling(
+#     position = "center",
+#     font_size = 14
+#   ) |> 
+#   # fuente de letra tipo código
+#   column_spec(
+#     column = c(1, 3),
+#     monospace = TRUE
+#   ) |>
+#   footnote(
+#     general_title = "Fuente:",
+#     general = "(ref:cita-inegi)",
+#     # general = "\\\\textcite{inegiconociendoenoe2023}",
+#     title_format = "bold",
+#     escape = FALSE
+#   )
+```
+
+NO PUEDO AÑADIR CITA BIBLIOGRÁFICA EN NOTA AL PIE DE PÁGINA con `footnote`
+
+NO PUEDO QUE COMILLA INVERTIDA SE INTERPRETE COMO BLOQUE DE CÓDIGO
+
+```{r}
+#| label: tbl-tablas-enoe
+#| tbl-cap: "Descripción de las tablas de la ENOE 3T-2025"
+#| tbl-cap-location: top
+#| tbl-pos: "H"
+
+tablas_enoe <- tribble(
+  ~tabla, ~descrip, ~abrev, ~num,
+  "`VIVT325`", "Tabla de vivienda", "`VIV`", "25",
+  "`HOGT325`", "Tabla de hogares", "`HOG`", "37",
+  "`SDEMT325`", "Tabla de sociodemográfico", "`SDEM`", "114",
+  "`COE1T325`", "Tabla de cuestionario de ocupación y empleo I", "`COE1`", "172",
+  "`COE2T325`", "Tabla de cuestionario de ocupación y empleo II", "`COE2`", "82",
+)
+
+tablas_enoe |> 
+  kableExtra::kbl(
+    format = "html",
+    col.names = c("Tabla de datos", "Descripción", "Abreviatura", "Número de campos"),
+    align = "l",
+    escape = FALSE,
+    booktabs = TRUE
+  ) |> 
+  kable_styling(
+    position = "center",
+    font_size = 14
+  ) |> 
+  # fuente de letra tipo código
+  column_spec(
+    column = c(1, 3),
+    monospace = TRUE
+  )
+  # footnote(
+  #   general_title = "Fuente:",
+  #   general = "(ref:cita-inegi)",
+  #   # general = "\\\\textcite{inegiconociendoenoe2023}",
+  #   title_format = "bold",
+  #   escape = FALSE
+  # )
+```
+
+**Fuente**: @inegiconociendoenoe2023
+

@@ -1,0 +1,285 @@
+---
+date: today
+format: html
+---
+
+Este documento tiene como objetivo servir de apoyo para la redacción de la versión 3 del capítulo 3 Resultados.
+
+Cabe señalar que a partir de "C:/Prog/tesis/29_C3_V3_acopio_v2.qmd", se añadió esto
+
+```
+mutate(
+    campo_espec = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    campo_detal = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    ) %>% 
+  separate(
+    campo_espec,
+      # campo específico a 2 dígitos de CMPE
+      into = c("campo_espec", "res"),
+      sep = 3
+    ) %>% 
+  separate(
+    campo_detal,
+      # campo detallado a 3 dígitos de CMPE
+      into = c("campo_detal", "res"),
+      sep = 4
+    ) %>%
+```
+
+Al archivo "C:/Prog/tesis/scripts/3_construccion_variables_v3.R" y se guardo en "C:/Prog/tesis/scripts/3_construccion_variables_v4.R"
+
+Para la regresión se trabajará con el modelo especificado en "C:/Prog/tesis/25_apoyo_c2_v3-3_muestra2.qmd" 
+
+```
+model_jov_svy <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy
+)
+```
+
+Para la regresión se trabará con los siguientes archivos
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v4.R")
+source("scripts/4_metodologia_v1.R")
+```
+
+Primero se definirá la tabla a ocupar
+
+```{r}
+general <- construir_variables(ocupada)
+general <- asignar_edu_mismatch(general, ciuo08)
+general <- convertir_a_factor(general)
+general_svy <- definir_encuesta(general)
+jovenes_svy <- seleccionar_jov(general_svy)
+```
+
+Se valida el tamaño de la muestra
+
+```{r}
+jovenes_svy |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Es correcto. Ahora se define la tabla para la regresión
+
+```{r}
+jovenes_svy_reg <- seleccionar_obs_reg(jovenes_svy)
+```
+
+Se valida el tamaño de la muestra
+
+```{r}
+jovenes_svy_reg |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Se realiza la regresión general
+
+```{r}
+model_jov_svy_gral <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy_reg
+)
+```
+
+Sí están todas las variables especificadas en el capítulo 2 versión 3-4 p. 24
+
+Se muestran los resultados
+
+```{r}
+summary(model_jov_svy_gral)
+```
+
+Se interpretan los resultados. 
+
+Un modelo estimado con `svyglm` no genera la R-Cuadrada convencional como si hubiera sido estimado por MCO. La razón principal es que `svyglm` no estima mediante MCO sino con pseudo-máxima verosimilitud y varianzas robustas que se ajustan considerando el diseño complejo de la encuesta: estratos, unidades primarias de muestreo, pesos de expansión y efectos de conglomeración. 
+
+En su lugar, la función indica la estimación de la varianza residual del modelo que permite, entre otros, reflejar cuánta variabilidad queda en la variable objetivo después de considerar las variables explicativas. Asimismo, indica el número de iteraciones necesarias para encontrar la solución al modelo.
+	
+Ahora bien, los resultados pueden interpretarse como sigue. 
+
+Con respecto a la educación, los resultados muestran una diferencia salarial relativa entre jóvenes egresados (que reportan ingresos) por nivel educativo. Por ejemplo, el ingreso mensual de un jóven egresado de licenciatura es aproximadamente 12.6% mayor a uno egresado de técnico superior, al nivel de confianzan del 90%. Se observa que conforme aumenta el nivel educativo, de tipo terciario, la diferencia salarial relativa es estadísticamente significativa y mayor. Por ejemplo, el jóven egresado de doctorado percibe un 30.9%  aproximado de ingreso mensual mayor a uno con estudios de técnico superior.
+
+En cuanto al otro componente de capital humano (experiencia laboral), los resultados muestran que un año adicional en la experiencia laboral se asocia con un incremento de 6.0% en el ingreso mensual del joven egresado. Por otro lado, un incremento del 1% en las horas laborales se asocia con un aumento del 0.11% en el ingreso mensual.  [VALIDAR INTERPRETACIÓN]
+
+Con respecto a las características individuales, se observa que existe una diferencia salarial estadísticamente significativa por género y por posición en el hogar. En el primer caso, el salario mensual de una mujer es aproximadamente, en promedio, 10.5% menos comparado con el de un hombre. Por su parte, un joven egresado establecido como jefe de hogar percibe un salario relativamente mayor comparado (12.5% aproximado) con aquellos que no lo son. El caso del estado conyugal, no se observa una diferencia significativa en la población objetivo.
+
+Por su parte, también se observa una diferencia salarial relativa significativa entre las distintas regiones del país. En específico, existe una diferencia relativamente mayor entre la región sur (grupo base) y la región norte debido a los jóvenes egresados ubicados en la región norte perciben, en promedio, 21.5% adicional comparado con los ubicados en la zona sur del país.
+
+En cuanto a las carreras educativas, no se presenta una diferencia salarial significativa en las siguientes carreras, comparado con los jóvenes egresados de las carreras relacionadas a servicios: 2, 5 y 8. En contraparte, los individuos egresados de las carreras vinculadas a 7 perciben, en promedio, un salario mensual 13.7% mayor comparado con los egresados de servicios.
+
+Por el lado de las variables que describen las características de la ocupación, se observa que la mayoría de ellas son estadísticamente significativas. En cuanto a la ocupación como tal, los jóvenes ubicados en la división 9 tienen un ingreso 41.0% mayor con respecto a los que están en la división 1.
+
+Por su parte, aquellos posicionados como empleadores o trabajadores por cuenta propia perciben, en promedio, un salario relativamente mayor con respecto aquellos como trabajadores subordinados y remunerados.
+
+En cuanto al sector económico, no existen diferencias salariales significativas. 
+
+Por su parte, el tamaño de la unidad económica explica una diferencia salarial donde, por ejemplo, el salario de los jóvenes egresados ocupados en el gobierno es, en promedio, 36.9% mayor comparado con los ubicados en micronegocios.
+
+También, la condición de informalidad se asocia con una diferencia salarial. Los individuos ocupados bajo la informalidad perciben, en promedio, 30.7% menos salario con respecto a aquellos que no lo están.
+
+De igual modo, la duración de la jornada laboral así como el tipo de unidad económica presentan diferencias salariales significativas.
+
+Con respecto a la variable de interés, los resultados muestran que aquellos jóvenes egresados en situación de sobrecalificación perciben un ingreso mensual relativamente menor comparado con aquellos que no lo están. En específico, el salario de un joven sobrecalificado es aproximadamente, en promedio, 19.2% menor siendo significativo al nivel de confianza del 99.9%. Por su parte, no se observa una diferencia entre los jóvenes subcalificados y sin desajuste. 
+
+Estos resultados muestran que la sobrecalificación se asocia con una pérdida salarial relativa. En específico, los jóvenes egresados (que reportan ingreso) ubicados en ocupaciones que requieren una educación menor a la que poseen es 19.2% comparado con aquellos que no presentan desajuste educativo. 
+
+Ahora, se analizará si la pérdida salarial de la sobrecalificación es heterogénea por nivel educativo, género y región.
+
+POR NIVEL EDUCATIVO
+
+```{r}
+model_jov_svy_edu <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * educacion + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy_reg
+)
+
+summary(model_jov_svy_edu)
+```
+
+Se realiza contraste de wald [PENDIENTE DE INVESTIGAR]
+
+```{r}
+regTermTest(model_jov_svy_edu, ~ over_obj:educacion)
+```
+
+Recordemos que $H0$: no existe efecto heterogéneo
+
+Los resultados muestran que no existe un efecto heterogéneo de la sobrecalificación por nivel educativo
+
+POR GÉNERO
+
+```{r}
+model_jov_svy_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj * mujer + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy_reg
+)
+
+summary(model_jov_svy_muj)
+```
+
+```{r}
+regTermTest(model_jov_svy_muj, ~ over_obj:mujer)
+```
+
+Tampoco existe un efecto heterogéneo por género
+
+POR CARRERAS
+
+```{r}
+model_jov_svy_car <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj * campo_amplio + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy_reg
+)
+
+summary(model_jov_svy_car)
+```
+
+```{r}
+regTermTest(model_jov_svy_car, ~ over_obj:campo_amplio)
+```
+
+Se rechaza HO. Es decir, existe un efecto heterogéneo por carrera educativa. Sin embargo, solamente en dos carreras esta diferencia es significativa. En específico, la pérdida salarial de la sobrecalificación de los jóvenes egresados de la carrera 7 (ingeniería, manufactura y construcción) es 13.6% menor comparado con aquellos egresados de la carrera de educación, es decir, la pérdida salarial de los jóvenes egresados de la carrera 7 sobrecalificados es, en promedio, 8.9% 
+
+```{r}
+exp(-0.267880) - 1 
+exp(0.136455) - 1
+
+-0.2350004 + 0.1462033
+```
+
+
+Asimismo, también existe una pérdida salarial significativamente distinta en jóvenes egresados de la carrera 10 (servicios).
+
+```{r}
+exp(0.142887) - 1
+-0.2350004 + 0.1535994
+```
+
+Ambos son significativos al nivel de confianza del 90%
+
+POR REGIONES
+
+```{r}
+model_jov_svy_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj * regiones + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy_reg
+)
+
+summary(model_jov_svy_reg)
+```
+
+```{r}
+regTermTest(model_jov_svy_reg, ~ over_obj:regiones)
+```
+
+Por regiones no existe un efecto significativo
+
+Por último, por condición de informalidad
+
+```{r}
+model_jov_svy_informal <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj * informal + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + campo_amplio + regiones + 
+    division + pos_ocu + sector_eco + tamanio + 
+    jornada + unidad_eco, 
+  design = jovenes_svy_reg
+)
+
+summary(model_jov_svy_informal)
+```
+
+```{r}
+regTermTest(model_jov_svy_informal, ~ over_obj:informal)
+```
+
+Tampoco lo es
+
+En resumen, los resultados muestran la existencia de una pérdida salarial de la sobrecalificación en jóvenes egresados de educación superior. En promedio, los jóvenes asignados en ocupaciones que requieren una educación menor perciben un salario mensual 17.5% menos comparado con aquellos que no presentan desajuste entre la educación individual y la requerida. Asimismo, se observa un efecto heterogéneo por carreras educativas donde la pérdida salarial de la sobrecalificación de jóvenes egresados de las carreras 7 y 10 es relativamente menor comparado con los individuos egresados de la carrera de educación. No obstante, no se observa un efecto salarial heterogéneo por nivel educativo, género, por regiones, ni por condición de informalidad. 
+
+Por tanto, no se rechaza la hipótesis central de la presente investigación, es decir, en jóvenes egresados de educación superior también existe una pérdida salarial relacionada a la sobrecalificación donde el salario (mensual) de los jóvenes sobrecalificados es, en promedio, 17.5% menor con respecto al salario de los jóvenes sin desajuste educativo. 
+
+
+
+```{r}
+exp(-0.1920406) - 1
+```
+

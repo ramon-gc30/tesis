@@ -1,0 +1,163 @@
+---
+date: today
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v2.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v3.R")
+
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+# Crea la tabla de la población objetivo
+jovenes <- seleccionar_jov(general)
+
+# se pasan a factores
+jovenes <- convertir_a_factor(jovenes)
+
+# se define como encuesta compleja
+jovenes_svy <- definir_encuesta(jovenes)
+```
+
+Ahora sí!!
+
+Se crean las tablas para el análisis descriptivo
+
+Variables continuas
+
+```{r}
+tbl_est_desc_ing <- obtener_est_descriptivos(jovenes_svy, ingreso_mensual) #|> 
+  # mutate(maximo = scales::comma(maximo))
+
+tbl_est_desc_anios_est <- obtener_est_descriptivos(jovenes_svy, anios_estudios)
+
+tbl_est_desc_exper <- obtener_est_descriptivos(jovenes_svy, exper)
+
+tbl_est_desc_hrs_lab <- obtener_est_descriptivos(jovenes_svy, horas_lab)
+
+tbl_est_desc_ing
+tbl_est_desc_anios_est
+tbl_est_desc_exper
+tbl_est_desc_hrs_lab
+```
+
+Discretas
+
+```{r}
+tbl_est_desc_educacion <- obtener_tot_svy(jovenes_svy, educacion)
+
+tbl_est_desc_genero <- obtener_tot_svy(jovenes_svy, mujer)
+
+tbl_est_desc_edo_civil <- obtener_tot_svy(jovenes_svy, casada)
+
+tbl_est_desc_hog <- obtener_tot_svy(jovenes_svy, jefe_hogar)
+
+tbl_est_desc_carreras <- obtener_tot_svy(jovenes_svy, campo_amplio)
+
+tbl_est_desc_regiones <- obtener_tot_svy(jovenes_svy, regiones)
+
+tbl_est_desc_div <- obtener_tot_svy(jovenes_svy, division)
+
+tbl_est_desc_pos_ocu <- obtener_tot_svy(jovenes_svy, pos_ocu)
+
+tbl_est_desc_sector_eco <- obtener_tot_svy(jovenes_svy, sector_eco)
+
+tbl_est_desc_tamanio <- obtener_tot_svy(jovenes_svy, tamanio)
+
+tbl_est_desc_informal <- obtener_tot_svy(jovenes_svy, informal)
+
+tbl_est_desc_jornada <- obtener_tot_svy(jovenes_svy, jornada)
+
+tbl_est_desc_unidad_eco <- obtener_tot_svy(jovenes_svy, unidad_eco)
+```
+
+Incidencia
+
+```{r}
+# general
+tbl_inc_tot <- calcular_incidencia_svy_tot(jovenes_svy, edu_mismatch_obj)
+```
+
+Se crea la tabla para gráfica por edad
+
+```{r}
+tbl_inc_edad <- calcular_inc_svy_des(jovenes_svy, edad, edu_mismatch_obj)
+```
+
+Para crear la gráfica solamente se filtra 
+
+```{r}
+tbl_inc_edad |> 
+  filter(edu_mismatch_obj == 1)
+```
+
+```{r}
+# nivel educativo
+tbl_inc_educacion <- calcular_inc_svy_des(jovenes_svy, educacion, edu_mismatch_obj)
+
+# estados
+tbl_inc_estados <- calcular_inc_svy_des(jovenes_svy, ent, edu_mismatch_obj)
+
+# carreras educativas
+tbl_inc_carreras <- calcular_inc_svy_des(jovenes_svy, campo_amplio, edu_mismatch_obj)
+```
+
+Falta el género
+
+```{r}
+calcular_inc_svy_des(jovenes_svy, mujer, edu_mismatch_obj)
+```
+
+¿Cómo presentarlo? Gráfica apilada? Me gusta la idea, aunque no hay mucha diferencia
+
+Mejor sólo lo pongo por escrito
+
+```{r}
+tbl_inc_genero <- calcular_inc_svy_des(jovenes_svy, mujer, edu_mismatch_obj)
+```
+
+Ahora bien, quisiera analizar el ingreso y demás características relacionadas a la ocupación
+
+```{r}
+# nivel de ingreso
+tbl_inc_ingreso <- calcular_inc_svy_des(jovenes_svy, ing7c, edu_mismatch_obj)
+
+# estado civil
+tbl_inc_edo_civil <- calcular_inc_svy_des(jovenes_svy, casada, edu_mismatch_obj)
+
+# jefe hogar
+tbl_inc_hog <- calcular_inc_svy_des(jovenes_svy, jefe_hogar, edu_mismatch_obj)
+
+# division
+tbl_inc_div <- calcular_inc_svy_grp(jovenes_svy, edu_mismatch_obj, division)
+
+# pos_ocu
+tbl_inc_pos_ocu <- calcular_inc_svy_des(jovenes_svy, pos_ocu, edu_mismatch_obj)
+
+# sector_eco
+tbl_inc_sector_eco <- calcular_inc_svy_des(jovenes_svy, sector_eco, edu_mismatch_obj)
+
+# tamanio
+tbl_inc_tamanio <- calcular_inc_svy_des(jovenes_svy, tamanio, edu_mismatch_obj)
+
+# informalidad
+tbl_inc_informal <- calcular_inc_svy_des(jovenes_svy, informal, edu_mismatch_obj)
+
+# jornada
+tbl_inc_jornada <- calcular_inc_svy_des(jovenes_svy, jornada, edu_mismatch_obj)
+
+# unidad_eco
+tbl_inc_unidad_eco <- calcular_inc_svy_des(jovenes_svy, unidad_eco, edu_mismatch_obj)
+```
+

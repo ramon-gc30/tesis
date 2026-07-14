@@ -1,0 +1,758 @@
+---
+date: today
+---
+
+Este documento tiene como propósito servir de apoyo para la versión 3 del capítulo 2 Metodología
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+source("scripts/25_importacion_v10.R")
+source("scripts/25_construccion_tablas_v10.R")
+source("scripts/25_funciones_v11.R")
+```
+
+Porcentaje de ocupaciones de SINCO-11 sin nivel de competencia requerido
+
+No se puede utilizar la función `determinar_edu_obj` debido a que devuelve solamente la tabla `sinco19`, por lo que se añade explícitamente el código de dicha función
+
+```{r}
+ciuo08 <- ciuo08 |> 
+    mutate(
+      skill_level = case_when(
+        # skill level 4
+        sub_major == "11" | sub_major == "12" |
+          sub_major == "13" | major == "2" |
+          sub_major == "01" ~ "4",
+        # skill level 3
+        sub_major == "14" | major == "3" ~ "3",
+        # skill level 2
+        major == "4" | major == "5" |
+          major == "6" | major == "7" |
+          major == "8" | sub_major == "02" ~ "2",
+        # skill level 1
+        major == "9" | sub_major == "03" ~ "1",
+        TRUE ~ NA,
+      )
+    ) |> 
+    # seleccionamos unit y skill_level
+    select(unit, skill_level) |> 
+    # se renombran variables
+    rename("c08_unit" = "unit")
+  
+  # se une tabla comparativa entre SINCO-11 con CIUO-08 
+  # con ciuo08 que tiene skill level (INEGI, 2012)
+  sinco11_ciuo08 <- sinco11_ciuo08 |> 
+    left_join(ciuo08, by = "c08_unit")
+  
+  # se crea tabla sinco11 con valores únicos en grupo unitario
+  sinco11 <- sinco11_ciuo08 |> 
+    distinct(s11_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(id = row_number()) |> 
+    pivot_wider(
+      id_cols = s11_unit,
+      names_from = skill_level,
+      values_from = skill_level,
+      names_sort = TRUE
+    ) |> 
+    select(-`NA`)
+```
+
+Se valida tabla `sinco11` creada
+
+```{r}
+sinco11
+```
+
+Sí está correcto, pero debo especificar explícitamente los casos NA por lo que no se elimina la columna que contiene dichos casos
+
+```{r}
+sinco11_ciuo08 |> 
+    distinct(s11_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(id = row_number()) |> 
+    pivot_wider(
+      id_cols = s11_unit,
+      names_from = skill_level,
+      values_from = skill_level,
+      names_sort = TRUE
+    )
+    # select(-`NA`)
+```
+
+No se podrá validar con dicha columna, entonces aplicamos un filtro
+
+```{r}
+sinco11 |> 
+  filter(is.na(`1`) & is.na(`2`) & is.na(`3`) & is.na(`4`))
+```
+
+En total son 38 ocupaciones sin nivel de competencia especificado, se valida
+
+Está correcto, ahora se calcula porcentaje
+
+```{r}
+s11_sin_skill <- sinco11 |> 
+  filter(is.na(`1`) & is.na(`2`) & is.na(`3`) & is.na(`4`)) |> 
+  count()
+
+s11_tot <- sinco11 |> 
+  count()
+
+s11_sin_skill$n / s11_tot$n 
+```
+
+El 8% de las ocupaciones del SINCO-11 no tienen un nivel de competencia requerido.
+
+Porcentaje de ocupaciones de SINCO-19 sin nivel de competencia requerido
+
+Ahora sí es posible llamar la función `determinar_edu_obj`
+
+```{r}
+# sinco19 <- determinar_edu_obj(ciuo08)
+
+# sinco19
+```
+
+Arroja error
+
+```
+Error in `mutate()` at scripts/25_funciones_v11.R:184:3:
+ℹ In argument: `skill_level = case_when(...)`.
+Caused by error in `case_when()`:
+! Failed to evaluate the left-hand side of formula 1.
+Caused by error:
+! objeto 'sub_major' no encontrado
+Run `rlang::last_trace()` to see where the error occurred.
+```
+
+Vamos a volver a importar la tabla 
+
+```{r}
+# tabla de ocupaciones de CIUO-08 (ILO, s/f)
+ciuo08 <- read_xlsx(
+  "datos/ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+
+Se vuelve a llamar la función
+
+```{r}
+# sinco19_skill <- determinar_edu_obj(ciuo08)
+```
+
+Vuelve arrojar error
+
+```
+Error in `distinct()` at scripts/25_funciones_v11.R:213:3:
+! Must use existing variables.
+✖ `skill_level` not found in `.data`.
+Run `rlang::last_trace()` to see where the error occurred.
+```
+
+Se desconoce el motivo, por lo tanto se hace manualmente
+
+```{r}
+ciuo08 <- ciuo08 |> 
+    mutate(
+      skill_level = case_when(
+        # skill level 4
+        sub_major == "11" | sub_major == "12" |
+          sub_major == "13" | major == "2" |
+          sub_major == "01" ~ "4",
+        # skill level 3
+        sub_major == "14" | major == "3" ~ "3",
+        # skill level 2
+        major == "4" | major == "5" |
+          major == "6" | major == "7" |
+          major == "8" | sub_major == "02" ~ "2",
+        # skill level 1
+        major == "9" | sub_major == "03" ~ "1",
+        TRUE ~ NA,
+      )
+    ) |> 
+    # seleccionamos unit y skill_level
+    select(unit, skill_level) |> 
+    # se renombran variables
+    rename("c08_unit" = "unit")
+  
+  # se une tabla comparativa entre SINCO-11 con CIUO-08 
+  # con ciuo08 que tiene skill level (INEGI, 2012)
+  sinco11_ciuo08 <- sinco11_ciuo08 |> 
+    left_join(ciuo08, by = "c08_unit")
+  
+  # se crea tabla sinco11 con valores únicos en grupo unitario
+  sinco11 <- sinco11_ciuo08 |> 
+    distinct(s11_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(id = row_number()) |> 
+    pivot_wider(
+      id_cols = s11_unit,
+      names_from = skill_level,
+      values_from = skill_level,
+      names_sort = TRUE
+    ) |> 
+    select(-`NA`)
+  
+  # se une tabla de equivalencia entre SINCO v11 y v19 
+  # con sinco11 (INEGI, 2020: 359-394)
+  sinco19_11 <- sinco19_11 |> 
+    left_join(sinco11, by = "s11_unit")
+  
+  # se crea tabla sinco19 para tener más de un skill level en
+  # una misma ocupación
+  sinco19 <- sinco19_11 |> 
+    pivot_longer(
+      `1`:`4`,
+      values_to = "skill_level"
+    ) |> 
+    select(-(s11_unit:name))
+  
+  # se pivotea a lo ancho para tener valores únicos de grupo unitario
+  sinco19 <- sinco19 |> 
+    distinct(s19_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(dummy = "1") |> 
+    pivot_wider(
+      id_cols = s19_unit,
+      names_from = skill_level,
+      names_prefix = "skill_",
+      names_sort = TRUE,
+      values_from = dummy
+    ) |> 
+    select(-skill_NA)
+```
+
+Listo! Pero se tuvo que correr cada procedimiento de forma individual, si se ejecutaba el bloque de forma completa arrojaba el mismo error ¿por qué? [se deja para después]
+
+Ahora se valida la tabla resultante
+
+```{r}
+sinco19
+```
+
+Se seleccionan las ocupaciones sin niveles de competencia asignado
+
+```{r}
+sinco19 |> 
+  filter(is.na(skill_1) & is.na(skill_2) & is.na(skill_3) & is.na(skill_4))
+```
+
+Ahora son 50 ocupaciones
+
+Se obtiene porcentaje
+
+```{r}
+50 / 490
+```
+
+Validemos `ciuo08`
+
+```{r}
+ciuo08
+sinco11_ciuo08
+```
+
+Ahí está el error, se podría corregir volviendo a importar los datos
+
+```{r}
+# tabla comparativa entre SINCO-11 y CIUO-08 (INEGI, 2012)
+sinco11_ciuo08 <- read_csv(
+  "datos/sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+# tabla equivalencia entre v11 y v19 de SINCO (INEGI, 2020: 359-394)
+sinco19_11 <- read_csv(
+  "datos/sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+# tabla de ocupaciones de CIUO-08 (ILO, s/f)
+ciuo08 <- read_xlsx(
+  "datos/ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+Con su respectiva limpieza
+
+```{r}
+# se limpia tabla comparativa de CIUO-08 con SINCO-11
+sinco11_ciuo08 <- sinco11_ciuo08 |>
+  select(sinco11, ciuo08) |>
+  # nos quedamos con grupo unitario
+  filter(str_length(sinco11) == 4) |>
+  # se renombran variables para unión
+  rename(
+    "s11_unit" = "sinco11",
+    "c08_unit" = "ciuo08"
+  )
+
+# se limpia tabla de equivalencia entre v11 y v19 de SINCO
+sinco19_11 <- sinco19_11 |>
+  select(sinco_19, sinco_11) |>
+  # nos quedamos con grupo unitario
+  filter(str_length(sinco_19) == 4) |>
+  # se renombran variables para unión
+  rename(
+    "s19_unit" = "sinco_19",
+    "s11_unit" = "sinco_11"
+  )
+```
+
+Se vuelve a llamar la función
+
+```{r}
+# sinco19_2 <- 
+  determinar_edu_obj(ciuo08) 
+```
+
+Ahora sí!!! Entonces, cuando existan problemas de ese tipo lo mejor sería volver a importar desde cero o ponerle nuevo nombre a la tabla que sea distinta de la tabla importada
+
+ANEXO DE OCUPACIONES SINCO-19 CON NIVEL DE COMPETENCIA Y NIVEL EDUCATIVO DE SEN
+
+Se tratará de crear la tabla 
+
+Primero se cargan las tablas correspondientes, aunque mejor se creó un archivo aparte
+
+```{r}
+source("scripts/25_tablas_ciuo08_y_sinco_v10.R")
+```
+
+Se pone todo el proceso del método objetivo ya que queremos nivel de competencia y nivel educativo
+
+
+```{r}
+ciuo08 <- ciuo08 |> 
+    mutate(
+      skill_level = case_when(
+        # skill level 4
+        sub_major == "11" | sub_major == "12" |
+          sub_major == "13" | major == "2" |
+          sub_major == "01" ~ "4",
+        # skill level 3
+        sub_major == "14" | major == "3" ~ "3",
+        # skill level 2
+        major == "4" | major == "5" |
+          major == "6" | major == "7" |
+          major == "8" | sub_major == "02" ~ "2",
+        # skill level 1
+        major == "9" | sub_major == "03" ~ "1",
+        TRUE ~ NA,
+      )
+    ) |> 
+    # seleccionamos unit y skill_level
+    select(unit, skill_level) |> 
+    # se renombran variables
+    rename("c08_unit" = "unit")
+  
+  # se une tabla comparativa entre SINCO-11 con CIUO-08 
+  # con ciuo08 que tiene skill level (INEGI, 2012)
+  sinco11_ciuo08 <- sinco11_ciuo08 |> 
+    left_join(ciuo08, by = "c08_unit")
+  
+  # se crea tabla sinco11 con valores únicos en grupo unitario
+  sinco11 <- sinco11_ciuo08 |> 
+    distinct(s11_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(id = row_number()) |> 
+    pivot_wider(
+      id_cols = s11_unit,
+      names_from = skill_level,
+      values_from = skill_level,
+      names_sort = TRUE
+    ) |> 
+    select(-`NA`)
+  
+  # se une tabla de equivalencia entre SINCO v11 y v19 
+  # con sinco11 (INEGI, 2020: 359-394)
+  sinco19_11 <- sinco19_11 |> 
+    left_join(sinco11, by = "s11_unit")
+  
+  # se crea tabla sinco19 para tener más de un skill level en
+  # una misma ocupación
+  sinco19 <- sinco19_11 |> 
+    pivot_longer(
+      `1`:`4`,
+      values_to = "skill_level"
+    ) |> 
+    select(-(s11_unit:name))
+  
+  # se pivotea a lo ancho para tener valores únicos de grupo unitario
+  sinco19 <- sinco19 |> 
+    distinct(s19_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(dummy = "1") |> 
+    pivot_wider(
+      id_cols = s19_unit,
+      names_from = skill_level,
+      names_prefix = "skill_",
+      names_sort = TRUE,
+      values_from = dummy
+    ) |> 
+    select(-skill_NA)
+  
+  # se añade educación mínima y máxima por ocupación
+  sinco19 <- sinco19 |> 
+    mutate(
+      objetivo_min = case_when(
+        !is.na(skill_1) ~ 1,
+        is.na(skill_1) & !is.na(skill_2) ~ 3,
+        is.na(skill_1) & is.na(skill_2) & !is.na(skill_3) ~ 6,
+        is.na(skill_1) & is.na(skill_2) & is.na(skill_3) & !is.na(skill_4) ~ 7,
+        TRUE ~ NA
+      ),
+      objetivo_max = case_when(
+        !is.na(skill_4) ~ 9,
+        is.na(skill_4) & !is.na(skill_3) ~ 6,
+        is.na(skill_4) & is.na(skill_3) & !is.na(skill_2) ~ 4,
+        is.na(skill_4) & is.na(skill_3) & is.na(skill_2) & !is.na(skill_1) ~ 2,
+        TRUE ~ NA
+      )
+    )
+    # select(-contains("skill"))
+```
+
+Se valida
+
+```{r}
+sinco19
+```
+
+Listo! 
+
+Pero también queremos la descripción por lo que se especifica manualmente la importación y limpieza
+
+```{r}
+# IMPORTACIÓN
+
+# tabla comparativa entre SINCO-11 y CIUO-08 (INEGI, 2012)
+sinco11_ciuo08 <- read_csv(
+  "datos/sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+# tabla equivalencia entre v11 y v19 de SINCO (INEGI, 2020: 359-394)
+sinco19_11 <- read_csv(
+  "datos/sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+# tabla de ocupaciones de CIUO-08 (ILO, s/f)
+ciuo08 <- read_xlsx(
+  "datos/ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+
+# LIMPIEZA
+
+# se limpia tabla comparativa de CIUO-08 con SINCO-11
+sinco11_ciuo08 <- sinco11_ciuo08 |>
+  # select(sinco11, ciuo08) |>
+  # nos quedamos con grupo unitario
+  filter(str_length(sinco11) == 4) |>
+  # se renombran variables para unión
+  rename(
+    "s11_unit" = "sinco11",
+    "c08_unit" = "ciuo08"
+  )
+
+# se limpia tabla de equivalencia entre v11 y v19 de SINCO
+sinco19_11 <- sinco19_11 |>
+  # select(sinco_19, sinco_11) |>
+  # nos quedamos con grupo unitario
+  filter(str_length(sinco_19) == 4) |>
+  # se renombran variables para unión
+  rename(
+    "s19_unit" = "sinco_19",
+    "s11_unit" = "sinco_11"
+  )
+```
+
+Se valida tabla `sinco19_11`
+
+```{r}
+sinco19_11
+```
+
+Se pone código de método normativo
+
+```{r}
+ciuo08 <- ciuo08 |> 
+    mutate(
+      skill_level = case_when(
+        # skill level 4
+        sub_major == "11" | sub_major == "12" |
+          sub_major == "13" | major == "2" |
+          sub_major == "01" ~ "4",
+        # skill level 3
+        sub_major == "14" | major == "3" ~ "3",
+        # skill level 2
+        major == "4" | major == "5" |
+          major == "6" | major == "7" |
+          major == "8" | sub_major == "02" ~ "2",
+        # skill level 1
+        major == "9" | sub_major == "03" ~ "1",
+        TRUE ~ NA,
+      )
+    ) |> 
+    # seleccionamos unit y skill_level
+    select(unit, skill_level) |> 
+    # se renombran variables
+    rename("c08_unit" = "unit")
+  
+  # se une tabla comparativa entre SINCO-11 con CIUO-08 
+  # con ciuo08 que tiene skill level (INEGI, 2012)
+  sinco11_ciuo08 <- sinco11_ciuo08 |> 
+    left_join(ciuo08, by = "c08_unit")
+  
+  # se crea tabla sinco11 con valores únicos en grupo unitario
+  sinco11 <- sinco11_ciuo08 |> 
+    distinct(s11_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(id = row_number()) |> 
+    pivot_wider(
+      id_cols = s11_unit,
+      names_from = skill_level,
+      values_from = skill_level,
+      names_sort = TRUE
+    ) |> 
+    select(-`NA`)
+  
+  # se une tabla de equivalencia entre SINCO v11 y v19 
+  # con sinco11 (INEGI, 2020: 359-394)
+  sinco19_11 <- sinco19_11 |> 
+    left_join(sinco11, by = "s11_unit")
+  
+  # se crea tabla sinco19 para tener más de un skill level en
+  # una misma ocupación
+  sinco19 <- sinco19_11 |> 
+    pivot_longer(
+      `1`:`4`,
+      values_to = "skill_level"
+    ) |> 
+    select(-(s11_unit:name))
+  
+  # se pivotea a lo ancho para tener valores únicos de grupo unitario
+  sinco19 <- sinco19 |> 
+    distinct(s19_unit, skill_level) |> 
+    # para evitar errores al pivotar
+    mutate(dummy = "1") |> 
+    pivot_wider(
+      id_cols = s19_unit,
+      names_from = skill_level,
+      names_prefix = "skill_",
+      names_sort = TRUE,
+      values_from = dummy
+    ) |> 
+    select(-skill_NA)
+  
+  # se añade educación mínima y máxima por ocupación
+  sinco19 <- sinco19 |> 
+    mutate(
+      objetivo_min = case_when(
+        !is.na(skill_1) ~ 1,
+        is.na(skill_1) & !is.na(skill_2) ~ 3,
+        is.na(skill_1) & is.na(skill_2) & !is.na(skill_3) ~ 6,
+        is.na(skill_1) & is.na(skill_2) & is.na(skill_3) & !is.na(skill_4) ~ 7,
+        TRUE ~ NA
+      ),
+      objetivo_max = case_when(
+        !is.na(skill_4) ~ 9,
+        is.na(skill_4) & !is.na(skill_3) ~ 6,
+        is.na(skill_4) & is.na(skill_3) & !is.na(skill_2) ~ 4,
+        is.na(skill_4) & is.na(skill_3) & is.na(skill_2) & !is.na(skill_1) ~ 2,
+        TRUE ~ NA
+      )
+    )
+    # select(-contains("skill"))
+```
+
+Se valida
+
+```{r}
+sinco19
+sinco19_11
+```
+
+Listo! Primero se limpia tabla `sinco19_11`
+
+```{r}
+sinco19_11 |> 
+  distinct(s19_unit, descripcion_sinco19)
+
+sinco19_desc <- sinco19_11 |> 
+  distinct(s19_unit, descripcion_sinco19)
+```
+
+Ahora se unen
+
+```{r}
+sinco19 |> 
+  left_join(sinco19_desc, by = "s19_unit")
+```
+
+Se valida `relocate`
+
+```{r}
+sinco19 |> 
+  left_join(sinco19_desc, by = "s19_unit") |> 
+  relocate(descripcion_sinco19, .after = s19_unit)
+```
+
+Sí se mueve la columna que deseo, ahora se define
+
+```{r}
+sinco19_skill_desc <- sinco19 |> 
+  left_join(sinco19_desc, by = "s19_unit") |> 
+  relocate(descripcion_sinco19, .after = s19_unit)
+```
+
+Ahora cambiamos los valores de `objetivo`, se logra con `fct_recode` se valida
+
+```{r}
+# ?fct_recode
+# ?factor
+```
+
+Primero definamos los niveles educativos 
+
+```{r}
+niveles_edu_sen <- c(
+ "Preescolar" = "1",
+ "Primaria" = "2",
+ "Secundaria" = "3",
+ "Tipo media superior" = "4",
+ "Técnico superior" = "6",
+ "Licenciatura" = "7",
+ "Maestría" = "8",
+ "Doctorado" = "9"
+)
+
+niveles_edu_sen
+```
+
+Ahora se definen los factores
+
+```{r}
+# sinco19_skill_desc |> 
+#   mutate(
+#     objetivo_min = factor(objetivo_min) |> fct_recode(niveles_edu_sen),
+#     objetivo_max = factor(objetivo_max) |> fct_recode(niveles_edu_sen)
+#   )
+```
+
+Arroja error, entonces se hace en cada variable
+
+Se valida valores distintos
+
+```{r}
+sinco19_skill_desc |> 
+  distinct(objetivo_min)
+
+sinco19_skill_desc |> 
+  distinct(objetivo_max)
+```
+
+
+```{r}
+sinco19_skill_desc |>
+  mutate(
+    objetivo_min = factor(objetivo_min) |> 
+      fct_recode(
+        "Preescolar" = "1",
+        # "Primaria" = "2",
+        "Secundaria" = "3",
+        # "Tipo media superior" = "4",
+        "Técnico superior" = "6",
+        "Licenciatura" = "7"
+        # "Maestría" = "8",
+        # "Doctorado" = "9"
+      ),
+    objetivo_max = factor(objetivo_max) |> 
+      fct_recode(
+        # "Preescolar" = "1",
+        "Primaria" = "2",
+        # "Secundaria" = "3",
+        "Tipo media superior" = "4",
+        "Técnico superior" = "6",
+        # "Licenciatura" = "7",
+        # "Maestría" = "8",
+        "Doctorado" = "9"
+      )
+  )
+```
+
+```{r}
+sinco19_skill_desc_tbl <- sinco19_skill_desc |>
+  mutate(
+    objetivo_min = factor(objetivo_min) |> 
+      fct_recode(
+        "Preescolar" = "1",
+        # "Primaria" = "2",
+        "Secundaria" = "3",
+        # "Tipo media superior" = "4",
+        "Técnico superior" = "6",
+        "Licenciatura" = "7"
+        # "Maestría" = "8",
+        # "Doctorado" = "9"
+      ),
+    objetivo_max = factor(objetivo_max) |> 
+      fct_recode(
+        # "Preescolar" = "1",
+        "Primaria" = "2",
+        # "Secundaria" = "3",
+        "Tipo media superior" = "4",
+        "Técnico superior" = "6",
+        # "Licenciatura" = "7",
+        # "Maestría" = "8",
+        "Doctorado" = "9"
+      )
+  )
+```
+
+Se renombran columnas
+
+```{r}
+sinco19_skill_desc_tbl2 <- sinco19_skill_desc_tbl |> 
+  rename(
+    "Ocupación" = "s19_unit",
+    "Descripción" = "descripcion_sinco19",
+    "1" = "skill_1",
+    "2" = "skill_2",
+    "3" = "skill_3",
+    "4" = "skill_4",
+    "Mínimo" = "objetivo_min",
+    "Máximo" = "objetivo_max"
+  )
+```
+
+
+Se exporta
+
+```{r}
+library(readr)
+library(readxl)
+
+# write_csv(sinco19_skill_desc_tbl2, "sinco19_desc.csv")
+```
+
+Arroja problemas con la coma, se deja sin renombrar columnas
+
+```{r}
+write_csv(sinco19_skill_desc_tbl, "sinco19_desc.csv", na = "")
+```
+

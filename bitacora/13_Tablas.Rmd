@@ -1,0 +1,36 @@
+---
+title: "R Notebook"
+output: word_document
+  always_allow_html: true
+---
+
+```{r setup}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+df <- read_csv(
+  "PIBvsEgresados.csv"
+)
+
+df
+```
+
+```{r}
+df %>% 
+  kable(
+    format = "html", 
+    # booktabs = TRUE, 
+    digits = 2,
+    caption = "Distribución del ingreso por nivel educativo"
+  ) %>% 
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE
+  )
+
+# ?kable
+```
+

@@ -1,0 +1,64 @@
+---
+title: "Diagramas"
+format: html
+---
+
+```{mermaid}
+graph TD
+    A[Inicio] --> B{¿Funciona?}
+    B -- Sí --> C[¡Genial!]
+    B -- No --> D[Reparar]
+    D --> B
+```
+
+
+```{dot}
+digraph G {
+  node [shape=box];
+  Usuario -> Interfaz;
+  Interfaz -> BaseDeDatos;
+  BaseDeDatos -> Interfaz;
+}
+```
+
+```{dot}
+//| label: fig-proceso-tesis
+//| fig-cap: "Relación de las tablas de la ENOE mediante las llaves principales."
+digraph G {
+  # Configuración horizontal (Left to Right)
+  rankdir=LR;
+  
+  # Estilo global de los nodos
+  node [shape=box, fontname="Helvetica", style="rounded"];
+
+  # Definición de los nodos con etiquetas tipo HTML
+  C1 [label=< 
+    <b>Tabla Vivienda</b>
+    <br/>TIPO
+    <br/>MES_CAL
+    <br/>CD_A
+    <br/>ENT
+    <br/>CON
+    <br/>V_SEL
+  >];
+  C2 [label=<
+    <b>Tabla Hogar</b>
+    <br/>TIPO
+    <br/>MES_CAL
+    <br/>CD_A
+    <br/>ENT
+    <br/>CON
+    <br/>V_SEL
+    <br/>N_HOG
+    <br/>H_MUD
+  >];
+  C3 [label=< <b>Tabla Sociodemográfico</b><br/>Texto 1<br/>Texto 2 >];
+  C4 [label=< <b>Tabla COE1</b><br/>Texto 1<br/>Texto 2 >];
+  C5 [label=< <b>Tabla COE2</b><br/>Texto 1<br/>Texto 2 >];
+
+  # Relaciones
+  C1 -> C2 -> C3 -> C4 -> C5;
+}
+```
+
+Fuente: Gemini

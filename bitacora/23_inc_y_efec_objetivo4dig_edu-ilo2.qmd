@@ -1,0 +1,74 @@
+---
+title: "Incidencia y efecto salarial con método objetivo a 4 dígitos y nivel educativo según ILO"
+date: "2026-03-06"
+format: html
+---
+
+El objetivo es presentar los resultados de la incidencia y el efecto salarial utilizando el método objetivo de ILO con la conversión de CIUO-08 a SINCO-19 a 4 dígitos según lo establecido por INEGI, asimismo se define el nivel educativo según los criterios de ILO
+
+```{r}
+#| label: setup
+
+source("scripts/23_codigo_completo_v7.R")
+```
+
+Primero se valida el número de personas por nivel educativo
+
+```{r}
+ocupada |> 
+  group_by(educacion) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Con el código nuevo para determinar el nivel educativo según ILO, no existen grandes diferencias con respecto a "bitacora/23_metodo_objetivo_4dig_incidencia_y_efecto.qmd", el número de personas con estudios profesionales en el documento anterior es de 19.5% y aquí 19.6%
+
+Se calcula la incidencia
+
+```{r}
+ocupada |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Tampoco existen grandes diferencias en cuanto a la incidencia general, anterior y actual es de 21.5% sobrecalificados
+
+Se valida para jóvenes
+
+```{r}
+jovenes <- ocupada |> 
+  filter(
+    edad_7g == "3" & 
+      (educacion == "6" | educacion == "7" | educacion == "8" | educacion == "9")
+  )
+```
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Tampoco hay grandes modificaciones
+
+
+Regresión
+
+```{r}
+model_general <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + educacion + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal, data = ocupada)
+
+summary.lm(model_general)
+```
+
+Jóvenes
+
+```{r}
+model_jov <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + under_obj + exper + I(exper**2) + mujer + casada + jefe_hogar + carreras + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal, data = jovenes)
+
+summary.lm(model_jov)
+```
+
+Tampoco hay grandes cambios
+

@@ -1,0 +1,457 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(survey)
+library(srvyr)
+library(ggrepel)
+library(scales)
+
+source("scripts/0_funciones_v9.R")
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+jovenes_reg <- read_rds("datos/jovenes_normativo_reg.rds")
+
+jovenes <- jovenes |> 
+  mutate(tcco2 = if_else(tcco != "0", "1", "0"))
+```
+
+PROPORCIÓN POR CARRERAS
+
+```{r}
+calcular_prop_sub(jovenes, sector_eco, tcco2) |> 
+  filter(tcco2 == 1)
+
+calcular_prop_sub(jovenes, tamanio, tcco2) |> 
+  filter(tcco2 == 1)
+
+calcular_prop_sub(jovenes, unidad_eco, tcco2) |> 
+    filter(tcco2 == 1)
+```
+
+Hay más en:
+* sector primario: 
+* micronegocios
+
+```{r}
+calcular_prop_sub(jovenes, campo_amplio, sector_eco) |> 
+  filter(sector_eco == 1)
+
+calcular_prop_sub(jovenes, campo_amplio, tamanio) |> 
+  filter(tamanio == 1)
+```
+
+* servicios menos del 1% sector eco
+
+```{r}
+prop_campo <- calcular_prop_sub(jovenes_reg, campo_amplio, ingreso_nivel)
+
+prop_campo |> 
+  ggplot(aes(campo_amplio, prop, fill = ingreso_nivel)) + 
+  geom_col()
+```
+
+```{r}
+calcular_prop_sub(jovenes, regiones, division) |> 
+  mutate(prop = scales::percent(prop))
+```
+
+```{r}
+model_jovenes2 <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes2)
+```
+
+```{r}
+model_jovenes2$coefficients
+```
+
+
+```{r}
+model_jovenes_edu <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * anios_estudios + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_edu)
+```
+
+```{r}
+model_jovenes_edu$coefficients
+```
+
+
+```{r}
+0.070249530 - 0.056957023
+```
+
+
+GÉNERO
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * mujer + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+ÁREA DE FORMACIÓN
+
+```{r}
+model_jovenes_cam <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * campo_amplio + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_cam)
+```
+
+```{r}
+model_jovenes_cam$coefficients
+```
+
+```{r}
+a <- -0.274320359 + 0.152799473 
+exp(a) - 1
+```
+
+
+REGIÓN
+
+```{r}
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * regiones + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+INFORMAL
+
+```{r}
+jovenes_reg <- jovenes_reg |> 
+  mutate(informal = as.integer(informal)) 
+
+model_jovenes_inf <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * informal + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_inf)
+```
+
+TAMAÑO
+
+```{r}
+model_jovenes_tam <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * tamanio + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_tam)
+```
+
+PARENTESCO
+
+```{r}
+model_jovenes_par <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * jefe_hogar + exper + I(exper**2) + 
+    log(horas_lab) + mujer + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_par)
+```
+
+```{r}
+regTermTest(model_jovenes_edu, "over_obj:anios_estudios")
+```
+
+```{r}
+regTermTest(model_jovenes_muj, "over_obj:mujer")
+regTermTest(model_jovenes_cam, "over_obj:campo_amplio")
+regTermTest(model_jovenes_reg, "over_obj:regiones")
+```
+
+ANÁLISIS DE SENSIBILIDAD
+
+```{r}
+jovenes <- establecer_edu_req_aprox(jovenes, edu_requerida)
+```
+
+
+```{r}
+calcular_prop(jovenes, edu_req_aprox)
+```
+
+No se consideran "otro"
+
+```{r}
+jovenes |> 
+  filter(edu_req_aprox != "3") |>
+  calcular_prop(edu_mismatch_obj)
+```
+
+¿Por qué se eliminan NA?
+
+RESPUESTA 
+
+Tenga en cuenta que cuando una condición se evalúa como NA, la fila se eliminará, a diferencia de la subselección básica con [.
+
+```{r}
+6843 + 7156 + 19
+```
+
+```{r}
+calcular_total(jovenes)
+```
+
+```{r}
+15138 - 14018
+```
+
+Vamos a pasar a df
+
+```{r}
+jov_df <- as.data.frame(jovenes)
+
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(n = n())
+
+jovenes |> 
+  mutate(edu_req_aprox = if_else(is.na(edu_req_aprox), "NA", edu_req_aprox)) |> 
+  filter(edu_req_aprox != "3") |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Entonces cambia la condición para conversar valores NA
+
+```{r}
+jovenes |> 
+  filter(
+    edu_req_aprox == "0" | 
+    edu_req_aprox == "1" | 
+    edu_req_aprox == "2" | 
+    is.na(edu_req_aprox)       
+  ) |>
+  calcular_prop(edu_mismatch_obj)
+```
+
+```{r}
+model_jovenes3 <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + sector_eco + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes3)
+```
+
+Siguen siendo no significativas:
+
+* subcalificación
+* estado civil
+* sector económico
+
+INDICADORES PRECISIÓN ESTADÍSTICA
+
+```{r}
+validar_precision <- function(datos, variable){
+  datos |>
+    group_by({{  variable  }}) |>
+    summarise(
+      # n = n(),
+      tot = survey_total(vartype = c("cv")),
+      prop = survey_prop(vartype = NULL)
+    )
+}
+
+validar_precision_sub <- function(datos, grupo, variable){
+  datos |>
+    group_by({{  grupo  }}, {{  variable  }}) |>
+    summarise(
+      # n = n(),
+      tot = survey_total(vartype = c("cv")),
+      prop = survey_prop(vartype = NULL)
+    )
+}
+```
+
+Nivel educativo
+
+```{r}
+validar_precision(jovenes, educacion)
+```
+
+Doctorado tiene un nivel de precisión moderada: 21.6%
+
+Campo de formación
+
+```{r}
+validar_precision(jovenes, campo_amplio)
+```
+
+No especificado tiene un nivel de precisión moderada: 23.7%
+
+Region
+
+```{r}
+validar_precision(jovenes, regiones)
+```
+
+```{r}
+validar_precision(jovenes, ent)
+```
+
+Sector
+
+```{r}
+validar_precision(jovenes, sector_eco)
+```
+
+Tamaño
+
+```{r}
+validar_precision(jovenes, tamanio)
+```
+
+Nivel ingreso
+
+```{r}
+validar_precision(jovenes, ingreso_nivel)
+validar_precision(jovenes_reg, ingreso_nivel)
+```
+
+División
+
+```{r}
+validar_precision(jovenes, division)
+```
+
+Educación requerida
+
+```{r}
+validar_precision(jovenes, edu_req_aprox)
+```
+
+Incidencia
+
+```{r}
+validar_precision(jovenes, edu_mismatch_obj)
+```
+
+Género
+
+```{r}
+validar_precision(jovenes, mujer)
+```
+
+```{r}
+validar_precision_sub(jovenes, mujer, over_obj)
+```
+
+```{r}
+validar_precision_sub(jovenes, educacion, over_obj) |> 
+  filter(over_obj == 1)
+```
+
+```{r}
+jovenes |> 
+  group_by(educacion, mujer, over_obj) |> 
+  summarise(
+    tot = survey_total(vartype = "cv"),
+    prop = survey_prop(vartype = NULL)
+  ) |> 
+  filter(over_obj == 1)
+```
+
+
+Carreras
+
+```{r}
+validar_precision_sub(jovenes, campo_amplio, over_obj) |> 
+  filter(over_obj == 1)
+```
+
+```{r}
+validar_precision_sub(jovenes, campo_espec, over_obj) |> 
+  filter(over_obj == 1) |> 
+  arrange(desc(prop))
+```
+
+Regiones
+
+```{r}
+validar_precision_sub(jovenes, regiones, over_obj) |> 
+  filter(over_obj == 1)
+```
+
+```{r}
+validar_precision_sub(jovenes, ent, over_obj) |> 
+  filter(over_obj == 1) |> 
+  arrange(desc(prop))
+```
+
+Ingreso mensual
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    promedio = survey_mean(ingreso_mensual, vartype = "cv", na.rm = TRUE)
+  )
+```
+

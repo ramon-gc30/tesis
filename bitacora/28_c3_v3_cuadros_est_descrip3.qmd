@@ -1,0 +1,60 @@
+---
+date: today
+format: html
+---
+
+Este documento contendrá la tabla de estadísticos descriptivos para la regresión
+
+```{r}
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v4.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v4.R")
+```
+
+Se selecciona tabla para la regresión
+
+```{r}
+general <- construir_variables(ocupada)
+general <- asignar_edu_mismatch(general, ciuo08)
+general <- convertir_a_factor(general)
+general_svy <- definir_encuesta(general)
+jovenes_svy <- seleccionar_jov(general_svy)
+jovenes_svy_reg <- seleccionar_obs_reg(jovenes_svy)
+```
+
+Se obtienen estadísticos
+
+```{r}
+obtener_tamanio_muestra(jovenes_svy)
+obtener_tamanio_muestra(jovenes_svy_reg)
+obtener_est_descriptivos(jovenes_svy_reg, ingreso_mensual) |> 
+  mutate(maximo = scales::comma(maximo))
+obtener_est_descriptivos(jovenes_svy_reg, edad)
+obtener_est_descriptivos(jovenes_svy_reg, anios_estudios)
+obtener_est_descriptivos(jovenes_svy_reg, exper)
+obtener_est_descriptivos(jovenes_svy_reg, horas_lab)
+```
+
+Se deja para después añadir la mediana, el sesgo y curtosis
+
+Ahora, se calcula para variables discretas
+
+```{r}
+obtener_tot_svy(jovenes_svy_reg, educacion)
+obtener_tot_svy(jovenes_svy_reg, mujer)
+obtener_tot_svy(jovenes_svy_reg, casada)
+obtener_tot_svy(jovenes_svy_reg, jefe_hogar)
+obtener_tot_svy(jovenes_svy_reg, campo_amplio)
+obtener_tot_svy(jovenes_svy_reg, regiones)
+obtener_tot_svy(jovenes_svy_reg, division)
+obtener_tot_svy(jovenes_svy_reg, pos_ocu)
+obtener_tot_svy(jovenes_svy_reg, sector_eco)
+obtener_tot_svy(jovenes_svy_reg, tamanio)
+obtener_tot_svy(jovenes_svy_reg, informal)
+obtener_tot_svy(jovenes_svy_reg, jornada)
+obtener_tot_svy(jovenes_svy_reg, unidad_eco)
+```
+
+

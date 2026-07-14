@@ -1,0 +1,57 @@
+---
+title: "Tesis"
+format: html
+---
+
+```{r}
+#| label: setup
+#| echo: false
+#| warning: false
+#| message: false
+
+source("20_codigo_completo_6.R")
+```
+
+Este documento tiene como propósito validar la colinealidad entre `over_obj` y `ocupaciones` en la tabla `jovenes`. En primer lugar, se realiza una gráfica entre dos variables categóricas, es decir, una gráfica de columna. 
+
+```{r}
+jovenes |> 
+  group_by(ocupacion1, over_obj) |> 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) |> 
+  mutate(
+    over_obj = factor(over_obj), 
+    prop = tot / sum(tot)
+  ) |> 
+  ggplot(aes(ocupacion1, prop, fill = over_obj)) + 
+  geom_col(position = "fill")
+```
+
+Se observa que ningún individuo ocupado en las ocupaciones 1 y 2 está sobrecalificado. Se calcula el coeficiente de correlación
+
+```
+jovenes |> 
+  summarise(
+    corr = cor(ocupacion1, over_obj)
+  )
+
+Error in `summarise()`:
+ℹ In argument: `corr = cor(ocupacion1, over_obj)`.
+Caused by error in `cor()`:
+! 'x' debe ser numérico
+Run `rlang::last_trace()` to see where the error occurred.
+```
+
+No se puede ya que no son variables numéricas. 
+
+¿Y si hago una regresión simple?
+
+```{r}
+# jovenes2 <- jovenes |> 
+#   mutate(ocupacion1 = factor(ocupacion1))
+# 
+# model_multicol <- lm(over_obj ~ ocupacion1, data = jovenes2)
+# summary.lm(jovenes2)
+```
+

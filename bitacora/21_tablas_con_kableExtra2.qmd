@@ -1,0 +1,503 @@
+---
+title: "Tesis"
+format: 
+  pdf:
+    pdf-engine: xelatex # asegurar el motor
+    latex-auto-install: true # permite descargar paquetes faltantes
+---
+
+```{r}
+#| label: setup
+#| echo: true
+#| warning: false
+#| message: false
+
+# source("20_codigo_completo_6.R")
+library(tidyverse)
+library(modelsummary)
+library(datos)
+library(knitr)
+library(scales)
+```
+
+```{r}
+precio_prom <- diamantes |> 
+  group_by(corte) |> 
+  summarise(
+    precio_prom = mean(precio)
+  )
+
+precio_prom
+```
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    caption = "Título de la tabla",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE
+  )
+```
+
+Arroja error porque no está habilitado la opción de instalar paquetes requeridos, se habilita en el encabezado YAML
+
+```
+pdf-engine: pdflatex # asegurar el motor
+    latex-auto-install: true # permite descargar paquetes faltantes
+```
+
+Sigue arrojando error, según Gemini el error es por que no está permitiendo la instalación de paquetes adicionales
+
+Se soluciona poniendo esto a la consola
+
+```
+tinytex::tlmgr_install(c("tabu", "threeparttable", "makecell", "multirow"))
+```
+
+Se intenta
+
+```
+tinytex::tlmgr_install(c("tabu", "threeparttable", "makecell", "multirow"))
+Warning in tlmgr(c("install", pkgs), usermode, ...) :
+  
+TeX Live does not seem to be installed. See https://yihui.org/tinytex/.
+
+tlmgr install tabu threeparttable makecell multirow
+tlmgr update --self
+Error en system2("tlmgr", args, ...): '"tlmgr"' not found
+```
+
+Arroja error
+
+Se valida paquete
+
+```{r}
+# system.file(package = "tinytext")
+# install.packages("tinytext")
+```
+
+Arroja error
+
+```
+Aviso: package ‘tinytext’ is not available for this version of R
+
+A version of this package for your version of R might be available elsewhere,
+see the ideas at
+https://cran.r-project.org/doc/manuals/r-patched/R-admin.html#Installing-packages
+```
+
+Otra solución, según Gemini, es añadiendo el código a la terminal
+
+```
+tlmgr install tabu threeparttable makecell multirow
+```
+Arroja error
+
+```
+C:\Prog\tesis>tlmgr install tabu threeparttable makecell multirow
+"tlmgr" no se reconoce como un comando interno o externo,
+programa o archivo por lotes ejecutable.
+```
+
+Otra cuestión, gemini pide cambiar el moto de `pdflatex` a `xelatex`
+
+Se valida y sugiere instalar el motor
+
+se hace en la terminal
+
+```
+quarto install tool tinytex
+```
+
+Ahora sí se pudo renderizar
+
+Sigamos con los argumentos
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    caption = "Título de la tabla",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    position = "h"
+  )
+```
+
+`booktabs`: permite el formato de tabulaciones, el autor sugiere activarlo para las tablas LaTeX
+
+`position`: especifica la ubicación de la tabla, `position = h` pone la tabla debajo del código
+
+Ahora asignemos nombre a la tabla en las configuraciones de los bloques de código
+
+```{r}
+#| label: tbl-precio-prom
+#| tbl-cap: "Precio promedio por tipo de corte"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  )
+```
+
+Se hace un ejemplo de referencia cruzada, como se observa en @tbl-precio-prom al omitirse el argumento `position` por defecto la tabla se pone debajo del código
+
+¿Qué hace `row.names`? Hagamos un ejemplo
+
+```{r}
+#| label: tbl-ejemplo1
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  )
+```
+
+Se observa que `row.names` agrega el número de fila. Entonces, para modificar el valor si debe pasarse a factor y después cambiarle el nombre a los niveles
+
+Al validar la documentación de `format`, la única opción para añadir el símbolo de porcentaje es mediante `scales::percent`
+
+Por ejemplo, tamaño de la muestra por corte en porcentaje
+
+```{r}
+datos::diamantes |> 
+  count(corte) |> 
+  mutate(
+    prop1 = n / sum(n),
+    prop2 = percent(prop1, accuracy = 0.1)
+  ) 
+```
+
+Observe que `accuracy = 0.1` muestra 1 decimal (después del punto) parece que multiplica el valor por 100 y después le suma 0.1.
+
+```{r}
+#| label: tbl-prop-corte
+#| tbl-cap: "Porcentaje de diamantes por tipo de corte"
+
+prop_corte <- datos::diamantes |> 
+  count(corte) |> 
+  mutate(
+    prop1 = n / sum(n),
+    prop2 = percent(prop1, accuracy = 0.1)
+  ) |> 
+  arrange(desc(prop1)) |> 
+  select(corte, prop2)
+
+prop_corte |> 
+  kableExtra::kbl(
+    col.names = c("Corte", "Porcentaje (%)"),
+    escape = TRUE,
+    booktabs = TRUE,
+    position = "p"
+  )
+```
+
+Como se observa en @tbl-prop-corte, el 40% de los diamantes presentan el corte *ideal*
+
+Se observa que la tabla se coloca al inicio de la página, a pesar de que se especifica la posición en `position`
+
+¿Cómo corregirlo?
+
+Sigue `kable_sytling`, creo que aquí se corrige la posición
+
+Se valida la documentación
+
+```{r}
+# ?kableExtra::kable_styling
+```
+
+Permite modicar el estilo de las tablas, esta función reemplaza o sustituye el argumento `table.attr` de `kbl`.
+
+* `bootstrap_options`: estilos de tablas para formato HTML, más info <https://www.w3schools.com/bootstrap/bootstrap_tables.asp> 
+
+* `latex_options`: estilos de tablas para LaTeX:
+
+```{r}
+#| label: tbl-ejemplo2
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "striped"
+  )
+```
+
+`striped`: añade colores alternativos entre filas
+
+```{r}
+#| label: tbl-ejemplo3
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "hold_position"
+  )
+```
+
+Se observa que `hold_position` pone la tabla encima del código
+
+```{r}
+#| label: tbl-ejemplo4
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    # row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "HOLD_position"
+  )
+```
+
+`HOLD_position` sobrepone la tabla en el código y sí pongo las dos?
+
+```{r}
+#| label: tbl-ejemplo5
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    # row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "hold_position"
+  )
+```
+
+Pone la tabla debajo de la otra, ¿por qué?
+
+`full_width`: especifica si debe tener el ancho completo, en PDF es falso por defecto
+
+```{r}
+#| label: tbl-ejemplo6
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    # row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "hold_position",
+    position = "float_left"
+  )
+```
+
+`position` especifica la posición (izquierda, derecha, centro) de la tabla. En primer lugar, se puso `left` pero no hizo ningún cambio después con `float_left` mueve la tabla a la izquierda, pero se observa que choca o se contrapone con el título que se especifico en las configuraciones del bloque de código
+
+```{r}
+#| label: tbl-ejemplo7
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    # row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "hold_position",
+    position = "left"
+  )
+```
+
+Arroja problemas con `position = right`
+
+Aún especificando `caption` hay problemas de la ubicación de la tabla, ¿cómo solucionarlo?
+
+```{r}
+#| label: tbl-ejemplo8
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    # row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "hold_position",
+    position = "center",
+    font_size = 16
+  )
+```
+
+`font_size`: especifica el tamaño de la letra de la tabla
+
+```{r}
+#| label: tbl-ejemplo9
+#| tbl-cap: "Ejemplo"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    latex_options = "hold_position",
+    position = "center",
+    font_size = 14,
+    row_label_position = "c"
+  )
+```
+
+`row_label_position`: no observo ningún comportamiento
+
+Ya tenemos todo lo necesario para crear nuestras tablas en formato APA, excepto el tema de la posición. Al validar con Gemini, el problema surge porque establezco un título en la configuración del bloque de código y al mismo tiempo especifico la posición dentro de `kbl`. La solución es especificar la posición dentro de la configuración del bloque de código con `tbl-pos` ¿existe?
+
+Se añade dicha configuración y se elimina `latex_position`
+
+```{r}
+#| label: tbl-ejemplo10
+#| tbl-cap: "Ejemplo 10"
+#| tbl-cap-location: top
+#| tbl-pos: "H"
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    row.names = TRUE,
+    col.names =  c("Corte", "Precio promedio"),
+    align = c("l", "r"),
+    # caption = "Ejemplo",
+    format.args = list(big.mark = ","),
+    escape = FALSE,
+    booktabs = TRUE,
+    # position = "h"
+  ) |> 
+  kableExtra::kable_styling(
+    # latex_options = "hold_position",
+    position = "center",
+    font_size = 14,
+    # row_label_position = "c"
+  )
+```
+
+Listo! Sí quedó 
+
+La IA sugiere que si persiste el problema, añadir lo siguiente en el encabezado YAML
+
+```
+format:
+  pdf:
+    include-in-header: 
+      text: |
+        \usepackage{float} 
+        \floatplacement{table}{H} # posicionar la tabla donde se define
+```
+
+Por fortuna no fue el caso
+
+Entonces, la plantilla para tablas en formato PDF es el siguiente
+
+```
+#| label: tbl-etiqueta
+#| tbl-cap: "Título"
+#| tbl-cap-location: top # ubicación_título
+#| tbl-pos: "H" # posiciona la tabla donde se refiere
+
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex", # salida PDF
+    digits = 2, # redondea los números a dos dígitos
+    row.names = FALSE, # NO enumera las filas
+    # Definir encabezado de cada columna
+    col.names =  c("columna_1", "columna_2", ..., "columna_n") 
+    align = c("l", "r"), # alineación de cada columna
+    format.args = list(big.mark = ","), # añade separación a números
+    escape = FALSE, # permite añadir caracteres especiales
+    booktabs = TRUE # recomendable para salida PDF
+  ) |> 
+  kableExtra::kable_styling(
+    position = "center", # posiciona la tabla en el centro
+    font_size = 14, # tamaño de la fuente
+  )
+```
+
+Recuerda primero renombrar los niveles de la variable categórica con `factor` o `fct_recorde`. 

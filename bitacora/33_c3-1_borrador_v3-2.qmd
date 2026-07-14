@@ -1,0 +1,203 @@
+---
+date: today
+format: html
+---
+
+Se obtienen los datos para la redacción de C3-1 V3-2
+
+```{r}
+library(tidyverse)
+library(scales)
+library(srvyr)
+
+source("scripts/0_funciones_v9.R")
+
+sinco19 <- read_rds("datos/descriptivo_sinco19.rds")
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+```
+
+Vamos a modificar las entradas para calcular las proporciones únicamente de la población ocupada
+
+```{r}
+argumentos <- tribble(
+  ~datos, ~grupo,
+  # ---
+  "jovenes_ocu", "mujer",
+  "jovenes_ocu", "educacion",
+  "jovenes_ocu", "campo_amplio",
+  "jovenes_ocu", "regiones",
+  "jovenes_ocu", "ent",
+  "jovenes_ocu", "sector_eco",
+  "jovenes_ocu", "tamanio",
+  "jovenes_ocu", "division",
+  "jovenes_ocu", "informal",
+  "jovenes_ocu", "jornada",
+  "jovenes_ocu", "ingreso_nivel"
+)
+
+descriptivo_prop <- pmap(argumentos, calcular_prop_map) |> 
+  list_rbind()
+```
+
+Se muestra tabla resultante
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "sector_eco") |> 
+  arrange(desc(prop))
+```
+
+Cálculos
+
+```{r}
+# 0.236838165 + 0.179029392 + 0.177578498
+0.147011825 + 0.118306482 + 0.068282738 + 0.056590713
+```
+
+```{r}
+df <- pmap(list("jovenes_ocu", "sector_eco", "rama_est2"), calcular_prop_sub_map) |> 
+  list_rbind()
+
+df |> 
+  select(-poblacion) |> 
+  group_by(gpo_val) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+Cálculos
+
+```{r}
+0.28278191 + 0.24060649
+```
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "informal") |> 
+  arrange(desc(prop))
+```
+
+Cálculos
+
+```{r}
+0.25135205 + 0.24009987 + 0.14857229
+```
+
+```{r}
+df <- pmap(list("jovenes_ocu", "tamanio", "informal"), calcular_prop_sub_map) |> 
+  list_rbind()
+
+df |> 
+  select(-poblacion) |> 
+  group_by(gpo_val) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "ingreso_nivel") |> 
+  arrange(desc(prop))
+```
+
+```{r}
+calcular_total(jovenes_ocu)
+```
+
+Cálculo
+
+```{r}
+15138 - 6999
+```
+
+¿Está correcto?
+
+
+```{r}
+jovenes_ocu |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  calcular_total()
+```
+
+Sí es correcto ya que en la regresión también se eliminan aquellos casos donde no fue posible calcular la experiencia, determinar el desajuste educativo y ya creo
+
+Por ejemplo,
+
+```{r}
+seleccionar_obs_reg(jovenes_ocu) |> 
+  calcular_total()
+```
+
+Por tanto continuamos con nuestro análisis
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "ingreso_nivel") |> 
+  arrange(desc(prop))
+```
+
+Educación requerida
+
+```{r}
+sinco19 |> 
+  count(edu_req_aprox) |> 
+  mutate(prop = n / sum(n))
+
+sinco19 |> 
+  distinct(edu_requerida)
+```
+
+```{r}
+sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop), .by_group = TRUE)
+
+sinco19 |> 
+count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  ggplot(aes(s19_div, prop, fill = edu_req_aprox)) +
+  geom_col() +
+  coord_flip()
+```
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "division") |> 
+  arrange(desc(prop))
+
+descriptivo_prop |> 
+  filter(grupo == "division") |> 
+  mutate(valor = factor(valor)) |> 
+  ggplot(aes(fct_reorder(valor, -prop), prop)) + 
+  geom_col()
+```
+
+Cálculos
+
+```{r}
+0.505822999 + 0.088579316
+
+0.046984769 + 0.006589197 + 0.036956490
+```
+
+Educación requerida
+
+```{r}
+jovenes_ocu |> 
+  establecer_edu_req_aprox(edu_requerida) |> 
+  calcular_prop(edu_req_aprox)
+```
+
+Cálculos
+
+```{r}
+0.57532020	+ 0.06390670	
+```
+
+
+```{r}
+descriptivo_prop |> 
+  filter(grupo == "jornada")
+``` 
+

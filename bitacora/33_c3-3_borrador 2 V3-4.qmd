@@ -1,0 +1,364 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+
+source("scripts/0_funciones_v9.R")
+
+jovenes_reg <- read_rds("datos/jovenes_normativo_reg.rds")
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+```
+
+Se valida en primer lugar el tamaño de la muestra
+
+```{r}
+calcular_total(jovenes_reg)
+```
+
+Se valida
+
+```{r}
+jovenes |> 
+  filter(
+    !is.na(ingreso_mensual),
+    !is.na(over_obj),
+    !is.na(exper),
+    !is.na(horas_lab)
+  ) |> 
+  calcular_total()
+```
+
+Correcto!!!
+
+Se valida `fct_relevel`
+
+```{r}
+jovenes_reg |> 
+  calcular_prop(campo_amplio)
+```
+
+Se valida
+
+```{r}
+jovenes_reg |> 
+  mutate(campo_amplio = fct_relevel(campo_amplio, "10")) |> 
+  calcular_prop(campo_amplio)
+```
+
+Sí queda
+
+Se valida regresión
+
+```{r}
+jovenes_reg <- jovenes_reg |> 
+  mutate(campo_amplio = fct_relevel(campo_amplio, "10"))
+```
+
+```{r}
+model_jovenes_tot <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_tot)
+```
+
+Se valida contraste
+
+```{r}
+model_jovenes_carrera <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj * campo_amplio + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_carrera)
+```
+
+No existen grandes cambios, por tanto se deja como está 
+
+Por último, se validan los estadísticos descriptivos
+
+Variables discretas
+
+```{r}
+argumentos <- tribble(
+  ~datos, ~grupo,
+  # ---
+  "jovenes_reg", "educacion",
+  "jovenes_reg", "over_obj",
+  "jovenes_reg", "under_obj",
+  "jovenes_reg", "mujer",
+  "jovenes_reg", "casada",
+  "jovenes_reg", "jefe_hogar",
+  "jovenes_reg", "regiones",
+  "jovenes_reg", "campo_amplio",
+  "jovenes_reg", "division",
+  "jovenes_reg", "pos_ocu",
+  "jovenes_reg", "sector_eco",
+  "jovenes_reg", "tamanio",
+  "jovenes_reg", "informal",
+  "jovenes_reg", "jornada",
+  "jovenes_reg", "unidad_eco"
+)
+
+prop_jov_reg <- pmap(argumentos, calcular_prop_map) |> 
+  list_rbind()
+```
+
+También se aplica para variables continuas, para lo cual se añade la función que lo hace de forma iterativa
+
+ANTES
+
+```
+# variables continuas
+calcular_descriptivos <- function(datos, variable){
+  # se enmascara nombre de columna
+  nombre_var <- as_label(enquo(variable))
+  
+  datos |> 
+    filter(!is.na({{  variable  }})) |> 
+    summarise(
+      # se inserta nombre de la columna
+      variable = nombre_var, 
+      minimo = min({{  variable  }}),
+      promedio = survey_mean({{  variable  }}, vartype = NULL),
+      desv_est = survey_sd({{  variable  }}),
+      maximo = max({{  variable  }})
+    )
+}
+```
+
+AHORA
+
+```
+# variables continuas
+calcular_descriptivos <- function(datos, variable){
+
+  poblacion <- get(datos)
+  variable_sym <- sym(variable)
+  
+  datos |> 
+    filter(!is.na(  !!variable_sym  )) |> 
+    summarise(
+      datos = datos,
+      variable = variable, 
+      min = survey_quantile(  
+        !!variable_sym, 
+        quantiles = 0, 
+        vartype = NULL
+      ),
+      media = survey_mean(  !!variable_sym  , vartype = NULL),
+      mediana = survey_median(  !!variable_sym  , varype = NULL),
+      var = survey_var(  !!variable_sym  , vartype = NULL),
+      sd = survey_sd(  !!variable_sym  ),
+      max = survey_quantile(  
+        !!variable_sym, 
+        quantiles = 1, 
+        vartype = NULL
+      )
+    )
+}
+```
+
+Se valida
+
+```{r}
+# variables continuas
+funcion_vgr <- function(datos, variable){
+
+  poblacion <- get(datos)
+  variable_sym <- sym(variable)
+  
+  poblacion |> 
+    filter(!is.na(  !!variable_sym  )) |> 
+    summarise(
+      datos = datos,
+      variable = variable, 
+      min = survey_quantile(  
+        !!variable_sym, 
+        quantiles = 0, 
+        vartype = NULL
+      ),
+      media = survey_mean(  !!variable_sym  , vartype = NULL),
+      mediana = survey_median(  !!variable_sym  , vartype = NULL),
+      # var = survey_var(  !!variable_sym  , vartype = NULL),
+      sd = survey_sd(  !!variable_sym  , vartype = NULL),
+      max = survey_quantile(  
+        !!variable_sym, 
+        quantiles = 1, 
+        vartype = NULL
+      )
+    )
+}
+```
+
+```{r}
+funcion_vgr("jovenes_reg", "ingreso_mensual")
+```
+
+Listo! Se añade al script `funciones` y se guarda en "C:/Prog/tesis/scripts/0_funciones_v9.R"
+
+
+Se valida
+
+```{r}
+calcular_descriptivos_map("jovenes_reg", "ingreso_mensual")
+```
+
+Se calcula
+
+```{r}
+argumentos <- tribble(
+  ~datos, ~variable,
+  # ---
+  "jovenes_reg", "ingreso_mensual",
+  "jovenes_reg", "exper",
+  "jovenes_reg", "horas_lab",
+  "jovenes_reg", "edad",
+  "jovenes_reg", "anios_estudios"
+)
+
+est_descrip_jov_reg <- pmap(argumentos, calcular_descriptivos_map) |> 
+  list_rbind()
+```
+
+Se valida
+
+```{r}
+prop_jov_reg
+est_descrip_jov_reg
+```
+
+Por último, se quita `under_obj` del modelo
+
+```{r}
+jovenes_reg <- read_rds("datos/jovenes_normativo_reg.rds")
+
+model_jovenes_tot <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_tot)
+```
+
+Por último,
+
+Se quita `sector_eco` y `casada`
+
+```{r}
+model_jovenes_tot <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_tot)
+```
+
+No modifica mucho
+
+Listo!
+
+Términos de interacción
+
+EDUCACIÓN
+
+```{r}
+model_jovenes_edu <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_edu)
+```
+
+```{r}
+regTermTest(model_jovenes_edu, ~ over_obj:educacion)
+```
+
+GÉNERO
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * mujer + educacion + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+```{r}
+regTermTest(model_jovenes_muj, ~ over_obj:mujer)
+```
+
+CARRERAS EDUCATIVAS
+
+```{r}
+model_jovenes_car <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * campo_amplio + educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_car)
+```
+
+```{r}
+regTermTest(model_jovenes_car, ~ over_obj:campo_amplio)
+```
+
+REGIONES
+
+```{r}
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * regiones + educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+```{r}
+regTermTest(model_jovenes_reg, ~ over_obj:regiones)
+```
+

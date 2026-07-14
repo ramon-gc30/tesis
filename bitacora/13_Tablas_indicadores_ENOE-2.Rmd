@@ -1,0 +1,451 @@
+---
+title: "Indicadores_ENOE 2"
+output: html_document
+bibliography: references.bib
+---
+
+# 2. Metodología
+
+## Librerías
+
+```{r setup, message=FALSE, warning=FALSE}
+# paquetes ==========================================================
+# manejo de datos
+library(tidyverse)
+# estadísticos descriptivos ponderados
+library(matrixStats)
+# definir como encuesta de diseño complejo
+library(srvyr)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# regresión
+library(modelr)
+# análisis de residuos
+library(performance)
+library(car)
+library(stats)
+library(nortest)
+# también para coeficiente asimetría
+library(moments) 
+library(lmtest)
+library(see)
+```
+
+## Fuente de datos
+
+```{r}
+# importación =======================================================
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+## Construcción de variables
+
+```{r}
+# construcción de variables =========================================
+# grupos de edadd OECD(2019: 135)
+sdem <- sdem %>%
+  mutate(
+    edad = as.integer(eda),
+    edad_7g = case_when(
+      between(edad, 0, 14) ~ "1",
+      between(edad, 15, 24) ~ "2",
+      between(edad, 25, 34) ~ "3",
+      between(edad, 35, 44) ~ "4",
+      between(edad, 45, 54) ~ "5",
+      between(edad, 55, 64) ~ "6",
+      between(edad, 65, 97) ~ "7",
+      # edad no especificada mayores a 12 INEGI(2024:16)
+      edad == "98" ~ "98",
+      # edad no especificada menores a 12 INEGI(2024:16)
+      edad == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitaria INEGI(2016: 13)
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+```
+
+## Segmentación
+
+```{r}
+# segmentación ======================================================
+sdem <- sdem %>% mutate(
+  # edad
+  edad = as.integer(eda),
+  # años de estudios
+  anios_estudios = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_estudios = if_else(anios_estudios != 99, anios_estudios, NA),
+  # grado escolar
+  escolaridad = as.integer(cs_p13_1),
+  # 99 pasa a NA para evitar 99 - edu_req
+  escolaridad = if_else(escolaridad != 99, escolaridad, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingreso_mensual = as.double(ingocup),
+  # 0 pasa a NA ya que 0==NA en p6b2
+  ingreso_mensual = if_else(ingreso_mensual != 0, ingreso_mensual, NA),
+  # promedio de ingreso por hora
+  ingreso_hora = as.double(ing_x_hrs),
+  # 0 pasa a NA ya que 0==NA en p6b2 y en dur9c == 1 & 9
+  ingreso_hora = if_else(ingreso_hora != 0, ingreso_hora, NA)
+)
+```
+
+## Encuesta de diseño complejo
+
+```{r}
+sdem <- sdem %>% 
+  as_survey_design(
+    ids = upm,
+    strata = est,
+    weights = fac_tri,
+    nest = TRUE
+  )
+```
+
+## Creación de tablas
+
+```{r}
+# creación de tablas ================================================
+# jóvenes profesionistas (25-34 años)
+# jovenes_prof <- sdem %>%
+#   filter(edad_7g == 3)
+
+# población total INEGI(2023:21)
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2",
+    edad_7g == 3
+  )
+
+# población de 15 años y más INEGI(2023:21)
+pob_15ymas <- pob_12ymas %>% 
+  filter(
+    r_def == "0",
+    c_res != "2",
+    between(edad, 15, 98),
+    edad_7g == 3
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+```
+
+# 4. Jóvenes profesionistas
+
+## Indicadores estratégicos
+
+```{r}
+pob_total %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+pob_15ymas %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+pob_15ymas %>% 
+  group_by(clase1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+pob_15ymas %>% 
+  group_by(clase1, clase2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(pos_ocu) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(remune2c) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(rama_est1, rama_est2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(ing7c) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(dur_est) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(seg_soc) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(ambito1, ambito2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(tue1, tue2, tue3) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+ocupada %>% 
+  group_by(emp_ppal, tue_ppal) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados <- pob_15ymas %>% 
+  filter(pos_ocu == 1)
+
+subordinados %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados %>% 
+  group_by(rama_est1, rama_est2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados %>% 
+  group_by(ing7c) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados %>% 
+  group_by(dur_est) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados %>% 
+  group_by(seg_soc) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados %>% 
+  group_by(pre_asa) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados %>% 
+  group_by(tip_con) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados_no_agrop <- subordinados %>% 
+  filter(ambito1 != 1)
+
+subordinados_no_agrop %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subordinados_no_agrop %>% 
+  group_by(ambito1, ambito2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subocupada <- pob_15ymas %>% 
+  filter(sub_o == 1)
+
+subocupada %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subocupada %>% 
+  group_by(busqueda) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subocupada %>% 
+  group_by(niv_ins) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subocupada %>% 
+  group_by(pos_ocu, remune2c) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+subocupada %>% 
+  group_by(rama_est1, rama_est2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+desocupada %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+desocupada %>%
+  group_by(eda5c) %>%
+  summarise(tot = survey_total(vartype = NULL))
+
+desocupada %>%
+  group_by(niv_ins) %>%
+  summarise(tot = survey_total(vartype = NULL))
+
+desocupada %>%
+  group_by(d_ant_lab, d_cexp_est) %>%
+  summarise(tot = survey_total(vartype = NULL))
+
+desocupada %>%
+  group_by(dur_des) %>%
+  summarise(tot = survey_total(vartype = NULL))
+
+pnea %>% 
+  group_by(clase2, pnea_est) %>%
+  summarise(tot = survey_total(vartype = NULL))
+```
+
+Promedios
+
+```{r}
+promedio <- pob_15ymas %>% 
+  filter(clase1 == 1 & between(edad, 15, 97))
+
+promedio %>% 
+  summarise(
+    promedio = survey_mean(edad, vartype = NULL),
+    mediana = survey_median(edad, vartype = NULL)
+  )
+
+promedio <- pob_15ymas %>% 
+  filter(clase1 == 1 & between(anios_estudios, 0, 24))
+
+promedio %>% 
+  summarise(
+    promedio = survey_mean(anios_estudios, vartype = NULL),
+    mediana = survey_median(anios_estudios, vartype = NULL)
+  )
+
+promedio <- pob_15ymas %>% 
+  mutate(hrsocup = as.integer(hrsocup)) %>% 
+  filter(clase2 == 1 & between(hrsocup, 1, 168))
+
+promedio %>% 
+  summarise(
+    promedio = survey_mean(hrsocup, vartype = NULL),
+    mediana = survey_median(hrsocup, vartype = NULL)
+  )
+
+promedio <- pob_15ymas %>% 
+  filter(clase2 == 1 & between(ingreso_hora, 1, 999998))
+
+promedio %>% 
+  summarise(
+    promedio = survey_mean(ingreso_hora, vartype = NULL),
+    mediana = survey_median(ingreso_hora, vartype = NULL)
+  )
+
+promedio <- pob_15ymas %>% 
+  filter(
+    clase2 == 1,
+    between(ingreso_hora, 1, 999998)
+    # remune2c == 2
+  )
+
+promedio %>% 
+  summarise(
+    promedio = survey_mean(ingreso_hora, vartype = NULL),
+    mediana = survey_median(ingreso_hora, vartype = NULL)
+  )
+```
+
+Tasas
+
+```{r}
+pob_15ymas %>% 
+  filter(clase1 == 1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+pob_15ymas %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tp <- 61065005 / 102615200)
+
+desocupada %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(td <- 1624245 / 61065005)
+
+pob_15ymas %>% 
+  filter(dur9c == 2) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(topd <- (1624245 + 3918033) / 61065005)
+
+pob_15ymas %>% 
+  filter(tpg_p8a == 1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tpg <- (1624245 + 1759267) / 61065005)
+
+ocupada %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+pob_15ymas %>% 
+  filter(remune2c == 1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tta <- 39448618 / 59440760)
+
+subocupada %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tsub <- 4288800 / 59440760)
+
+pob_15ymas %>% 
+  filter(tcco != 0) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tcco <- 19164131 / 59440760)
+
+pob_15ymas %>% 
+  filter(tue2 == 5) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tosi <- 17240375 / 59440760)
+
+pob_15ymas %>% 
+  filter(emp_ppal == 1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(til1 <- 32589068 / 59440760)
+
+pob_15ymas %>% 
+  filter(clase2 == 1 & ambito1 != 1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(tosi2 <- 17240375 / 53144550)
+
+pob_15ymas %>% 
+  filter(emp_ppal == 1 & ambito1 != 1) %>% 
+  summarise(tot = survey_total(vartype = NULL))
+
+(til2 <- 27175242 / 53144550)
+
+```
+
+
+
+

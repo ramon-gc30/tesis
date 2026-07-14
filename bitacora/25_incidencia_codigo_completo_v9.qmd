@@ -1,0 +1,104 @@
+---
+date: today
+---
+
+Se validará la incidencia de la sobrecalificación con el código C:/Prog/tesis/scripts/24_codigo_completo_v9.R para validar si coinciden con las modificaciones realizadas en C:/Prog/tesis/25_cap2_v3_con_enoe_2T2025_3.qmd
+
+```{r}
+#| label: setup
+#| message: false
+
+source("scripts/24_codigo_completo_v9.R")
+```
+
+
+Incidencia
+
+General
+
+```{r}
+ocupada |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Ay canijos!
+
+En C:/Prog/tesis/25_cap2_v3_con_enoe_2T2025_3.qmd, la incidencia es del 46.3% y aquí del 21%!!!
+
+
+```{r}
+jovenes |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+En el archivo anterior es de 56% y aquí de 51.3%!!!
+
+
+Se valida código del archivo anterior
+
+Al validar la incidencia con el código actual, observo que no consideré el caso de carrera técnica, véase
+
+```
+# nivel de estudios concluidos ILO(s.f.)
+sdem <- sdem |> 
+  mutate(
+    # nivel escolar
+    educacion = as.integer(cs_p13_1),
+    # 99 pasa a NA para evitar 99 - edu_req
+    educacion = if_else(educacion != 99, educacion, NA),
+    # cambian los valores de cs_p15 para que coincidan con cs_p13_1
+    edu_previa = case_when(
+      # primaria
+      cs_p15 == "1" ~ 2,
+      # secundaria
+      cs_p15 == "2" ~ 3,
+      # preparatoria
+      cs_p15 == "3" ~ 4,
+      TRUE ~ NA
+    ),
+    educacion = case_when(
+      # si no concluyó sus estudios y reporta educación previa
+      # se le asigna el nivel reportado en cs_p15 
+      cs_p16 == "2" & !is.na(edu_previa) ~ edu_previa,
+      # si no concluyó sus estudios y no reporta educación previa
+      # doctorado baja a maestría
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 9 ~ 8,
+      # maestría baja a licenciatura
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 8 ~ 7,
+      # licenciatura baja a preparatoria
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 7 ~ 4,
+      # carrera técnica baja a preparatoria
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 6 ~ 4,
+      # normal baja a preparatoria
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 5 ~ 4,
+      # preparatoria baja a secundaria
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 4 ~ 3,
+      # secundaria baja a primaria 
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 3 ~ 2,
+      # primaria baja a preescolar
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 2 ~ 1,
+      # preescolar baja a ninguna
+      cs_p16 == "2" & is.na(edu_previa) & educacion == 1 ~ 0,
+      # si concluyó se le asigna el nivel educativo reportado
+      TRUE ~ educacion
+    ),
+    # 5 pasa a 7 para método objetivo a 4 dígitos
+    educacion = if_else(educacion == 5, 7, educacion)
+  ) 
+```
+
+Sólo considera el caso de nivel educativo según CINE-11
+
+Se añade dicha cuestión en un documento nuevo
+
+

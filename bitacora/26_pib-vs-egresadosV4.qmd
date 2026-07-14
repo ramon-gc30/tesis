@@ -1,0 +1,284 @@
+---
+date: today
+---
+
+Se intentará actualizar la gráfica de PIB vs Egresados para abarcar un perido más amplio
+
+ANTES: 2010-2024
+
+AHORA: 2000-2025
+
+El repositorio estadístico de la ANUIES ya cuenta con esa información
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+library(readr)
+
+anuies <- read_csv("datos/Egresados.csv")
+
+anuies
+```
+
+Primero, se selecciona los datos de egresados
+
+```{r}
+egresados <- anuies |> 
+  filter(TIPO == "EGRESADOS TOTAL")
+
+egresados
+```
+
+Ahora se separa el campo que contiene el periodo
+
+```{r}
+egresados <- egresados |> 
+  separate(
+    PERIODO,
+    into = c("inicio", "fin"),
+    sep = "-",
+    convert = TRUE
+  )
+
+egresados
+```
+
+Se seleccionan las variables de interés
+
+```{r}
+egresados <- egresados |> 
+  select(inicio, VALOR) |> 
+  rename(
+    "Periodo" = "inicio",
+    "Valor" = "VALOR"
+  )
+
+egresados
+```
+
+Se calcula variación anual
+
+```{r}
+egresados <- egresados |> 
+  mutate(Variacion = Valor / lag(Valor) - 1)
+
+egresados
+```
+
+Según recuerdo el crecimiento anual se calcula así
+
+$$
+\% = \sqrt{\frac{V_f}{V_i}-1} * 100
+$$
+
+Se validan las notas contenidas en (Heath, 2012), y sí en efecto así se calcula, entre otros modos, la tasa de crecimiento promedio. Se aplica con los datos de egresados
+
+```{r}
+egresados |> 
+  summarise(
+    vf = last(Valor),
+    vi = first(Valor),
+    n = n(),
+    tcp = (vf / vi)**(1/n) - 1
+  )
+```
+
+Listo! ¿Cómo aplicarlo a función?
+
+```{r}
+calc_crec_prom <- function(datos){
+  datos_procesados <- datos |> 
+    summarise(
+    vf = last(Valor),
+    vi = first(Valor),
+    n = n(),
+    tcp = (vf / vi)**(1/n) - 1
+  )
+  return(datos_procesados)  
+}
+```
+
+Función
+
+```{r}
+calc_crec_prom(egresados) 
+```
+
+La tasa de crecimiento promedio de egresados en el periodo 2000-2024 fue de 4.7%
+
+Se valida función con los cálculos ya realizados
+
+```{r}
+egresados |> 
+  filter(Periodo >= 2010) |> 
+  calc_crec_prom()
+```
+
+En el documento de Word muestro un crecimiento promedio de 6.3% anual "donde pasó de poco más de 400 mil egresados al inicio del periodo a algo más de un millón de egresados en el ciclo escolar 2024-2025"
+
+Se valida
+
+```{r}
+anuies |> 
+  filter(TIPO == "EGRESADOS TOTAL")
+```
+
+Aquí tengo una cifra de 515,669 egresados en el periodo 2010 ¿por qué la diferencia? Porque en el documento de Word no consideré a todas la educación superior. En la pestaña "Egresados" de "C:/Users/Ramon GC/Documents/UNAM_Economia/Tesis/Temas/sobrecalificacion/Datos/PIBvsEgresados.xlsx" está la cifra ya considerando a toda la educación superior: técnico superior, licenciatura, especialidad, maestría y doctorado. Se observa una cifra de 547,608 egresados que medianamente coincide con la registrada aquí.
+
+Con los datos del archivo Excel arroja un crecimiento promedio de 4.16%
+
+$$
+Vf = 1,009,855 \\
+Vi = 547,608 \\
+n = 25
+$$
+
+Esa tasa es más cercana a la que yo tengo 4.6%
+
+Ya se tiene los datos para comparar egresados vs PIB
+
+Falta el PIB
+
+Se limpió el archivo en Excel
+
+```{r}
+pib <- read_csv(
+  "datos/pib.csv"
+)
+
+pib
+```
+
+Se calcula PIB anual
+
+```{r}
+pib_anual <- pib |> 
+  group_by(Periodo) |> 
+  summarise(Valor2 = sum(Valor))
+
+pib_anual
+```
+
+Se calcula variación anual
+
+```{r}
+pib_anual <- pib_anual |> 
+  mutate(variacion = Valor2 / lag(Valor2) - 1)
+
+pib_anual
+```
+
+¿Cuál es el inicio y fin del periodo?
+
+```{r}
+egresados$Periodo
+```
+
+INICIO: 2000
+FIN: 2024
+
+Se selecciona dicho periodo para PIB
+
+```{r}
+pib_anual2 <- pib_anual |> 
+  filter(between(Periodo, 2000, 2024))
+
+pib_anual2
+```
+
+Se calcula tasa de crecimiento promedio
+
+```{r}
+pib_anual2 |> 
+  rename("Valor" = "Valor2") |> 
+  calc_crec_prom()
+```
+
+La tasa de crecimiento promedio del PIB en 2000-2024 fue de 1.4%, cercano al periodo 2010-2024.
+
+Ahora se unen los datos
+
+```{r}
+glimpse(egresados)
+glimpse(pib_anual2)
+```
+
+Primero, se renombran variables
+
+```{r}
+desajuste <- full_join(egresados, pib_anual2, by = "Periodo") |> 
+  rename(
+    "Valor_egresados" = "Valor",
+    "Valor_PIB" = "Valor2",
+    "Egresados" = "Variacion",
+    "PIB" = "variacion"
+  )
+
+desajuste
+```
+
+Por último, se grafica
+
+```{r}
+library(RColorBrewer)
+library(ggthemes)
+library(ggrepel)
+
+# pivotar para graficar
+datos_pivot <- desajuste %>%
+  pivot_longer(
+    cols = c(Egresados, PIB),
+    names_to = "variables",
+    values_to = "valor"
+  )
+
+# labels_vars <- c(
+#   "prop_pib" = "PIB",
+#   "prop_egresados" = "Egresados"
+#   )
+
+datos_pivot %>%
+  ggplot(aes(x = Periodo, y = valor, color = variables, shape = variables, linetype = variables)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(
+    breaks = seq(2000, 2024, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = seq(-0.1, 0.2, by = 0.05)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL) + 
+  scale_shape_discrete(name = NULL) + 
+  scale_linetype_discrete(name = NULL) + 
+  theme_classic(base_size = 16, base_family = "Trebuchet MS") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 14)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+
+# library(systemfonts)
+# df <- systemfonts::system_fonts()
+# df2 <- as_tibble(unique(df$family))
+# print(df2, n = Inf)
+# 
+# df %>% 
+#   filter(name == "Spectral")
+# 
+# systemfonts::match_fonts("Trebuchet MS")
+
+# tamaño completo en Word
+ggsave(
+  "pib_vs_egresados2.png",
+  width = 17,
+  height = 10,
+  units = "cm"
+)
+```
+

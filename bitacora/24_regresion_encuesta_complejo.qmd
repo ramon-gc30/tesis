@@ -1,0 +1,99 @@
+---
+title: "Tesis"
+format: html
+---
+
+En este documento se realiza la regresión tipo "survey" con las modificaciones realizadas en:
+* C:/Prog/tesis/scripts/24_codigo_completo_v8.R
+* C:/Prog/tesis/bitacora/24_jornada_y_unidad_eco.qmd
+
+```{r}
+#| label: setup
+
+source("scripts/24_codigo_completo_v8.R")
+```
+
+Se define la encuesta de diseño complejo
+
+```{r}
+ocupada2 <- svydesign(
+  ids = ~upm,
+  strata = ~est,
+  weights = ~fac_tri,
+  nest = TRUE,
+  data = ocupada
+)
+
+summary(ocupada2)
+```
+
+Se realiza regresión
+
+```{r}
+model_general1 <- svyglm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + log(horas_lab) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, design = ocupada2)
+
+summary(model_general1)
+```
+
+La pérdida salarial relativa pasa de -10.32% en C:/Prog/tesis/bitacora/24_jornada_y_unidad_eco.qmd a -10.64% aprox que equivale a 
+
+```{r}
+coefficients(model_general1)
+```
+
+Se calcula cifra exacta
+
+```{r}
+exp(-0.1063793949)-1
+```
+
+Se valida el caso de jóvenes
+
+```{r}
+jovenes <- ocupada |> 
+  filter(
+    edad_7g == "3" & 
+      (educacion == "6" | educacion == "7" | educacion == "8" | educacion == "9")
+  )
+
+jovenes2 <- svydesign(
+  ids = ~upm,
+  strata = ~est,
+  weights = ~fac_tri,
+  nest = TRUE,
+  data = jovenes
+)
+
+summary(jovenes2)
+```
+
+Regresión
+
+```{r}
+model_jov1 <- svyglm(log(ingreso_mensual) ~ educacion + over_obj + under_obj + exper + I(exper**2) + log(horas_lab) + mujer + casada + jefe_hogar + regiones + ocupaciones + pos_ocu + sector_eco + tamanio + informal + jornada + unidad_eco, design = jovenes2)
+
+summary(model_jov1)
+```
+
+Se calcula cifra exacta
+
+```{r}
+coefficients(model_jov1)
+```
+
+```{r}
+exp(-0.182677069) - 1
+```
+
+Se valida paquetería
+
+```{r}
+# ?svyglm
+```
+
+Referencia bibliográfica
+
+Lumley T, Scott A (2017) "Fitting Regression Models to Survey Data" Statistical Science 32: 265-278
+
+https://projecteuclid.org/journals/statistical-science/volume-32/issue-2/Fitting-Regression-Models-to-Survey-Data/10.1214/16-STS605.pdf
+

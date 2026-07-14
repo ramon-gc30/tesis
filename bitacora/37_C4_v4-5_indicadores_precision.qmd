@@ -1,0 +1,251 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(survey)
+library(srvyr)
+
+source("scripts/0_funciones_v9.R")
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+jovenes_reg <- read_rds("datos/jovenes_normativo_reg.rds")
+```
+
+FUNCIÓN
+
+```{r}
+# Variables dicotómicas o categóricas
+validar_precision_tot <- function(datos, variable){
+  datos |>
+    group_by({{  variable  }}) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = c("se", "cv")),
+      prop = survey_prop(vartype = NULL)
+    ) |> 
+    mutate(
+      nivel_precision = case_when(
+        tot_cv <= 0.15 ~ "Alta",
+        tot_cv > 0.15 & tot_cv <= 0.30 ~ "Moderada",
+        tot_cv > 0.30 ~ "Baja",
+        TRUE ~ NA
+      )
+    )
+}
+```
+
+
+NIVEL DE INGRESO
+
+```{r}
+jovenes |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  validar_precision_tot(ingreso_nivel) 
+```
+
+EDUCACIÓN REQUERIDA
+
+```{r}
+jovenes <- establecer_edu_req_aprox(jovenes, edu_requerida)
+
+validar_precision_tot(jovenes, edu_req_aprox)
+```
+
+SOBRECALIFICACIÓN
+
+```{r}
+validar_precision_tot(jovenes, edu_mismatch_obj)
+```
+
+Ingreso promedio
+
+General
+
+```{r}
+calcular_descriptivos(jovenes, ingreso_mensual)
+```
+
+
+```{r}
+jovenes |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = survey_total(vartype = NULL),
+    promedio = survey_mean(ingreso_mensual, vartype = c("se", "cv"))
+  ) |> 
+  mutate(
+      nivel_precision = case_when(
+        promedio_cv <= 0.15 ~ "Alta",
+        promedio_cv > 0.15 & promedio_cv <= 0.30 ~ "Moderada",
+        promedio_cv > 0.30 ~ "Baja",
+        TRUE ~ NA
+      )
+    )
+```
+
+REGRESIÓN
+
+Estadísticos descriptivos
+
+```{r}
+validar_precision_tot(jovenes_reg, over_obj)
+validar_precision_tot(jovenes_reg, mujer)
+validar_precision_tot(jovenes_reg, jefe_hogar)
+validar_precision_tot(jovenes_reg, regiones)
+validar_precision_tot(jovenes_reg, campo_amplio)
+validar_precision_tot(jovenes_reg, division)
+validar_precision_tot(jovenes_reg, pos_ocu)
+validar_precision_tot(jovenes_reg, informal)
+validar_precision_tot(jovenes_reg, jornada)
+validar_precision_tot(jovenes_reg, unidad_eco)
+```
+
+```{r}
+model_jovenes_gral <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_gral)
+```
+
+Términos de interacción
+
+```{r}
+model_jovenes_edu <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios * over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_edu)
+```
+
+Prueba Wald
+
+```{r}
+regTermTest(model_jovenes_edu, "anios_estudios:over_obj")
+```
+
+Género
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * mujer + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+```{r}
+regTermTest(model_jovenes_muj, "over_obj:mujer")
+```
+
+
+
+Campos
+
+```{r}
+model_jovenes_campo <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * campo_amplio + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_campo)
+```
+
+```{r}
+regTermTest(model_jovenes_campo, "over_obj:campo_amplio")
+```
+
+
+Regiones
+
+```{r}
+model_jovenes_region <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * regiones + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_region)
+```
+
+```{r}
+regTermTest(model_jovenes_region, "over_obj:regiones")
+```
+
+CUADRO INCIDENCIA CAMPO Y REGIÓN
+
+```{r}
+over_camp_reg <- calcular_prop_sub_var(jovenes, campo_amplio, regiones, over_obj) |> 
+  filter(over_obj == 1)
+
+over_camp_reg |> 
+  pivot_wider(
+    id_cols = campo_amplio,
+    id_expand = TRUE,
+    names_from = regiones,
+    names_prefix = "region",
+    values_from = prop
+  )
+```
+
+Valida precisión
+
+```{r}
+over_camp_reg2 <- jovenes |> 
+  group_by(campo_amplio, regiones, over_obj) |> 
+  summarise(
+    tot = survey_total(vartype = "cv"),
+    prop = survey_prop(vartype = NULL)
+  ) |> 
+  filter(over_obj == 1)
+
+over_camp_reg2 <- over_camp_reg2 |> 
+  mutate(
+      nivel_precision = case_when(
+        tot_cv <= 0.15 ~ "Alta",
+        tot_cv > 0.15 & tot_cv <= 0.30 ~ "Moderada",
+        tot_cv > 0.30 ~ "Baja",
+        TRUE ~ NA
+      )
+    )
+
+over_camp_reg2 |> 
+  pivot_wider(
+    id_cols = campo_amplio,
+    id_expand = TRUE,
+    names_from = regiones,
+    names_prefix = "region",
+    values_from = c(prop, nivel_precision)
+  )
+```
+

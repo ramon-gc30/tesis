@@ -1,0 +1,34 @@
+---
+date: today
+---
+
+Este documento tiene como propósito servir de apoyo para la versión 3 del capítulo 2 Metodología
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+source("scripts/25_importacion_v10.R")
+source("scripts/25_construccion_tablas_v10.R")
+source("scripts/25_funciones_v11.R")
+```
+
+Primero se valida modificación realizada en "C:/Prog/tesis/scripts/25_funciones_v11.R", donde la función `construir_educacion_cine11` se añade directamente a la función correspondiente al criterio `asignar_edu_mismatch`, por lo que se requieren tres funciones para calcular la incidencia general
+
+1. `construir_variables(ocupada)`: tabla que contiene la población ocupada
+2. `asignar_edu_mismatch(general, ciuo08)`: tabla donde están las variables construidas y la clasificación de OIT 
+3. `calcular_incidencia(objetivo)`: tabla que tiene el método objetivo y criterio para asignar desajuste educativo individual 
+
+Además se requieren los archivos especificados en el bloque de configuración
+
+```{r}
+general <- construir_variables(ocupada)
+objetivo <- asignar_edu_mismatch(general, ciuo08)
+incidencia_obj_gral <- calcular_incidencia(objetivo)
+
+incidencia_obj_gral
+```
+
+Se valida con el documento anterior "C:/Prog/tesis/25_codigo_con_scripts_separados_v10.qmd", el resultado es idéntico
+

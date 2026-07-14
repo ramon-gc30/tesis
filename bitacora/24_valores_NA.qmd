@@ -1,0 +1,295 @@
+---
+title: "Tesis"
+format: html
+---
+
+En este documento se modificarán los valores nulos `NA` de las variables utilizadas en la regresión debido a que se quiere realizar la regresión considerando dichos casos
+
+```{r}
+#| label: setup
+
+source("scripts/24_codigo_completo_v9.R")
+```
+
+Primero se contrasta las observaciones de la tabla `ocupada` y después los resultantes de la regresión
+
+```{r}
+ocupada |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+La cifra coincide con @inegienoet22025r
+
+¿Cuánta parte de la población no reporta algún tipo de ingreso?
+
+```{r}
+ocupada |> 
+  filter(is.na(ingreso_mensual)) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Es decir,
+
+```{r}
+73832 / 190687
+
+25722853 / 59440760
+```
+
+No ma! Alrededor del 38.7% de la muestra no reporta algún tipo de ingreso mensual.
+
+La cifra coincide con `ing7c`?
+
+```{r}
+ocupada |> 
+  group_by(ing7c) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+No coincide con la suma de los valores `6` y `7`
+
+Recordemos que `ingreso_mensual` se construyó a partir de `ingocup` donde `0` es equivalente a `NA` en `p6b2`
+
+```{r}
+ocupada |> 
+  mutate(ingocup = as.double(ingocup)) |> 
+  ggplot(aes(ingocup)) + 
+  geom_histogram()
+
+ocupada |> 
+  mutate(p6b2 = as.double(p6b2)) |> 
+  ggplot(aes(p6b2)) + 
+  geom_histogram()
+```
+
+¿Qué pasa al convertir 0 a log?
+
+```{r}
+log(0)
+```
+
+Genera un error, por lo tanto sí debe convertirse a valores nulos
+
+Entonces hay que señalar que al eliminarse valores nulos de `ingreso_mensual` se pierden alrededor del 38.7% de la muestra que representa al 43.3% de la población ocupada
+
+¿Cuántas observaciones se utilizan en la regresión?
+
+```{r}
+nobs(model_general)
+```
+
+Si contamos a las personas que sí reportan ingreso
+
+```{r}
+ocupada |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Es decir,
+
+```{r}
+116855 - 88899
+```
+
+Se pierden 27,956 observaciones
+
+Se modifican los valores NA a otros valores para que se consideren en la regresión
+
+```{r}
+ocupada2 <- ocupada %>% 
+  mutate(
+    # experiencia laboral potencial
+    # si edad == 98, se convierte a NA
+    exper = if_else(edad != 98, exper, NA),
+    mujer = if_else(sex == 2, 1, 0),
+    # estado civil == 1 si es casada
+    casada = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jefe_hogar = if_else(par_c == 101, 1, 0),
+    ocupaciones = factor(ocupacion1),
+    # valor No sabe pasa a NA
+    carreras = if_else(carrera1 != "99", carrera1, "NA"),
+    carreras = factor(carreras),
+    # posición en la ocupacion
+    # valor no especificado pasa a NA
+    pos_ocu = if_else(pos_ocu != 5, pos_ocu, "NA"),
+    pos_ocu = factor(pos_ocu),
+    # sector económico agregado
+    # valor no especificado pasa a NA
+    sector_eco = if_else(rama_est1 != 4, rama_est1, "NA"),
+    sector_eco = factor(sector_eco),
+    # núm de trabajadores
+    # valor no espcificado pasa a NA
+    # trabajadores = if_else(emple7c != 7, emple7c, NA),
+    # trabajadores = factor(trabajadores),
+    # tamaño de unidad económica
+    tamanio = case_when(
+      ambito2 == 2 | ambito2 == 3 ~ "1",
+      # valor no especificado pasa a NA
+      ambito2 == 0 | ambito2 == 8 ~ "NA",
+      TRUE ~ ambito2
+    ),
+    tamanio = factor(tamanio),
+    informal = if_else(emp_ppal == 1, "1", "0"),
+    # nivel educativo
+    educacion = factor(educacion),
+    # regiones
+    regiones = factor(regiones),
+    # duración de la jornada laboral
+    jornada = if_else(dur_est != "6", dur_est, "NA"),
+    jornada = factor(jornada),
+    # tipo de unidad económica
+    unidad_eco = if_else(tue2 != "0", tue2, "NA"),
+    unidad_eco = factor(unidad_eco)
+  )
+```
+
+Se crean las tablas de jóvenes y tipo survey, también se realiza regresión
+
+```{r}
+# Jóvenes =====================================================================
+
+# se define jóvenes a personas de 25 a 34 años 
+# egresados de educación superior
+jovenes2 <- ocupada |> 
+  filter(
+    edad_7g == "3" & 
+      (educacion == "6" | educacion == "7" | 
+         educacion == "8" | educacion == "9")
+  )
+
+# Tipo survey =================================================================
+
+## General --------------------------------------------------------------------
+ocupada_svy2 <- svydesign(
+  ids = ~upm,
+  strata = ~est,
+  weights = ~fac_tri,
+  nest = TRUE,
+  data = ocupada
+)
+
+## Jóvenes --------------------------------------------------------------------
+jovenes_svy2 <- svydesign(
+  ids = ~upm,
+  strata = ~est,
+  weights = ~fac_tri,
+  nest = TRUE,
+  data = jovenes
+)
+
+# Regresión ===================================================================
+
+## MCO ------------------------------------------------------------------------
+
+### General -----
+
+model_general2 <- lm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + 
+    ocupaciones + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = ocupada2
+)
+
+### Jóvenes -----
+
+model_jov2 <- lm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + 
+    ocupaciones + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes2
+)
+
+## Tipo survey ----------------------------------------------------------------
+
+
+### General -----
+
+model_general_svy2 <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + 
+    ocupaciones + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = ocupada_svy2
+)
+
+### Jóvenes -----
+
+model_jov_svy2 <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + 
+    ocupaciones + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy2
+)
+```
+
+Se valida las observaciones de esta nueva regresión
+
+```{r}
+nobs(model_general2)
+```
+
+Se valida al caso general
+
+```{r}
+# general
+190687 - 109582
+
+# solo ingreso reportado
+116855 - 109582
+```
+
+Se siguen eliminando 7,273 observaciones
+
+Se validan resultados
+
+```{r}
+# general
+summary.lm(model_general2)
+```
+
+Los valores NA son no significativas
+
+```{r}
+# jóvenes
+summary.lm(model_jov2)
+```
+
+Es decir, no tiene sentido añadir los valores `NA` al modelo
+
+Se valida resultados de `jovenes`
+
+```{r}
+summary.lm(model_jov)
+```
+
+```{r}
+summary(model_jov_svy)
+```
+
+Número de observaciones
+
+```{r}
+nobs(model_jov_svy)
+```
+

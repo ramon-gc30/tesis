@@ -1,0 +1,1459 @@
+---
+title: "3. Limpieza de datos"
+bibliography: references.bib
+output:
+  html_document:
+    df_print: paged
+---
+
+# Introducción
+
+Este documento es la continuación de las notas anteriores:
+
+1. C:/Prog/tesis/1_Primeros_pasos.Rmd
+2. C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3. C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+
+El objetivo es responder de forma concisa algunas de las preguntas de investigación esbozadas en la nota física del 23-10-25 mediante la utilización de la ENOE perteneciente al trimestre II del 2025.
+
+# 1. Importar
+
+```{r}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+# 2. Segmentar
+
+```{r}
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+```
+
+# 3. Grupos de edad
+
+Construir los siguientes grupos de edad, a partir del campo precodificado `eda12c`:
+
+1. 15 a 24: valor 1 y 2
+2. 25 a 34: valor 3 y 4 
+3. 35 a 44: valor 5 y 6
+4. 45 a 54: valor 7 y 8
+5. 55 a 64: valor 9 y 10
+6. 65 y  más: valor 11
+
+```{r}
+sdem %>% 
+  transmute(
+    edad_grupos = case_when(
+      # de 15 a 24
+      eda12c == 1 | eda12c == 2 ~ "1",
+      # de 25 a 34
+      eda12c == 3 | eda12c == 4 ~ "2",
+      # de 35 a 44
+      eda12c == 5 | eda12c == 6 ~ "3",
+      # de 45 a 54
+      eda12c == 7 | eda12c == 8 ~ "4",
+      # de 55 a 64 
+      eda12c == 9 | eda12c == 10 ~ "5",
+      # de 65 y más
+      eda12c == 11 ~ "6",
+      # no especificado (INEGI, 2024: 24)
+      eda12c == 12 ~ "7",
+      # de 0 a 14
+      TRUE ~ "0"
+    )
+  ) %>% 
+  count(edad_grupos)
+```
+
+Se corrobora resultados con los valores del campo precodificado `eda12c`
+
+```{r}
+sdem %>% 
+  count(eda12c)
+```
+
+## 3.1 Valor `0` en `eda12c`
+
+¿Qué edades corresponden el valor `0` de `eda12c`?
+
+```{r}
+sdem %>% 
+  filter(eda12c == "0") %>% 
+  count(eda) 
+```
+
+Se observa que el valor `0` de la variable `eda12` corresponde a las edades menores a 15 años, pero también tiene registro de personas con edad de 15 años o superior. Entonces, la variable `eda12c` no es de fiar; debo construir los grupos de edad a partir de la variable `eda`.
+
+## 3.2 Asistencia escolar en edad de 20-24 años
+
+Duda: ¿cuántos todavía asisten a la escuela en la edad de 20 a 24 años?
+
+```{r}
+sdem %>% 
+  filter(cs_p13_1 == 7) %>% 
+  ggplot(aes(eda19c)) + 
+  geom_bar(aes(fill = cs_p17)) 
+```
+
+Alrededor de 3/4 de los encuestados de entre 20 a 24 años reporta asistir actualmente en la escuela (valor 7 color naranja), situación contraria al grupo de edad de 25 a 29 años debido a que la 3/4 señala ya no acudir a la escuela (valor 8 color verde). Se corrobora con la variable de grupos de edad creada.
+
+```{r}
+sdem %>% 
+  mutate(
+    edad_7grupos = case_when(
+      # de 15 a 24
+      eda12c == 1 | eda12c == 2 ~ "1",
+      # de 25 a 34
+      eda12c == 3 | eda12c == 4 ~ "2",
+      # de 35 a 44
+      eda12c == 5 | eda12c == 6 ~ "3",
+      # de 45 a 54
+      eda12c == 7 | eda12c == 8 ~ "4",
+      # de 55 a 64 
+      eda12c == 9 | eda12c == 10 ~ "5",
+      # de 65 y más
+      eda12c == 11 ~ "6",
+      # no especificado (INEGI, 2024: 24)
+      eda12c == 12 ~ "7",
+      # de 0 a 14
+      TRUE ~ "0"
+    )
+  ) %>% 
+  ggplot(aes(edad_7grupos)) + 
+  geom_bar(aes(fill = cs_p17))
+```
+
+Con la variable creada, se observa que la mitad de encuestados pertenecientes al grupo de edad de 15 a 24 años reporta asistir actualmente a la escuela, mientras que alrededor del 95% del grupo de 25 a 34 años señala no acudir.
+
+Se valida con la variable `eda`
+
+```{r}
+sdem %>% 
+  filter(between(eda, 15, 24) & cs_p13_1 == 7) %>% 
+  ggplot(aes(eda, fill = cs_p16)) + 
+  geom_bar() + 
+  scale_x_continuous(
+    breaks = seq(15, 24, by = 1)
+  )
+```
+
+
+## 3.3 Definir grupos de edad
+
+Por lo que, se deja la variable creada que identifica los grupos de edad, en línea con @oecd2019. 
+
+```{r}
+# sdem <- sdem %>% mutate(
+#   edad_7grupos = case_when(
+#       # de 15 a 24
+#       eda12c == 1 | eda12c == 2 ~ "1",
+#       # de 25 a 34
+#       eda12c == 3 | eda12c == 4 ~ "2",
+#       # de 35 a 44
+#       eda12c == 5 | eda12c == 6 ~ "3",
+#       # de 45 a 54
+#       eda12c == 7 | eda12c == 8 ~ "4",
+#       # de 55 a 64 
+#       eda12c == 9 | eda12c == 10 ~ "5",
+#       # de 65 y más
+#       eda12c == 11 ~ "6",
+#       # no especificado (INEGI, 2024: 24)
+#       eda12c == 12 ~ "7",
+#       # de 0 a 14
+#       TRUE ~ "0"
+#     )
+# )
+```
+
+## 3.4 Renombrar grupos de edad
+
+Se averigua el tipo de dato:
+
+```{r}
+# sdem %>%
+#   select(edad_7grupos)
+```
+
+Se renombra los niveles
+
+```{r}
+# sdem %>% 
+#   transmute(
+#     edad_7grupos = factor(edad_7grupos),
+#     edad_7grupos = fct_recode(
+#       edad_7grupos,
+#       "15 a 24 años" = "1",
+#       "25 a 34 años" = "2",
+#       "35 a 44 años" = "3",
+#       "45 a 54 años" = "4",
+#       "55 a 64 años" = "5",
+#       "65 y más" = "6",
+#       "No especificado" = "7",
+#       "Otro" = "0"
+#     )
+#   ) %>% 
+#   count(edad_7grupos)
+```
+
+NOTA: la variable `eda12` no es confiable ya que el valor `0` contiene edades de 15 a 99 años por lo que debe construirse el grupo de edad con la variable `eda`. Entonces, se construyen los grupos de edad con la variable `eda`. Por fortuna, dicha variable está como tipo entero así que nos permitirá construir mediante la función `between`.
+
+## 3.5 Construir grupos con `eda`
+
+Primero, se valida los valores de `eda`
+
+```{r}
+sdem %>% 
+  count(eda)
+```
+
+
+
+```{r}
+sdem %>%
+  transmute(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      TRUE ~ "NA"
+    )
+  ) %>% 
+  count(edad_7g)
+```
+
+Se le asigna el valor `98`, a los casos que la edad está no especificada para mayores de 12 años y más, y el valor `99` a los casos en que la edad no se señaló para menores de 0 a 11 años de la variable `eda`, véase @inegienoebd2024 p. 16 para más información. Se puede asignar así o directamente renombrar las variables:
+
+```{r}
+sdem %>%
+  transmute(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "0 a 14 años",
+      between(eda, 15, 24) ~ "15 a 24 años",
+      between(eda, 25, 34) ~ "25 a 34 años",
+      between(eda, 35, 44) ~ "35 a 44 años",
+      between(eda, 45, 54) ~ "45 a 54 años",
+      between(eda, 55, 64) ~ "55 a 65 años",
+      between(eda, 65, 97) ~ "65 años y más",
+      # edad no especificada mayores a 12 
+      eda == "98" ~ "No especificada para mayores (12 años y más)",
+      # edad no especificada menores a 12
+      eda == "99" ~ "No especificada para menores (0 a 11 años)",
+      TRUE ~ "NA"
+    )
+  ) %>% 
+  count(edad_7g)
+```
+
+Se les deja el valor númerico debido a que se creará una nueva variable que considerará sólo a jóvenes de 25 a 34 años. Nota: en `TRUE` se le asigna el valor `NA` sin comillas dobles debido a que así se asignan los valores faltantes (missing).
+
+```{r}
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      TRUE ~ NA
+    ),
+    edad_7g = as.integer(edad_7g)
+  )
+```
+
+# 4. Clave de carreras universitarias
+
+## 4.1 Tamaño de caracteres
+
+Ahora, se divide el código o clave de la carrera profesional para obtener los 10 campos amplios de las carreras universitarias, véase @inegi2016c p. 13. Recordemos que, en `Bitacora_Tesis` se observó que dicha variable tiene algunos valores con tamaño de 5 o 6 caracteres, se validará:
+
+```{r}
+sdem %>% 
+  transmute(
+    tamanio = if_else(str_length(cs_p14_c) == 5, 1, 0)
+  ) %>% 
+  count(tamanio)
+```
+
+También, se verifica el tipo de variable del campo `cs_p14_c`:
+
+```{r}
+glimpse(sdem$cs_p14_c)
+```
+
+Existen más valores con tamaño de 5 que de 6 caracteres. Se añade un cero en dichos casos
+
+```{r}
+sdem %>% 
+  transmute(
+    cod_carreras = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    tamanio = if_else(str_length(cod_carreras) == 5, 1, 0)
+  ) %>% 
+  count(tamanio)
+```
+
+Se observa que la variable `cs_p14_c` tiene en todos sus valores un tamaño de 6 caracteres. Se crea en una nueva variable debido a que se separará.
+
+```{r}
+# sdem <- sdem %>% 
+#   mutate(
+#     carreras = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+#   )
+```
+
+## 4.2 Separar en 3 columnas
+
+En primera instancia, se había decidido en separar la variable `caarreras` en cuatro columnas, sin embargo, para renombrar los niveles del campo específico (28 niveles) y del campo detallado (118 niveles) se considera el campo amplio que corresponde a los primeros dos dígitos de la variable. Entonces, ¿cómo separar? Una posible solución es crear tres variables para poder separar y posteriormente eliminar la parte restante.
+
+```{r}
+sdem %>% 
+  transmute(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res) 
+```
+
+Dicha solución si divide correctamente la clave de la carrera `cs_p14_c` a tres campos desagregados: amplio, específico y detallado, véase @inegi2016c pp. 13-14:
+
+1. Campo amplio: primero dos dígitos `carrera1`,
+2. Campo específico: tercer dígito `carrera2`,
+3. Campo detallado: cuarto dígito `carrera3`
+
+```{r}
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+```
+
+Se observa que existe el valor `999999` que a su vez es un nivel no registrado en @inegi2016c.  Ahora, vamos a renombrar los niveles de la variable `carrera1` según @inegi2016c p. 13, para eso primero se segmentará dicha variable a tipo factor y después se utilizará la función `fct_recode`.
+
+# 5. Grupos ocupacionales
+
+## 5.1 Separar en 2 columnas
+
+Se hará lo mismo con la variable asociada a la clasificación ocupacional (`p3`) perteneciente a la tabla `coe1`, véase @inegienoebd2024 p. 73. En primer lugar, se dividirá dicha columna:
+
+```{r}
+coe1 %>% 
+  transmute(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res) %>% 
+  count(ocupacion2, sort = TRUE)
+```
+
+Hay más observaciones correspondientes a la ocupación: "Empleados de ventas en establecimientos" (`42`). 
+
+```{r}
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+```
+
+# 6. Población total
+
+Se procede a filtrar la muestra para que represente la población total mediante el campo precodificado `fac_tri`, véase @inegiconociendoenoe2023 p. 21. Primero, se identifica los valores únicos de las variables `r_def` y `c_res`.
+
+```{r}
+unique(sdem$r_def)
+unique(sdem$c_res)
+```
+
+Ahora, se aplica el criterio establecido en @inegiconociendoenoe2023 p. 21
+
+```{r}
+sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  ) %>% 
+  summarise(
+    n_tot = sum(n()),
+    pob_tot = sum(fac_tri)
+  )
+```
+
+Se define la nueva variable `pob_total`:
+
+```{r}
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+```
+
+# 7. Población de 15 años y más
+
+Según @inegiconociendoenoe2023 p. 21, se debe filtrar a la población en edad legal para trabajar, esto es, de 15 a 98 años. No obstante, el mismo documento en las pp. 9-10 establece filtrar a la población de 12 a 99 años para unir las tablas `sdem` con `coe1` y `coe2`. Vamos a corroborar tal situación.
+
+```{r}
+sdem %>% filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 15, 98)
+) %>% 
+  count()
+```
+
+## 7.1 Población en edad legal para trabajar
+
+```{r}
+sdem %>% filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+) %>% 
+  count()
+```
+
+## 7.2 Muestra en `coe1` y `coe2`
+
+```{r}
+coe1 %>% count()
+coe2 %>% count()
+```
+
+Se observa que la muestra resultante de `pob12_ymas` es igual a `coe1` y `coe2`. Se crea una tabla que contenga a la población de 12 años y más para unirla con las tablas de `coe`.
+
+```{r}
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+)
+```
+
+Adicional, se crea una tabla que considera sólo a la población de 15 años y más para calcular los indicadores estratégicos de @inegiconociendoenoe2023 p.21
+
+```{r}
+pob_15ymas <- sdem %>% 
+  filter(
+    r_def == "0",
+    c_res != "2",
+    between(eda, 15, 98)
+  )
+```
+
+# 8. Unión de las tablas `sdem` y `coe1`
+
+Se procede a juntar las tablas de `pob_12ymas` con las de `coe`, recordemos en "ENOET22025_Analisis-1" que tienen el mismo tamaño por lo que cualquier función de unión es prácticamente indiferente por lo que se decide utilizar la función `full_join`.
+
+```{r}
+pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+```
+
+Se observa un tamaño de `346,404 x 359`, por defecto son `352` más una columna creada asociada al grupo de edad (`edad_7grupos`) junto con las tres columnas creadas por las claves de carreras universitarias en la tabla `sdem` (`carrera1`, `carrera2`, `carrera3`) y las dos columnas pertenecientes a los grupos ocupacionales en la tabla `coe1` (`ocupacion1` y `ocupacion2`): $352 + 1 + 3 + 2 = 358$. 
+
+Se unirán las tablas en la variable `completo`:
+
+```{r}
+# completo = sdem + coe1 + coe2 con criterio aplicado
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) 
+```
+
+# 9. Profesionistas
+
+Se creará una tabla que contendrá a personas con grado escolar "Profesional": `cs_p13_1 = 7`; pero se validará el número de observaciones con estudios de maestría y doctorado por grupos de edad.
+
+```{r}
+completo %>% 
+  filter(
+    cs_p13_1 == "7" | cs_p13_1 == "8" | cs_p13_1 == "9"
+  ) %>% 
+  ggplot(aes(edad_7g)) + 
+  geom_bar(aes(fill = cs_p13_1)) 
+```
+
+En el grupo de jóvenes (25 a 34 años), alrededor del 90% reporta estudios de licenciatura; de hecho es el grupo etario con el mayor número de personas con estudios de licenciatura (a nivel absoluto): ¿cómo será a nivel relativo?. 
+
+```{r}
+completo %>% 
+  filter(
+    cs_p13_1 == "7" | cs_p13_1 == "8" | cs_p13_1 == "9"
+  ) %>% 
+  ggplot(aes(edad_7g)) + 
+  geom_bar(aes(fill = cs_p13_1), position = "fill") 
+```
+
+A nivel relativo, el grupo de edad considerado como jóvenes (25 a 34 años) cuenta con la mayor proporción de individuos con estudios de licenciatura, pero se observa que conforme avanza la edad también aumenta el número de personas con estudios de maestría y doctorado.
+
+Todavía no decido si trabajar sólo con nivel de estudios de licencatura o también incluir con maestría y doctorado. Por el momento, considero a los tres estudios superiores.
+
+```{r}
+profesionistas <- completo %>% 
+  filter(
+    cs_p13_1 == "7" | cs_p13_1 == "8" | cs_p13_1 == "9"
+  )
+```
+
+# 10. Jóvenes
+
+Se valida el número de jóvenes de 25 a 34 años con distintos niveles de estudios (`edad_7g = 3`)
+
+```{r}
+completo %>% 
+  filter(edad_7g == "3") %>% 
+  ggplot(aes(cs_p13_1)) + 
+  geom_bar() 
+```
+
+La mayor cantidad de jóvenes se concentra en estudios de licenciatura, no obstante hay una cantidad no trivial de jóvenes con estudios de preparatoria y de secundaria. ¿Cuántos asisten a la escuela en la actualidad?
+
+```{r}
+completo %>% 
+  filter(edad_7g == "3") %>% 
+  ggplot(aes(cs_p13_1)) + 
+  geom_bar(aes(fill = cs_p17)) 
+```
+
+Es cercana al 95% los jóvenes que actualmente no asisten a la escuela en los distintos grados escolares. ¿Cuántos terminaron sus estudios o materias?
+
+```{r}
+completo %>% 
+  filter(edad_7g == "3") %>% 
+  ggplot(aes(cs_p13_1)) + 
+  geom_bar(aes(fill = cs_p16))
+```
+
+La pregunta `cs_p16` sólo aplica para carrera técnica y universitaria; por otra parte, se observa que cerca del 80% concluyó sus estudios. 
+
+Se asigna la variable `jovenes` que contiene sólo a personas entre 25 a 34 años.
+
+```{r}
+jovenes <- completo %>% 
+  filter(edad_7g == "3")
+```
+
+# 11. Renombrar niveles
+
+Esta sección contiene los niveles de algunas variables de interés renombradas, pero se deja como paso previo antes de realizar la gráfica final (o definitiva) por lo que se dejan como comentarios hasta dicho momento.
+
+## 11.1 Entidades federativas
+
+Se valida los niveles de la variable `ent`
+
+```{r}
+unique(sdem$ent)
+```
+
+Se renombran los niveles
+
+```{r}
+sdem %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_recode(
+      ent,
+      "Aguascalientes" = "1",
+      "Baja California" = "2",
+      "Baja California Sur" = "3",
+      "Campeche" = "4",
+      "Coahuila de Zaragoza" = "5",
+      "Colima" = "6",
+      "Chiapas" = "7",
+      "Chihuahua" = "8",
+      "Ciudad de México" = "9",
+      "Durango" = "10",
+      "Guanajuato" = "11",
+      "Guerrero" = "12",
+      "Hidalgo" = "13",
+      "Jalisco" = "14",
+      "México" = "15",
+      "Michoacán de Ocampo" = "16",
+      "Morelos" = "17",
+      "Nayarit" = "18",
+      "Nuevo León" = "19",
+      "Oaxaca" = "20",
+      "Puebla" = "21",
+      "Querétaro" = "22",
+      "Quintana Roo" = "23",
+      "San Luis Potosí" = "24",
+      "Sinaloa" = "25",
+      "Sonora" = "26",
+      "Tabasco" = "27",
+      "Tamaulipas" = "28",
+      "Tlaxcala" = "29",
+      "Veracruz de Ignacio de la Llave" = "30",
+      "Yucatán" = "31",
+      "Zacatecas" = "32"
+    )
+  ) %>% 
+  group_by(ent) %>% 
+  summarise(
+    n = n(),
+    pob_tot = sum(fac_tri)
+  ) %>% 
+  arrange(desc(pob_tot)) 
+```
+
+Se asignan los nuevos niveles
+
+```{r}
+# sdem <- sdem %>% 
+#   mutate(
+#     ent = factor(ent),
+#     ent = fct_recode(
+#       ent,
+#       "Aguascalientes" = "1",
+#       "Baja California" = "2",
+#       "Baja California Sur" = "3",
+#       "Campeche" = "4",
+#       "Coahuila de Zaragoza" = "5",
+#       "Colima" = "6",
+#       "Chiapas" = "7",
+#       "Chihuahua" = "8",
+#       "Ciudad de México" = "9",
+#       "Durango" = "10",
+#       "Guanajuato" = "11",
+#       "Guerrero" = "12",
+#       "Hidalgo" = "13",
+#       "Jalisco" = "14",
+#       "México" = "15",
+#       "Michoacán de Ocampo" = "16",
+#       "Morelos" = "17",
+#       "Nayarit" = "18",
+#       "Nuevo León" = "19",
+#       "Oaxaca" = "20",
+#       "Puebla" = "21",
+#       "Querétaro" = "22",
+#       "Quintana Roo" = "23",
+#       "San Luis Potosí" = "24",
+#       "Sinaloa" = "25",
+#       "Sonora" = "26",
+#       "Tabasco" = "27",
+#       "Tamaulipas" = "28",
+#       "Tlaxcala" = "29",
+#       "Veracruz de Ignacio de la Llave" = "30",
+#       "Yucatán" = "31",
+#       "Zacatecas" = "32"
+#     )
+#   )
+```
+
+## 11.2 Sexo
+
+```{r}
+sdem %>% 
+  transmute(
+    sex = factor(sex),
+    sex = fct_recode(
+      sex,
+      "Hombre" = "1",
+      "Mujer" = "2"
+    )
+  ) %>% 
+  count(sex)
+```
+
+Se encuestaron a más mujeres que hombres.
+
+```{r}
+# sdem <- sdem %>% 
+#   mutate(
+#     sex = factor(sex),
+#     sex = fct_recode(
+#       sex,
+#       "Hombre" = "1",
+#       "Mujer" = "2"
+#     )
+#   )
+```
+
+## 11.3 Carreras: campo amplio
+
+```{r}
+sdem %>% 
+  transmute(
+    carrera1 = factor(carrera1), 
+    carrera1 = fct_recode(
+      carrera1,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10",
+      # nivel no registrado en INEGI(2016)
+      "No sabe" = "99"
+    )
+  ) %>% 
+  count(carrera1, sort = TRUE)
+```
+
+A partir de otras preguntas y sus correspondientes respuestas en @inegienoebd2024, por ejemplo véase variable `cs_p13_1` p. 16 y respuesta `99 No sabe`, se le asigna al valor `999999` el nombre `No sabe`. 
+
+```{r}
+# sdem <- sdem %>% 
+#   mutate(
+#     carrera1 = factor(carrera1), 
+#     carrera1 = fct_recode(
+#       carrera1,
+#       "Educación" = "01",
+#       "Artes y humanidades" = "02",
+#       "Ciencias sociales y derecho" = "03",
+#       "Administración y negocios" = "04",
+#       "Ciencias naturales, matemáticas y estadística" = "05",
+#       "Tecnologías de la información y la comunicación" = "06",
+#       "Ingeniería, manufactura y construcción" = "07",
+#       "Agronomía y veterinaria" = "08",
+#       "Ciencias de la salud" = "09",
+#       "Servicios" = "10",
+#       # nivel no registrado en INEGI(2016)
+#       "No sabe" = "99"
+#     )
+#   )
+```
+
+Se hará lo mismo para el caso de los campos específico y detallado, para tal fin se utilizará un Excel para poder concatenar.
+
+## 11.4 Carreras: campo específico
+
+```{r}
+sdem %>% 
+  transmute(
+    carrera2 = factor(carrera2),
+    carrera2 = fct_recode(
+      carrera2,
+      "Ciencias de la educación y pedagogía" = "011",
+      "Formación docente" = "012",
+      "Artes" = "021",
+      "Humanidades" = "022",
+      "Ciencias sociales y estudios del comportamiento" = "031",
+      "Ciencias de la información" = "032",
+      "Derecho y criminología" = "033",
+      "Negocios y contabilidad" = "041",
+      "Administración y gestión" = "042",
+      "Ciencias biológicas y ambientales" = "051",
+      "Ciencias físicas, químicas y de la tierra" = "052",
+      "Matemáticas y estadística" = "053",
+      "Innovación en tecnologías de la información y la comunicación" = "061",
+      "Implementación de las tecnologías de la información y la comunicación" = "062",
+      "Ingeniería mecánica, eléctrica, electrónica, química y profesiones afines" = "071",
+      "Manufacturas y procesos" = "072",
+      "Arquitectura y construcción" = "073",
+      "Agronomía, horticultura, silvicultura y pesca" = "081",
+      "Veterinaria" = "082",
+      "Ciencias médicas" = "091",
+      "Enfermería" = "092",
+      "Ciencias odontológicas" = "093",
+      "Terapia, rehabilitación y tratamientos alternativos" = "094",
+      "Disciplinas auxiliares para la salud" = "095",
+      "Servicios personales y deportes" = "101",
+      "Servicios de transporte" = "102",
+      "Seguridad para el trabajo" = "103",
+      "Servicios de seguridad" = "104",
+      # nivel no registrado en INEGI(2016)
+      "No sabe" = "999"
+    )
+  ) %>% 
+  count(carrera2, sort = TRUE)
+```
+
+Existe una mayor cantidad de encuestados correspondiente a la carrera "Negocios y contabilidad", seguido de "Ingeniería mecánica, eléctrica, electrónica, química y afines".
+
+```{r}
+# sdem <- sdem %>% 
+#   mutate(
+#     carrera2 = factor(carrera2),
+#     carrera2 = fct_recode(
+#       carrera2,
+#       "Ciencias de la educación y pedagogía" = "011",
+#       "Formación docente" = "012",
+#       "Artes" = "021",
+#       "Humanidades" = "022",
+#       "Ciencias sociales y estudios del comportamiento" = "031",
+#       "Ciencias de la información" = "032",
+#       "Derecho y criminología" = "033",
+#       "Negocios y contabilidad" = "041",
+#       "Administración y gestión" = "042",
+#       "Ciencias biológicas y ambientales" = "051",
+#       "Ciencias físicas, químicas y de la tierra" = "052",
+#       "Matemáticas y estadística" = "053",
+#       "Innovación en tecnologías de la información y la comunicación" = "061",
+#       "Implementación de las tecnologías de la información y la comunicación" = "062",
+#       "Ingeniería mecánica, eléctrica, electrónica, química y profesiones afines" = "071",
+#       "Manufacturas y procesos" = "072",
+#       "Arquitectura y construcción" = "073",
+#       "Agronomía, horticultura, silvicultura y pesca" = "081",
+#       "Veterinaria" = "082",
+#       "Ciencias médicas" = "091",
+#       "Enfermería" = "092",
+#       "Ciencias odontológicas" = "093",
+#       "Terapia, rehabilitación y tratamientos alternativos" = "094",
+#       "Disciplinas auxiliares para la salud" = "095",
+#       "Servicios personales y deportes" = "101",
+#       "Servicios de transporte" = "102",
+#       "Seguridad para el trabajo" = "103",
+#       "Servicios de seguridad" = "104",
+#       # nivel no registrado en INEGI(2016)
+#       "No sabe" = "999"
+#     )
+#   )
+```
+
+## 11.5 Carreras: campo detallado
+
+Al momento de renombrar los niveles, arroja un error:
+
+```
+Aviso: There was 1 warning in `transmute()`.
+ℹ In argument: `carrera3 = fct_recode(...)`.
+Caused by warning:
+! Unknown levels in `f`: 1010
+```
+
+Es decir, no aparece en la base de datos el nivel `1010`, se valida:
+
+```{r}
+sdem %>% 
+  filter(carrera3 == "1010") %>% 
+  count()
+```
+
+Entonces, no se considera dicho nivel al momento de renombrar:
+
+```{r}
+sdem %>% 
+  transmute(
+    carrera3 = factor(carrera3),
+    carrera3 = fct_recode(
+      carrera3,
+      "Diseño curricular y pedagogía" = "0111",
+      "Planeación, evaluación e investigación educativa" = "0112",
+      "Orientación e intervención educativa" = "0113",
+      "Tecnología y comunicación educativa" = "0114",
+      "Ciencias de la educación" = "0115",
+      "Planes multidisciplinarios o generales del campo de ciencias de la educación y pedagogía" = "0110",
+      "Formación docente en educación básica, nivel preescolar" = "0121",
+      "Formación docente en educación básica, nivel primaria" = "0122",
+      "Formación docente en educación básica, nivel secundaria" = "0123",
+      "Formación docente en educación media superior" = "0124",
+      "Formación docente en educación superior" = "0125",
+      "Formación docente en la enseñanza de asignaturas específicas" = "0126",
+      "Formación docente en otros servicios educativos" = "0127",
+      "Planes multidisciplinarios o generales del campo de formación docente" = "0120",
+      "Bellas artes" = "0211",
+      "Artes escénicas" = "0212",
+      "Música" = "0213",
+      "Tecnologías audiovisuales para medios de comunicación" = "0214",
+      "Diseño y comunicación gráfica y editorial" = "0215",
+      "Diseño industrial, de moda e interiores" = "0216",
+      "Artesanía tradicional y manualidades" = "0217",
+      "Planes multidisciplinarios o generales del campo de artes" = "0210",
+      "Teología" = "0221",
+      "Adquisición de idiomas extranjeros" = "0222",
+      "Literatura" = "0223",
+      "Lingüística" = "0224",
+      "Historia y arqueología" = "0225",
+      "Filosofía y ética" = "0226",
+      "Planes multidisciplinarios o generales del campo de humanidades" = "0220",
+      "Psicología" = "0311",
+      "Sociología y antropología" = "0312",
+      "Ciencias políticas" = "0313",
+      "Economía" = "0314",
+      "Trabajo y atención social" = "0315",
+      "Planes multidisciplinarios o generales del campo de ciencias sociales y estudios del comportamiento" = "0310",
+      "Comunicación y periodismo" = "0321",
+      "Biblioteconomía y archivonomía" = "0322",
+      "Derecho" = "0331",
+      "Criminología y criminalística" = "0332",
+      "Negocios y comercio" = "0411",
+      "Mercadotecnia y publicidad" = "0412",
+      "Finanzas, banca y seguros" = "0413",
+      "Contabilidad y fiscalización" = "0414",
+      "Planes multidisciplinarios o generales del campo de negocios y contabilidad" = "0410",
+      "Administración de empresas" = "0421",
+      "Administración turística y de restaurantes" = "0422",
+      "Administración pública" = "0423",
+      "Administración en el ámbito de la ingeniería y la construcción" = "0424",
+      "Administración en los campos de la educación, salud, deporte, agronomía y las artes y humanidades" = "0425",
+      "Planes multidisciplinarios o generales del campo de administración y gestión" = "0420",
+      "Biología" = "0511",
+      "Bioquímica y biofísica" = "0512",
+      "Ecología y ciencias ambientales" = "0513",
+      "Planes multidisciplinarios o generales del campo de ciencias biológicas y ambientales" = "0510",
+      "Física y astronomía" = "0521",
+      "Química" = "0522",
+      "Ciencias de la tierra y de la atmósfera" = "0523",
+      "Planes multidisciplinarios o generales del campo de ciencias físicas, químicas y de la tierra" = "0520",
+      "Matemáticas" = "0531",
+      "Estadística y actuaría" = "0532",
+      "Ciencias computacionales" = "0611",
+      "Desarrollo de hardware" = "0612",
+      "Desarrollo de software" = "0613",
+      "Planes multidisciplinarios o generales del campo de innovación en tecnologías de la información y la comunicación" = "0610",
+      "Telecomunicaciones" = "0621",
+      "Informática" = "0622",
+      "Soporte y servicios de mantenimiento a las tecnologías de la información y comunicación" = "0623",
+      "Planes multidisciplinarios o generales del campo de implementación de las tecnologías de la información y la comunicación" = "0620",
+      "Mecánica y profesiones afines al trabajo metálico" = "0711",
+      "Electricidad y generación de energía" = "0712",
+      "Electrónica, automatización y aplicaciones de la mecánica-eléctrica" = "0713",
+      "Ingeniería de procesos químicos" = "0714",
+      "Vehículos, barcos y aeronaves motorizadas" = "0715",
+      "Tecnología para la protección del medio ambiente" = "0716",
+      "Ingeniería industrial" = "0717",
+      "Planes multidisciplinarios o generales del campo de ingeniería mecánica, eléctrica, electrónica, química y profesiones afines" = "0710",
+      "Industria de la alimentación" = "0721",
+      "Industria textil, del calzado y piel" = "0722",
+      "Industrias de materiales diversos (cerámica, madera, plástico y vidrio)" = "0723",
+      "Industria de la minería, extracción y metalurgia" = "0724",
+      "Planes multidisciplinarios o generales del campo de manufacturas y procesos" = "0720",
+      "Arquitectura y urbanismo" = "0731",
+      "Construcción e ingeniería civil" = "0732",
+      "Producción y explotación agrícola y ganadera" = "0811",
+      "Horticultura" = "0812",
+      "Silvicultura" = "0813",
+      "Pesca y acuacultura" = "0814",
+      "Planes multidisciplinarios o generales del campo de agronomía, horticultura, silvicultura y pesca" = "0810",
+      "Veterinaria" = "0821",
+      "Medicina general" = "0911",
+      "Medicina homeopática" = "0912",
+      "Medicina de especialidad" = "0913",
+      "Enfermería general y obstetricia" = "0921",
+      "Enfermería de especialidad" = "0922",
+      "Estomatología y odontología general" = "0931",
+      "Estomatología y odontología de especialidad" = "0932",
+      "Terapia y rehabilitación" = "0941",
+      "Nutrición" = "0942",
+      "Tratamientos alternativos y acupuntura" = "0943",
+      "Planes multidisciplinarios o generales del campo de terapia, rehabilitación y tratamientos alternativos" = "0940",
+      "Atención prehospitalaria y emergencias médicas" = "0951",
+      "Biomedicina" = "0952",
+      "Diagnóstico médico y tecnología del tratamiento" = "0953",
+      "Farmacia" = "0954",
+      "Audiometría y optometría" = "0955",
+      "Salud pública" = "0956",
+      "Planes multidisciplinarios o generales del campo de disciplinas auxiliares para la salud" = "0950",
+      "Deportes" = "1011",
+      "Servicios funerarios" = "1012",
+      "Servicios de cuidado personal y belleza" = "1013",
+      "Servicios de apoyo y asistencia administrativa" = "1014",
+      "Gastronomía y servicios de alimentos" = "1015",
+      "Hospitalidad y turismo" = "1016",
+      # "Planes multidisciplinarios o generales del campo de servicios personales y deportes" = "1010",
+      "Servicios de transporte" = "1021",
+      "Seguridad para el trabajo" = "1031",
+      "Seguridad pública" = "1041",
+      "Servicios militares" = "1042",
+      # nivel no registrado en INEGI(2016)
+      "No sabe" = "9999"
+    )
+  ) %>% 
+  count(carrera3, sort = TRUE)
+```
+
+Se observa un número mayor de individuos con carreras relacionada a la Contabilidad y fiscalización, seguido de Derecho y Administración de empresas. Si analizamos la literatura de sobre-educación para el caso mexicano, se encontrará poca variación en las profesiones demandadas (¿u ofertadas?) en el mercado laboral mexicano, por ejemplo véase @hernandezlaos2004; @hernandezviverosyelizondo2023, lo que nos permite establecer una hipótesis: existe un mayor número de jóvenes profesionistas sobre-educados pertenecientes a la carrera de "Administración y negocios". 
+
+```{r}
+# sdem <- sdem %>% 
+#   mutate(
+#     carrera3 = factor(carrera3),
+#     carrera3 = fct_recode(
+#       carrera3,
+#       "Diseño curricular y pedagogía" = "0111",
+#       "Planeación, evaluación e investigación educativa" = "0112",
+#       "Orientación e intervención educativa" = "0113",
+#       "Tecnología y comunicación educativa" = "0114",
+#       "Ciencias de la educación" = "0115",
+#       "Planes multidisciplinarios o generales del campo de ciencias de la educación y pedagogía" = "0110",
+#       "Formación docente en educación básica, nivel preescolar" = "0121",
+#       "Formación docente en educación básica, nivel primaria" = "0122",
+#       "Formación docente en educación básica, nivel secundaria" = "0123",
+#       "Formación docente en educación media superior" = "0124",
+#       "Formación docente en educación superior" = "0125",
+#       "Formación docente en la enseñanza de asignaturas específicas" = "0126",
+#       "Formación docente en otros servicios educativos" = "0127",
+#       "Planes multidisciplinarios o generales del campo de formación docente" = "0120",
+#       "Bellas artes" = "0211",
+#       "Artes escénicas" = "0212",
+#       "Música" = "0213",
+#       "Tecnologías audiovisuales para medios de comunicación" = "0214",
+#       "Diseño y comunicación gráfica y editorial" = "0215",
+#       "Diseño industrial, de moda e interiores" = "0216",
+#       "Artesanía tradicional y manualidades" = "0217",
+#       "Planes multidisciplinarios o generales del campo de artes" = "0210",
+#       "Teología" = "0221",
+#       "Adquisición de idiomas extranjeros" = "0222",
+#       "Literatura" = "0223",
+#       "Lingüística" = "0224",
+#       "Historia y arqueología" = "0225",
+#       "Filosofía y ética" = "0226",
+#       "Planes multidisciplinarios o generales del campo de humanidades" = "0220",
+#       "Psicología" = "0311",
+#       "Sociología y antropología" = "0312",
+#       "Ciencias políticas" = "0313",
+#       "Economía" = "0314",
+#       "Trabajo y atención social" = "0315",
+#       "Planes multidisciplinarios o generales del campo de ciencias sociales y estudios del comportamiento" = "0310",
+#       "Comunicación y periodismo" = "0321",
+#       "Biblioteconomía y archivonomía" = "0322",
+#       "Derecho" = "0331",
+#       "Criminología y criminalística" = "0332",
+#       "Negocios y comercio" = "0411",
+#       "Mercadotecnia y publicidad" = "0412",
+#       "Finanzas, banca y seguros" = "0413",
+#       "Contabilidad y fiscalización" = "0414",
+#       "Planes multidisciplinarios o generales del campo de negocios y contabilidad" = "0410",
+#       "Administración de empresas" = "0421",
+#       "Administración turística y de restaurantes" = "0422",
+#       "Administración pública" = "0423",
+#       "Administración en el ámbito de la ingeniería y la construcción" = "0424",
+#       "Administración en los campos de la educación, salud, deporte, agronomía y las artes y humanidades" = "0425",
+#       "Planes multidisciplinarios o generales del campo de administración y gestión" = "0420",
+#       "Biología" = "0511",
+#       "Bioquímica y biofísica" = "0512",
+#       "Ecología y ciencias ambientales" = "0513",
+#       "Planes multidisciplinarios o generales del campo de ciencias biológicas y ambientales" = "0510",
+#       "Física y astronomía" = "0521",
+#       "Química" = "0522",
+#       "Ciencias de la tierra y de la atmósfera" = "0523",
+#       "Planes multidisciplinarios o generales del campo de ciencias físicas, químicas y de la tierra" = "0520",
+#       "Matemáticas" = "0531",
+#       "Estadística y actuaría" = "0532",
+#       "Ciencias computacionales" = "0611",
+#       "Desarrollo de hardware" = "0612",
+#       "Desarrollo de software" = "0613",
+#       "Planes multidisciplinarios o generales del campo de innovación en tecnologías de la información y la comunicación" = "0610",
+#       "Telecomunicaciones" = "0621",
+#       "Informática" = "0622",
+#       "Soporte y servicios de mantenimiento a las tecnologías de la información y comunicación" = "0623",
+#       "Planes multidisciplinarios o generales del campo de implementación de las tecnologías de la información y la comunicación" = "0620",
+#       "Mecánica y profesiones afines al trabajo metálico" = "0711",
+#       "Electricidad y generación de energía" = "0712",
+#       "Electrónica, automatización y aplicaciones de la mecánica-eléctrica" = "0713",
+#       "Ingeniería de procesos químicos" = "0714",
+#       "Vehículos, barcos y aeronaves motorizadas" = "0715",
+#       "Tecnología para la protección del medio ambiente" = "0716",
+#       "Ingeniería industrial" = "0717",
+#       "Planes multidisciplinarios o generales del campo de ingeniería mecánica, eléctrica, electrónica, química y profesiones afines" = "0710",
+#       "Industria de la alimentación" = "0721",
+#       "Industria textil, del calzado y piel" = "0722",
+#       "Industrias de materiales diversos (cerámica, madera, plástico y vidrio)" = "0723",
+#       "Industria de la minería, extracción y metalurgia" = "0724",
+#       "Planes multidisciplinarios o generales del campo de manufacturas y procesos" = "0720",
+#       "Arquitectura y urbanismo" = "0731",
+#       "Construcción e ingeniería civil" = "0732",
+#       "Producción y explotación agrícola y ganadera" = "0811",
+#       "Horticultura" = "0812",
+#       "Silvicultura" = "0813",
+#       "Pesca y acuacultura" = "0814",
+#       "Planes multidisciplinarios o generales del campo de agronomía, horticultura, silvicultura y pesca" = "0810",
+#       "Veterinaria" = "0821",
+#       "Medicina general" = "0911",
+#       "Medicina homeopática" = "0912",
+#       "Medicina de especialidad" = "0913",
+#       "Enfermería general y obstetricia" = "0921",
+#       "Enfermería de especialidad" = "0922",
+#       "Estomatología y odontología general" = "0931",
+#       "Estomatología y odontología de especialidad" = "0932",
+#       "Terapia y rehabilitación" = "0941",
+#       "Nutrición" = "0942",
+#       "Tratamientos alternativos y acupuntura" = "0943",
+#       "Planes multidisciplinarios o generales del campo de terapia, rehabilitación y tratamientos alternativos" = "0940",
+#       "Atención prehospitalaria y emergencias médicas" = "0951",
+#       "Biomedicina" = "0952",
+#       "Diagnóstico médico y tecnología del tratamiento" = "0953",
+#       "Farmacia" = "0954",
+#       "Audiometría y optometría" = "0955",
+#       "Salud pública" = "0956",
+#       "Planes multidisciplinarios o generales del campo de disciplinas auxiliares para la salud" = "0950",
+#       "Deportes" = "1011",
+#       "Servicios funerarios" = "1012",
+#       "Servicios de cuidado personal y belleza" = "1013",
+#       "Servicios de apoyo y asistencia administrativa" = "1014",
+#       "Gastronomía y servicios de alimentos" = "1015",
+#       "Hospitalidad y turismo" = "1016",
+#       # "Planes multidisciplinarios o generales del campo de servicios personales y deportes" = "1010",
+#       "Servicios de transporte" = "1021",
+#       "Seguridad para el trabajo" = "1031",
+#       "Seguridad pública" = "1041",
+#       "Servicios militares" = "1042",
+#       # nivel no registrado en INEGI(2016)
+#       "No sabe" = "9999"
+#     )
+#   )
+```
+
+## 11.6 SINCO: grupo división
+
+Ahora, se renombran los niveles. Empecemos con el grupo ocupacional de mayor agregación: división.
+
+```{r}
+coe1 %>% 
+  transmute(
+    ocupacion1 = factor(ocupacion1),
+    ocupacion1 = fct_recode(
+      ocupacion1, 
+      "Funcionarios, directores y jefes" = "1",
+      "Profesionistas y técnicos" = "2",
+      "Trabajadores auxiliares en actividades administrativas" = "3",
+      "Comerciantes, empleados en ventas y agentes de ventas" = "4",
+      "Trabajadores en servicios personales y de vigilancia" = "5",
+      "Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca" = "6",
+      "Trabajadores artesanales, en la construcción y otros oficios" = "7",
+      "Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte" = "8",
+      "Trabajadores en actividades elementales y de apoyo" = "9"
+    )
+  ) %>% 
+  count(ocupacion1, sort = TRUE)
+```
+
+Existen más individuos encuestados pertenecientes al grupo ocupacional "Trabajadores en actividades elementales y de apoyo" seguido de "Profesionistas y técnicos".
+
+```{r}
+# coe1 <- coe1 %>% 
+#   mutate(
+#     ocupacion1 = factor(ocupacion1),
+#     ocupacion1 = fct_recode(
+#       ocupacion1, 
+#       "Funcionarios, directores y jefes" = "1",
+#       "Profesionistas y técnicos" = "2",
+#       "Trabajadores auxiliares en actividades administrativas" = "3",
+#       "Comerciantes, empleados en ventas y agentes de ventas" = "4",
+#       "Trabajadores en servicios personales y de vigilancia" = "5",
+#       "Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca" = "6",
+#       "Trabajadores artesanales, en la construcción y otros oficios" = "7",
+#       "Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte" = "8",
+#       "Trabajadores en actividades elementales y de apoyo" = "9"
+#     )
+#   )
+```
+
+## 11.7 SINCO: grupo principal
+
+Ahora, procedemos al segundo grupo ocupacional: principal compuesto por 52 niveles
+
+```{r}
+coe1 %>% 
+  transmute(
+    ocupacion2 = factor(ocupacion2),
+    ocupacion2 = fct_recode(
+      ocupacion2,
+      "Funcionarios y altas autoridades de los sectores público, privado y social" = "11",
+      "Directores y gerentes en servicios financieros, legales, administrativos y sociales" = "12",
+      "Directores y gerentes en producción, tecnología y transporte" = "13",
+      "Directores y gerentes de ventas, restaurantes, hoteles y otros establecimientos" = "14",
+      "Coordinadores y jefes de área en servicios financieros, administrativos y sociales" = "15",
+      "Coordinadores y jefes de área en producción y tecnología" = "16",
+      "Coordinadores y jefes de área de ventas, restaurantes, hoteles y otros establecimientos" = "17",
+      "Otros directores, funcionarios, gerentes, coordinadores y jefes de área, no clasificados anteriormente" = "19",
+      "Profesionistas en ciencias económico-administrativas, ciencias sociales, humanistas y en artes" = "21",
+      "Investigadores y profesionistas en ciencias exactas, biológicas, ingeniería, informática y en telecomunicaciones" = "22",
+      "Profesores y especialistas en docencia" = "23",
+      "Médicos, enfermeras y otros especialistas en salud" = "24",
+      "Auxiliares y técnicos en ciencias económico-administrativas, ciencias sociales, humanistas y en artes" = "25",
+      "Auxiliares y técnicos en ciencias exactas, biológicas, ingeniería, informática y en telecomunicaciones" = "26",
+      "Auxiliares y técnicos en educación, instructores y capacitadores" = "27",
+      "Enfermeras, técnicos en medicina y trabajadores de apoyo en salud" = "28",
+      "Otros profesionistas y técnicos no clasificados anteriormente" = "29",
+      "Supervisores de personal de apoyo administrativo, secretarias, capturistas, cajeros y trabajadores de control de archivo y transporte" = "31",
+      "Supervisores y trabajadores que brindan y manejan información" = "32",
+      "Otros trabajadores auxiliares en actividades administrativas, no clasificados anteriormente" = "39",
+      "Comerciantes en establecimientos" = "41",
+      "Empleados de ventas en establecimientos" = "42",
+      "Trabajadores en servicios de alquiler" = "43",
+      "Otros comerciantes, empleados en ventas y agentes de ventas en establecimiento, no clasificados anteriormente" = "49",
+      "Trabajadores en la preparación y servicio de alimentos y bebidas, así como en servicios de esparcimiento y de hotelería" = "51",
+      "Trabajadores en cuidados personales y del hogar" = "52",
+      "Trabajadores en servicios de protección y vigilancia" = "53",
+      "Trabajadores de la Armada, Ejército y Fuerza Aérea" = "54",
+      "Trabajadores en actividades agrícolas y ganaderas" = "61",
+      "Trabajadores en actividades pesqueras, forestales, caza y similares" = "62",
+      "Operadores de maquinaria agropecuaria y forestal" = "63",
+      "Otros trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca, no clasificados anteriormente" = "69",
+      "Trabajadores en la extracción y la edificación de construcciones" = "71",
+      "Artesanos y trabajadores en el tratamiento y elaboración de productos de metal" = "72",
+      "Artesanos y trabajadores en la elaboración de productos de madera, papel, textiles y de cuero y piel" = "73",
+      "Artesanos y trabajadores en la elaboración de productos de hule, caucho, plásticos y de sustancias químicas" = "74",
+      "Trabajadores en la elaboración y procesamiento de alimentos, bebidas y productos de tabaco" = "75",
+      "Artesanos y trabajadores en la elaboración de productos de cerámica, vidrio, azulejo y similares" = "76",
+      "Otros trabajadores artesanales no clasificados anteriormente" = "79",
+      "Operadores de instalaciones y maquinaria industrial" = "81",
+      "Ensambladores y montadores de herramientas, maquinaria, productos metálicos y electrónicos" = "82",
+      "Conductores de transporte y de maquinaria móvil" = "83",
+      "Otros operadores de maquinaria industrial, ensambladores y conductores de transporte, no clasificados anteriormente" = "89",
+      "Trabajadores de apoyo en actividades agropecuarias, forestales, pesca y caza" = "91",
+      "Trabajadores de apoyo en la minería, construcción e industria" = "92",
+      "Ayudantes de conductores de transporte, conductores de transporte de tracción humana y animal y cargadores" = "93",
+      "Ayudantes en la preparación de alimentos" = "94",
+      "Vendedores ambulantes" = "95",
+      "Trabajadores domésticos, de limpieza, planchadores y otros trabajadores de limpieza" = "96",
+      "Trabajadores de paquetería, de apoyo para espectáculos, mensajeros y repartidores de mercancías" = "97",
+      "Otros trabajadores en actividades elementales y de apoyo, no clasificados anteriormente" = "98",
+      "Ocupaciones no especificadas" = "99"
+    )
+  ) %>% 
+  count(ocupacion2, sort = TRUE)
+```
+
+Se asignan dichas variables a la tabla `coe1`:
+
+```{r}
+# coe1 <- coe1 %>% 
+#   mutate(
+#     ocupacion2 = factor(ocupacion2),
+#     ocupacion2 = fct_recode(
+#       ocupacion2,
+#       "Funcionarios y altas autoridades de los sectores público, privado y social" = "11",
+#       "Directores y gerentes en servicios financieros, legales, administrativos y sociales" = "12",
+#       "Directores y gerentes en producción, tecnología y transporte" = "13",
+#       "Directores y gerentes de ventas, restaurantes, hoteles y otros establecimientos" = "14",
+#       "Coordinadores y jefes de área en servicios financieros, administrativos y sociales" = "15",
+#       "Coordinadores y jefes de área en producción y tecnología" = "16",
+#       "Coordinadores y jefes de área de ventas, restaurantes, hoteles y otros establecimientos" = "17",
+#       "Otros directores, funcionarios, gerentes, coordinadores y jefes de área, no clasificados anteriormente" = "19",
+#       "Profesionistas en ciencias económico-administrativas, ciencias sociales, humanistas y en artes" = "21",
+#       "Investigadores y profesionistas en ciencias exactas, biológicas, ingeniería, informática y en telecomunicaciones" = "22",
+#       "Profesores y especialistas en docencia" = "23",
+#       "Médicos, enfermeras y otros especialistas en salud" = "24",
+#       "Auxiliares y técnicos en ciencias económico-administrativas, ciencias sociales, humanistas y en artes" = "25",
+#       "Auxiliares y técnicos en ciencias exactas, biológicas, ingeniería, informática y en telecomunicaciones" = "26",
+#       "Auxiliares y técnicos en educación, instructores y capacitadores" = "27",
+#       "Enfermeras, técnicos en medicina y trabajadores de apoyo en salud" = "28",
+#       "Otros profesionistas y técnicos no clasificados anteriormente" = "29",
+#       "Supervisores de personal de apoyo administrativo, secretarias, capturistas, cajeros y trabajadores de control de archivo y transporte" = "31",
+#       "Supervisores y trabajadores que brindan y manejan información" = "32",
+#       "Otros trabajadores auxiliares en actividades administrativas, no clasificados anteriormente" = "39",
+#       "Comerciantes en establecimientos" = "41",
+#       "Empleados de ventas en establecimientos" = "42",
+#       "Trabajadores en servicios de alquiler" = "43",
+#       "Otros comerciantes, empleados en ventas y agentes de ventas en establecimiento, no clasificados anteriormente" = "49",
+#       "Trabajadores en la preparación y servicio de alimentos y bebidas, así como en servicios de esparcimiento y de hotelería" = "51",
+#       "Trabajadores en cuidados personales y del hogar" = "52",
+#       "Trabajadores en servicios de protección y vigilancia" = "53",
+#       "Trabajadores de la Armada, Ejército y Fuerza Aérea" = "54",
+#       "Trabajadores en actividades agrícolas y ganaderas" = "61",
+#       "Trabajadores en actividades pesqueras, forestales, caza y similares" = "62",
+#       "Operadores de maquinaria agropecuaria y forestal" = "63",
+#       "Otros trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca, no clasificados anteriormente" = "69",
+#       "Trabajadores en la extracción y la edificación de construcciones" = "71",
+#       "Artesanos y trabajadores en el tratamiento y elaboración de productos de metal" = "72",
+#       "Artesanos y trabajadores en la elaboración de productos de madera, papel, textiles y de cuero y piel" = "73",
+#       "Artesanos y trabajadores en la elaboración de productos de hule, caucho, plásticos y de sustancias químicas" = "74",
+#       "Trabajadores en la elaboración y procesamiento de alimentos, bebidas y productos de tabaco" = "75",
+#       "Artesanos y trabajadores en la elaboración de productos de cerámica, vidrio, azulejo y similares" = "76",
+#       "Otros trabajadores artesanales no clasificados anteriormente" = "79",
+#       "Operadores de instalaciones y maquinaria industrial" = "81",
+#       "Ensambladores y montadores de herramientas, maquinaria, productos metálicos y electrónicos" = "82",
+#       "Conductores de transporte y de maquinaria móvil" = "83",
+#       "Otros operadores de maquinaria industrial, ensambladores y conductores de transporte, no clasificados anteriormente" = "89",
+#       "Trabajadores de apoyo en actividades agropecuarias, forestales, pesca y caza" = "91",
+#       "Trabajadores de apoyo en la minería, construcción e industria" = "92",
+#       "Ayudantes de conductores de transporte, conductores de transporte de tracción humana y animal y cargadores" = "93",
+#       "Ayudantes en la preparación de alimentos" = "94",
+#       "Vendedores ambulantes" = "95",
+#       "Trabajadores domésticos, de limpieza, planchadores y otros trabajadores de limpieza" = "96",
+#       "Trabajadores de paquetería, de apoyo para espectáculos, mensajeros y repartidores de mercancías" = "97",
+#       "Otros trabajadores en actividades elementales y de apoyo, no clasificados anteriormente" = "98",
+#       "Ocupaciones no especificadas" = "99"
+#     )
+#   )
+```
+
+## 11.8 Grupos de edad
+
+```{r}
+# sdem <- sdem %>%
+#   mutate(
+#     edad_7g = case_when(
+#       between(eda, 0, 14) ~ "0 a 14 años",
+#       between(eda, 15, 24) ~ "15 a 24 años",
+#       between(eda, 25, 34) ~ "25 a 34 años",
+#       between(eda, 35, 44) ~ "35 a 44 años",
+#       between(eda, 45, 54) ~ "45 a 54 años",
+#       between(eda, 55, 64) ~ "55 a 65 años",
+#       between(eda, 65, 97) ~ "65 años y más",
+#       # edad no especificada mayores a 12 
+#       eda == "98" ~ "No especificada para mayores de 12 años y más",
+#       # edad no especificada menores a 12
+#       eda == "99" ~ "No especificada para menores de 0 a 11 años",
+#       TRUE ~ NA
+#     )
+#   )
+```
+
+# Resumen
+
+Esta sección del documento consistió en la limpieza de datos, se crearon las siguientes variables:
+
+1. Grupos de edad: `edad_7g`
+2. Carreras: `carrera1`, `carrera2`, `carrera3`
+3. SINCO: `ocupacion1`, `ocupacion2`
+
+Adicional, se definieron las siguientes tablas:
+
+1. Población total: `pob_total`
+2. Población 12 y más: `pob_12ymas`
+3. Unión de las tablas sociodemográficas y del coe: `completo`
+4. Profesionistas: licenciatura, maestría y doctorado: `profesionistas`
+5. Jóvenes: `jovenes`
+
+Además, se tiene el código para renombrar los niveles de las siguientes variables:
+
+* Entidad federativa: `ent`
+* Sexo: `sex`
+* Grupos de edad: `edad_7g`
+* Carreras: campo amplio, específico y detallado `carrera1`, `carrera2`, `carrera3`
+* Grupos ocupacionales (SINCO): grupo división y principal `ocupacion1`, `ocupacion2`
+
+¿Qué sigue? Resolver las preguntas planteadas que señalan las problemáticas que se enfrentan los jóvenes profesionistas.
+
+# Panorama de los jóvenes profesionistas
+
+## 1. Informalidad
+
+¿Cuántos se encuentran en la informalidad?
+
+Según @inegiconociendoenoe2023 p. 21, primero debemos aplicar los siguientes criterios:
+
+```
+r_def == 0 & c_res != 2 & (eda => 15 & eda <= 98), 
+clase2 == 1 
+```
+
+El primero está aplicado a la tabla `completo`, para la edad sólo eliminamos los grupos de edad que no corresponden en la variable `edad_7g`, y sólo aplicamos el criterio `clase2 == 1` que señala a la población ocupada. Haremos este ejemplo breve para jóvenes.
+
+```{r}
+jovenes %>% 
+  filter(clase2 == 1, emp_ppal == 1) %>% 
+  ggplot(aes(cs_p13_1)) + 
+  geom_bar()
+```
+
+
+

@@ -1,0 +1,727 @@
+---
+date: today
+format: html
+---
+
+En este documento se modifica "C:/Prog/tesis/scripts/funciones_v4.R" para añadir la variable `edu_req` que une la educación mínima y máxima requerida. Asimismo, se unen las tablas del análisis descriptivo en una sola.
+
+Listo!!
+
+Se valida
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+# trabajar encuesta compleja dentro de tidyverse 
+library(srvyr)
+# regresión a encuesta compleja
+library(survey)
+# convertir a porcentaje dentro de mutate
+library(scales) 
+# operador entre llaves 
+library(rlang)
+
+source("C:/Prog/tesis/scripts/funciones_v5.R")
+
+pob_15ymas <- read_rds("C:/Prog/tesis/datos/pob_15ymas.rds")
+jovenes_tot <- read_rds("C:/Prog/tesis/datos/jovenes_tot.rds")
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+sinco19 <- read_rds("datos/sinco_19_edu_req.rds")
+```
+
+Se valida modificaciones a través de calcular la incidencia
+
+```{r}
+calcular_incidencia_tot(jovenes_ocu, edu_mismatch_obj)
+```
+
+Los resultados están correctos
+
+Se valida `sinco19`
+
+```{r}
+sinco19
+```
+
+Está correcto
+
+De acuerdo a (Zimmer et. al., 2024: 93-95). La función `map` itera una función `n` veces. Proviene del paquete `purrr`. En mi caso, la función `calcular_tasas_ocu_sub` se utiliza tantas veces para calcular porcentaje de poblaciones especificas. 
+
+```
+# tasas complementarios por grupos
+calcular_tasas_ocu_sub <- function(datos, grupo, campo, valor){
+  datos |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Lo que cambia en esta función es `grupo`, `campo`, `valor`
+
+A primera vista, podría ser así
+
+```
+# tasas complementarios por grupos
+calcular_tasas_ocu_sub <- function(datos, tasa, grupo, campo, valor){
+  datos |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      tasa = tasa,
+      grupo = grupo,
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+El único tema es `grupo` que pasa como caracter. Por tanto, hay que convertir de caracter a expresión de R. ¿Cómo?
+
+Se investiga. De acuerdo a la IA, se utiliza la función `sym`, se valida
+
+De acuerdo a la documentación `rlang::sym`:
+
+"Los símbolos son un tipo de expresión difusa que representa objetos en entornos.
+
+Las funciones `sym()` y `syms()` toman cadenas de texto como entrada y las convierten en símbolos."
+
+Los símbolos se encuentran presentes en funciones como argumentos. Por tanto, `sym` convierte cadenas de texto a argumentos para utilizar con los operadores de enmascaramiento de datos
+
+Por tanto, la función quedaría así
+
+```
+# tasas complementarios por grupos
+calcular_tasas_ocu_sub <- function(datos, tasa, grupo, campo, valor){
+  datos |> 
+    grupo <- sym(grupo)
+  
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      tasa = tasa,
+      grupo = as_name(grupo),
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Ahora se investiga paquete `map`, principalmente para iterar la función que contiene más de un argumento
+
+```{r}
+# system.file(package = "purrr")
+library(purrr)
+
+?purrr::map
+```
+
+De acuerdo a la IA, para iterar una función con múltiples argumentos se utiliza `pmap`. Asimismo, los argumentos se ingresan en formato lista o marco de datos (data frame). Pero, para aplicarlo con el operador entre llaves, debe convertirse cada variable del data frame como símbolo mediante `sym`.
+
+```{r}
+data.frame(
+  tasa = "tp",
+  grupo = "mujer", 
+  campo = "clase1", 
+  valor = 1
+)
+
+list(
+  tasa = "tp",
+  grupo = "mujer", 
+  campo = "clase1", 
+  valor = 1
+)
+```
+
+¿Cómo añadir elementos extras al `data frame`?
+
+La función podría quedar así
+
+```
+# tasas complementarios por grupos
+calcular_tasas_ocu_sub <- function(datos, tasa, grupo, campo, valor){
+  datos |> 
+    grupo <- sym(grupo)
+    campo <- sym(campo)
+    valor <- as_integer(valor)
+  
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      tasa = tasa
+      grupo = as_name(grupo),
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Se hace un intento con `mujer`
+
+```{r}
+# tasas complementarios por grupos
+funcion_vgr <- function(datos, grupo, nombre, campo, valor){
+    grupo <- sym(grupo)
+    campo <- sym(campo)
+    valor <- as_integer(valor)
+  
+    datos |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      grupo = as_name(grupo),
+      nombre = nombre,
+      numerador = sum(ponderador[{{  campo  }} == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Se calcula tasa de participación
+
+```{r}
+valores <- list(
+  grupo = "mujer", 
+  nombre = "tp",
+  campo = "clase1", 
+  valor = 1
+)
+
+valores |> 
+  pmap(~ funcion_vgr(datos = jovenes_tot, grupo = valores$grupo, nombre = valores$nombre, campo = valores$campo, valor = valores$valor))
+```
+
+Podría ser útil ya que sólo modifico la lista y ya, pero quiero poner todos los valores que quiero calcular en un solo marco de datos
+
+Para crear un `data frame` se crean primero los vectores que contienen las entradas y después se une mediante `data.frame`
+
+La IA brinda las siguientes sugerencias:
+
+```
+library(dplyr)
+library(purrr)
+library(rlang)
+
+funcion_vgr <- function(datos, grupo, nombre, campo, valor){
+  # Convertimos las cadenas a símbolos
+  grupo_sym <- sym(grupo)
+  campo_sym <- sym(campo)
+  valor <- as.integer(valor) # Corregido as_integer por as.integer estándar
+  
+  datos |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(!!grupo_sym) |> # Usamos !! para inyectar el símbolo
+    summarise(
+      # Guardamos el nombre de la variable de agrupación
+      variable_grupo = grupo, 
+      # Renombramos la columna dinámica a un nombre fijo "categoria" para poder unir las tablas después
+      categoria = as.character(!!grupo_sym), 
+      nombre = nombre,
+      # Sumamos el ponderador solo donde se cumple la condición
+      numerador = sum(ponderador[!!campo_sym == valor], na.rm = TRUE),
+      denominador = sum(ponderador, na.rm = TRUE),
+      tasa = numerador / denominador,
+      .groups = "drop"
+    )
+}
+
+```
+
+Menciona que los valores pueden ingresarse directamente en un `tibble`
+
+Asimismo menciona que:
+
+* operador entre llaves (curly-curly) se usa para expresiones que no tienen comillas
+* operador bang-bang se utiliza para expresiones que tienen comillas y se convirtieron a símbolo
+
+Además, conviene añadir `categoria` para unir después
+
+Se hace esta nueva aproximación
+
+```{r}
+# tasas complementarios por grupos
+funcion_vgr <- function(datos, grupo, nombre, campo, valor){
+    grupo_sym <- sym(grupo)
+    campo_sym <- sym(campo)
+    valor <- as.integer(valor)
+  
+    datos |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(  !!grupo_sym  ) |> 
+    summarise(
+      grupo = grupo,
+      nombre = nombre,
+      numerador = sum(ponderador[  !!campo_sym  == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador,
+      .groups = "drop"
+    ) |> 
+    rename("subgrupo" :=  !!grupo_sym  ) |> 
+      relocate(subgrupo, .after = grupo)
+}
+```
+
+Se define el `tibble`
+
+```{r}
+valores <- tribble(
+  ~grupo, ~nombre, ~campo, ~valor, 
+  # ---
+  "mujer", "tp", "clase1", 1
+)
+```
+
+Iterar mediante `pmap` se hace así
+
+```
+resultados_finales <- plan_calculo |> 
+  pmap(function(grupo, nombre, campo, valor) {
+    funcion_vgr(
+      datos = jovenes_tot, 
+      grupo = grupo, 
+      nombre = nombre, 
+      campo = campo, 
+      valor = valor
+    )
+  }) |> 
+  list_rbind()
+```
+
+Se realiza intento
+
+```{r}
+valores |> 
+  pmap(function(grupo, nombre, campo, valor){
+    funcion_vgr(
+      datos = jovenes_tot,
+      grupo = grupo,
+      nombre = nombre,
+      campo = campo,
+      valor = valor
+    )    
+  }
+)
+```
+
+Con la sugerencia de Gemini, arrojaba error, se renombró la columna después de resumir y sí se obtuvo la tasa de forma correcta. Tal proceso de renombrar se siguió el ejemplo de (Zimmer et. al., 2024). Se le pregunta a la IA el operador `:=`
+
+Según la IA:
+
+"El operador := se conoce formalmente como el operador de asignación por morsa (o walrus operator en inglés) y se utiliza en el Tidyverse para asignar nombres a columnas de forma dinámica utilizando variables o expresiones Tidyverse evolutions: curly-curly operator and pivoting (feat. TidyTuesday Data, Leaflet, Visuals)."
+
+En resumen, el operador de asignación por mosa permite asignar nombres a variables enmascaradas.
+
+Ahora, se expande el `tibble` que contiene los argumentos de la función
+
+```{r}
+valores <- tribble(
+  ~grupo, ~nombre, ~campo, ~valor, 
+  # ---
+  "mujer", "tp", "clase1", 1,
+  "mujer", "til1", "emp_ppal", 1 
+)
+```
+
+Se valida
+
+```{r}
+valores |> 
+  pmap(function(grupo, nombre, campo, valor){
+    funcion_vgr(
+      datos = jovenes_tot,
+      grupo = grupo,
+      nombre = nombre,
+      campo = campo,
+      valor = valor
+    )    
+  }
+)
+```
+
+Para TCCO debo añadir el operador y en TIL1 cambia la población objetivo. También se puede hacer dinámico, pero para eso se requiere `get` del paquete `base`.
+
+Dicha función: "Buscar por nombre un objeto (get) o cero o más objetos (mget)." 
+
+El argumento `envir` especifica en dónde se buscará dicho elemento.
+
+Por su parte, `parent.frame`: 
+
+"Estas funciones proporcionan acceso a entornos (o "marcos" en la terminología de S) asociados con funciones que se encuentran más arriba en la pila de llamadas."
+
+Permite buscar en el entorno donde están los marcos de datos
+
+```
+library(dplyr)
+library(purrr)
+library(rlang)
+
+# Función adaptada para recibir el nombre del data frame como texto
+funcion_vgr <- function(datos, grupo, nombre, campo, valor){
+    # get(datos) busca el objeto de texto (ej. "jovenes_tot") en el entorno y trae el data frame real
+    df_real <- get(datos, envir = parent.frame()) 
+    
+    grupo_sym <- sym(grupo)
+    campo_sym <- sym(campo)
+    valor <- as.integer(valor)
+  
+    df_real |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(!!grupo_sym) |> 
+    summarise(
+      datos_origen = datos, # Opcional: añade una columna para saber de qué data frame vino
+      grupo = grupo,
+      nombre = nombre,
+      numerador = sum(ponderador[!!campo_sym == valor], na.rm = TRUE),
+      denominador = sum(ponderador, na.rm = TRUE),
+      tasa = numerador / denominador,
+      .groups = "drop"
+    ) |> 
+    rename("subgrupo" := !!grupo_sym) |> 
+    relocate(subgrupo, .after = grupo)
+}
+```
+
+Como se observa, el código no se modifica mucho
+
+Por su parte, `pmap` se nombra así
+
+```
+resultados_finales <- valores |> 
+  pmap(funcion_vgr) |> 
+  list_rbind()
+
+# Visualizar el resultado integrado
+print(resultados_finales)
+```
+
+Como se observa, se reduce la función `pmap` ya que el vector, lista o marco de datos contiene todos los argumentos de la función
+
+Se validan cambios
+
+```{r}
+# tasas complementarios por grupos
+funcion_vgr <- function(datos, grupo, nombre, campo, valor){
+    # busca el tibble especificado por el usuario
+    poblacion <- get(datos)
+    # pasa de cadena de texto a símbolo
+    grupo_sym <- sym(grupo)
+    campo_sym <- sym(campo)
+    valor <- as.integer(valor)
+  
+    poblacion |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(  !!grupo_sym  ) |> 
+    summarise(
+      grupo = grupo,
+      nombre = nombre,
+      numerador = sum(ponderador[  !!campo_sym  == valor]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador,
+      # elimina agrupación
+      .groups = "drop"
+    ) |> 
+      # renombra columna que contiene valores del grupo
+    rename("subgrupo" :=  !!grupo_sym  ) |> 
+      relocate(subgrupo, .after = grupo)
+}
+```
+
+También se cambia `tibble`
+
+```{r}
+valores <- tribble(
+  ~datos, ~grupo, ~nombre, ~campo, ~valor, 
+  # ---
+  "jovenes_tot", "mujer", "tp", "clase1", 1,
+  "jovenes_ocu", "mujer", "til1", "emp_ppal", 1 
+)
+```
+
+Se valida
+
+```{r}
+valores |> 
+  pmap(funcion_vgr)
+```
+
+Está correcto!!!
+
+Por último, se unen con `list_rbind()`. Dicha función:
+
+"combina elementos en un marco de datos mediante la unión de filas con `vctrs::vec_rbind()`."
+
+Se valida
+
+```{r}
+valores |> 
+  pmap(funcion_vgr) |> 
+  list_rbind()
+```
+
+Sí!!!!
+
+Ahora queda pendiente TCCO
+
+La función original es:
+
+```
+# tasas complementarias con operador
+calcular_tasas_ocup_operador <- function(datos, nombre, campo, operador, valor){
+  # concatenar
+  filtro <- paste(campo, operador, valor)
+  
+  datos |>
+    mutate(ponderador = as.double(fac_tri)) |>
+    summarise(
+      nombre = nombre,
+      numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+```
+
+Lo que hace `parse_expr` convierte una cadena de texto a una expresión
+
+En este caso quedaría así
+
+```
+calcular_tasas_ocup_operador <- function(datos, grupo, nombre, campo, operador, valor){
+  # busca el tibble especificado por el usuario
+  poblacion <- get(datos)
+  # pasa de cadena de texto a símbolo
+  grupo_sym <- sym(grupo)
+  # concatena
+  filtro <- paste(campo, operador, valor)
+  
+  poblacion |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(  !!grupo_sym  ) |> 
+    summarise(
+      grupo = grupo,
+      nombre = nombre,
+      numerador = sum(ponderador[  !!parse_expr(filtro)  ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador,
+      # elimina agrupación
+      .groups = "drop"
+    ) |> 
+      # renombra columna que contiene valores del grupo
+    rename("subgrupo" :=  !!grupo_sym  ) |> 
+      relocate(subgrupo, .after = grupo)
+}
+```
+
+El tibble quedaría así
+
+```{r}
+valores2 <- tribble(
+  ~datos, ~grupo, ~nombre, ~campo, ~operador, ~valor, 
+  # ---
+  "jovenes_ocu", "mujer", "til1", "tcco", "!=", 0 
+)
+```
+
+Se valida
+
+```{r}
+funcion_vgr2 <- function(datos, grupo, nombre, campo, operador, valor){
+  # busca el tibble especificado por el usuario
+  poblacion <- get(datos)
+  # pasa de cadena de texto a símbolo
+  grupo_sym <- sym(grupo)
+  # concatena
+  filtro <- paste(campo, operador, valor)
+  
+  poblacion |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(  !!grupo_sym  ) |> 
+    summarise(
+      grupo = grupo,
+      nombre = nombre,
+      numerador = sum(ponderador[  !!parse_expr(filtro)  ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador,
+      # elimina agrupación
+      .groups = "drop"
+    ) |> 
+      # renombra columna que contiene valores del grupo
+    rename("subgrupo" :=  !!grupo_sym  ) |> 
+      relocate(subgrupo, .after = grupo)
+}
+```
+
+Se hace intento
+
+```{r}
+pmap(valores2, funcion_vgr2)
+```
+
+Listo!!!
+
+De echo puede quedarse esa función para el caso general. Facilita el código para crear la función
+
+Para iterar el tamaño de la muestra
+
+```
+ANTES
+# Tamaño de la muestra
+calcular_total <- function(datos){
+  datos |> 
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL)
+    )
+}
+
+AHORA
+calcular_total <- function(datos){
+  poblacion <- get(datos)
+  
+  poblacion |> 
+    summarise(
+      poblacion = datos,
+      n = n(),
+      tot = survey_total(vartype = NULL)
+    )
+}
+```
+
+Se valida
+
+```{r}
+funcion_vgr3 <- function(datos){
+  poblacion <- get(datos)
+  
+  poblacion |> 
+    summarise(
+      poblacion = datos,
+      n = n(),
+      tot = survey_total(vartype = NULL)
+    )
+}
+```
+
+```{r}
+c("jovenes_tot") |> 
+  map(funcion_vgr3)
+```
+
+Correcto
+
+Para calcular la proporción
+
+```
+# antes
+# Variables dicotómicas o categóricas
+calcular_prop <- function(datos, variable){
+  datos |>
+    group_by({{  variable  }}) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    )
+}
+```
+
+AHORA
+
+```
+# Variables dicotómicas o categóricas
+calcular_prop <- function(datos, variable){
+  poblacion <- get(datos)
+  variable <- sym(variable)
+  
+  poblacion |>
+    group_by(  !!variable  ) |>
+    summarise(
+      poblacion = datos,
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    ) |> 
+    rename("variable :=  !!variable  )
+}
+```
+
+Se valida
+
+```{r}
+funcion_vgr4 <- function(datos, grupo){
+  poblacion <- get(datos)
+  grupo_sym <- sym(grupo)
+  
+  poblacion |>
+    group_by(  !!grupo_sym  ) |>
+    summarise(
+      poblacion = datos,
+      grupo = grupo,
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    ) |> 
+    rename("valor" :=  !!grupo_sym  ) |> 
+    relocate(valor, .after = grupo)
+}
+```
+
+```{r}
+map2("jovenes_tot", "clase1", funcion_vgr4)
+```
+
+Correcto!!!
+
+Por último
+
+`prop_sub`
+
+```{r}
+funcion_vgr5 <- function(datos, grupo, subgrupo){
+  poblacion <- get(datos)
+  grupo_sym <- sym(grupo)
+  subgrupo_sym <- sym(subgrupo)
+  
+  poblacion |>
+    group_by(  !!grupo_sym  ,  !!subgrupo_sym  ) |>
+    summarise(
+      poblacion = datos,
+      gpo_lab = grupo,
+      sub_lab = subgrupo,
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL),
+      .groups = "drop"
+    ) |>
+    rename(
+      "gpo_val" :=  !!grupo_sym,
+      "sub_val" :=  !!subgrupo_sym
+    ) |> 
+    relocate(gpo_val, .after = sub_lab) |> 
+    relocate(sub_val, .before = n)
+}
+```
+
+```{r}
+list("jovenes_tot", "clase1", "clase2") |> 
+  pmap(funcion_vgr5)
+```
+
+Listo!!!
+
+Se añadirá a una nueva versión de `funciones`
+
+
+

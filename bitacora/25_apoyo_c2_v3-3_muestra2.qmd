@@ -1,0 +1,524 @@
+---
+date: today
+---
+
+Este documento es una continuación de "C:/Prog/tesis/25_apoyo_c2_v3-3_muestra.qmd", se realizarán los siguientes pendientes
+
+Cuántos individuos reportan estudios previos
+Cuántos reportan si concluyeron exitosamente el nivel educativo reportado,
+Cuántos reportaron carrera técnica y estudios previos de secundaria
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/25_importacion_v10.R")
+source("scripts/25_construccion_tablas_v10.R")
+source("scripts/25_funciones_v11.R")
+```
+
+INDIVIDUOS REPORTAN ESTUDIOS PREVIOS
+
+Se selecciona jóvenes de la muestra original
+
+```{r}
+jov_orig <- ocupada |> 
+  mutate(
+    educacion = as.integer(cs_p13_1),
+    fac_tri = as.double(fac_tri)
+    # educacion = if_else(educacion == 5, 7, educacion)
+  ) |> 
+  filter(between(edad, 25, 34) & between(educacion, 5, 9))
+```
+
+
+Se valida 
+
+```{r}
+jov_orig |> 
+  group_by(cs_p15) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+De la muestra original, sólo el 6% no especifica los estudios previos, incluye NA y No sabe
+
+INDIVIDUOS QUE REPORTARON SITUACIÓN DE EGRESO
+
+```{r}
+jov_orig |> 
+  group_by(cs_p16) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot) * 100)
+```
+
+
+Solamente el 0.3% no reporta situación de egreso, el 83.8% menciona que sí concluyó y el 15.9% menciona que no
+
+INDIVIDUOS CON CARRERA TÉCNICA Y ESTUDIOS PREVIOS
+
+```{r}
+jov_orig |> 
+  filter(educacion == 6) |> 
+  group_by(cs_p15) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot) * 100)
+```
+
+Del total de individuos que reportan carrera técnica, el 65.1% reporta estudios previos de secundaria, el 34.6% estudios de preparatoria y solamente el 0.3% no especifica. 
+
+```{r}
+jov_orig |> 
+  group_by(educacion) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot) * 100)
+```
+
+Ahora se validará el tamaño de la muestra considerando solamente los que reportaron ingreso
+
+```{r}
+general <- construir_variables(ocupada)
+general <- asignar_edu_mismatch(general, ciuo08)
+
+jovenes <- seleccionar_jov(general)
+```
+
+Se valida tamaño de la muestra
+
+```{r}
+calc_total <- function(datos){
+  datos_proc <- datos |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+  return(datos_proc)
+}
+```
+
+```{r}
+# calc_total(jovenes)
+```
+
+Me di cuenta de un error. Al calcular el tamaño de la muestra de jóvenes con la función `seleccionar_jov` arroja:
+
+* n: 12,958
+* tot: 3,852,118
+
+Se observa que es distinto al mostrado en C:/Prog/tesis/25_apoyo_c2_v3-3_muestra.qmd, ahí arroja
+
+* n: 15,138
+* tot: 4,453,805
+
+Es decir, tengo cifras distintas ¿por qué? al observar la función
+
+```
+## Tabla jóvenes --------------------------------------------------------------
+
+seleccionar_jov <- function(datos){
+  datos_procesados <- datos |> 
+    # se define jóvenes a personas de 25 a 34 años 
+    # egresados de educación superior
+    filter(
+      edad_7g == "3" & 
+        (educacion == "6" | educacion == "7" | 
+           educacion == "8" | educacion == "9")
+    )
+  return(datos_procesados)
+}
+```
+
+Se selecciona el valor 3 de `edad_7g`, pero dicho valor corresponde a otro grupo de edad
+
+```
+ # grupos de edad ----
+  datos_procesados <- datos_procesados |> 
+    mutate(
+      # 98 y 99 indican edad no especificada
+      # se convierten a NA para evitar errores de cálculo en exper
+      edad = if_else(edad == 98 | edad == 99, NA, edad),
+      # para crear grupo de jóvenes 25-34 años OECD(2019: 135) 
+      # y comparar incidencia por grupos de edad
+      edad_7g = case_when(
+        between(edad, 15, 24) ~ 1,
+        between(edad, 25, 34) ~ 2,
+        between(edad, 35, 44) ~ 3,
+        between(edad, 45, 54) ~ 4,
+        between(edad, 55, 64) ~ 5,
+        between(edad, 65, 97) ~ 6,
+        # valor 7 indica no especificado
+        TRUE ~ 7
+      )
+    )
+```
+
+Corresponde a individuos de 35 a 44 años, es decir, NO es mi población objetivo.
+
+Se corrige dicha situación en el archivo "C:/Prog/tesis/scripts/25_funciones_v11.R", y se vuelve a correr el código
+
+```{r}
+calc_total(jovenes)
+```
+
+Ahora sí aparece la muestra correcta. Cabe señalar que anteriormente calculé la incidencia pero tenía ese error así que no corresponde a la incidencia de la población objetivo, se calcula incidencia en jóvenes
+
+```{r}
+calcular_incidencia(jovenes)
+```
+
+La incidencia se calculó en
+
+* C:/Prog/tesis/25_incidencia_con_funciones_v11.qmd
+* C:/Prog/tesis/25_incidencia_codigo_nuevo_v10.qmd
+* C:/Prog/tesis/25_incidencia_codigo_v9_con_carrera_tecnica.qmd
+* C:/Prog/tesis/25_incidencia_codigo_completo_v9.qmd SÍ
+
+Solamente en el último archivo sí calculé la incidencia para jóvenes, ahí la incidencia es de 51.3% con una muestra de 15,543, mientras que aquí del 51.0% y aquí de 15,138. ¿En qué se diferencian? El anterior ya define nivel educativo en términos de CINE-11, pero no los estudios de carrera técnica como de tipo superior, mientras que aquí ambos sí están considerados.
+
+Cuestión resuelta
+
+Ahora validemos cuántos reportan ingreso
+
+```{r}
+jovenes_reportan <- jovenes |> 
+  mutate(
+    reportan = if_else(!is.na(ingreso_mensual), 1, 0)
+  ) 
+
+jovenes_reportan |> 
+  group_by(reportan) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+No puede ser!!! Solamente el 47.1% reporta ingresos
+
+Además, se realizaron las siguientes manipulaciones
+
+* educacion: 99 pasa a NA para evitar 99 - edu_req
+* anios_estudios: 99 indica no especificado, se convierte a NA
+* horas_lab: 999 indica no especificado, se convierte a NA (INEGI, 2024:81)
+
+Esos casos también reducen el tamaño de la muestra, hagamos una regresión para validar
+
+```{r}
+library(survey)
+
+jovenes2 <- convertir_a_factor(jovenes)
+
+jovenes_svy <- svydesign(
+  ids = ~upm,
+  strata = ~est,
+  weights = ~fac_tri,
+  nest = TRUE,
+  data = jovenes2
+)
+
+model_jov_svy <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + under_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + sector_eco + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_svy
+)
+
+summary(model_jov_svy)
+```
+Existe una pérdida salarial relativa aproximada del 18.97% estadísticamente significativa. Aquí ya están considerandos los casos no especificados, excepto en horas_lab, exper y educacion
+
+Se valida el tamaño de la muestra
+
+```{r}
+nobs(model_jov_svy)
+```
+
+Sólo son 7708 observaciones!!!
+
+Es decir
+
+```{r}
+8139 - 7708
+```
+
+Se pierden 431 observaciones adicionales por los casos especificados se validan
+
+```{r}
+jovenes_reportan |> 
+  filter(reportan == 1 & !is.na(horas_lab) & !is.na(anios_estudios)) |> 
+  calc_total()
+```
+
+Cuando se eliminan valores faltantes de horas_lab y anios_estudios la muestra se reduce a 7,812, es decir
+
+```{r}
+7812 - 7708
+```
+
+Todavía falta explicar 104 observaciones faltantes
+
+¿Hay ingreso cero?
+
+```{r}
+jovenes_reportan |> 
+  filter(ingreso_mensual == 0) |> 
+  calc_total()
+```
+
+No
+
+Validemos distribución de exper
+
+```{r}
+jovenes_reportan |> 
+  ggplot(aes(exper)) + 
+  geom_histogram()
+```
+
+Hay valores cero, se valida el total
+
+```{r}
+jovenes_reportan |> 
+  filter(exper == 0) |> 
+  calc_total()
+```
+
+Sólo son 7 observaciones
+
+Hay horas_lab en 0?
+
+```{r}
+jovenes_reportan |> 
+  filter(horas_lab == 0) |> 
+  calc_total()
+```
+
+NO
+
+Se valida campo_amplio
+
+```{r}
+jovenes2 |> 
+  group_by(campo_amplio) |> 
+  summarise(n = n())
+```
+
+Se valida division
+
+```{r}
+jovenes2 |> 
+  group_by(division) |> 
+  summarise(n = n())
+```
+
+NO aparece division10  en la regresión que son 28 observaciones
+
+```{r}
+jovenes2 |> 
+  group_by(pos_ocu) |> 
+  summarise(n = n())
+```
+
+Tampoco pos_ocu4 equivale a 197 observaciones
+
+```{r}
+jovenes2 |> 
+  group_by(tamanio) |> 
+  summarise(n = n())
+```
+
+
+```{r}
+jovenes2 |> 
+  group_by(jornada) |> 
+  summarise(n = n())
+```
+
+No aparece jornada2 que son 526 obs
+
+```{r}
+jovenes2 |> 
+  group_by(over_obj) |> 
+  summarise(n = n())
+
+# jovenes2 |> 
+#   group_by(under_obj) |> 
+#   summarise(n = n())
+```
+
+Se observa que hay 204 observaciones con valores NA en over_obj ¿por qué?
+
+Recordemos que over_obj se construye así
+
+```
+over_obj = if_else(educacion > objetivo_max, 1, 0),
+```
+
+Es decir o el valor educacion es nulo u el nivel educativo requerido es nulo, validemos
+
+```{r}
+jovenes2 |> 
+  group_by(educacion) |> 
+  summarise(n = n())
+```
+
+No hay valores faltantes en educacion
+
+```{r}
+jovenes2 |> 
+  group_by(objetivo_max) |> 
+  summarise(n = n())
+```
+
+Los valores faltantes pertenecen a objetivo_max, recordemos que en estos casos no se puede determinar la educación requerida por lo tanto se eliminan en la regresión
+
+Por otra parte, ¿hay valores faltantes en exper?
+
+```{r}
+jovenes2 |> 
+  group_by(exper) |> 
+  summarise(n = n())
+```
+
+Sí hay 40 obs con valor NA
+
+Se valida horas_lab
+
+```{r}
+jovenes2 |> 
+  group_by(horas_lab) |> 
+  summarise(n = n())
+```
+
+Hay 647 obs
+
+Se validan los casos donde hay valores faltantes
+
+```{r}
+jovenes_reportan |> 
+  filter(reportan == 1 & !is.na(horas_lab) & !is.na(exper) & !is.na(over_obj)) |> 
+  calc_total()
+```
+
+Por fin los encontré!!
+
+Se eliminan los valores faltantes en
+
+* ingreso_mensual: 
+* horas_lab: 
+* exper: 
+* over_obj:  
+
+Muestra original: 15138
+Muestra regresión: 7708
+
+Se valida
+
+```{r}
+jovenes_reportan |> 
+  filter(reportan == 0) |>  
+    calc_total()
+
+jovenes_reportan |> 
+  filter(reportan == 1 & is.na(horas_lab)) |>  
+    calc_total()
+
+jovenes_reportan |> 
+  filter(reportan == 1 & !is.na(horas_lab) & is.na(exper)) |>  
+    calc_total()
+
+jovenes_reportan |> 
+  filter(reportan == 1 & !is.na(horas_lab) & !is.na(exper) & is.na(over_obj)) |>  
+    calc_total()
+```
+
+* ingreso_mensual: 6999
+* horas_lab: 302
+* exper: 25
+* over_obj: 104
+
+Es decir, 
+
+1. Se eliminan los valores NA de ingreso_mensual
+2. De las obs que sí reportaron ingreso se eliminan los que tengan NA en horas_lab
+3. De las obs que sí reportaron ingreso, sí tengan valores en horas_lab, se eliminan los que tengan NA en exper
+4. De las obs que sí reportaron ingreso, sí tengan valores en horas_lab, sí tengan valores en exper, se eliminan valores NA en over_obj
+
+Ya está! 
+
+Entonces,
+
+Muestra original: 15,138
+Muestra regresión: 7,708
+Observaciones que no se consideran: 7,430
+
+¿Qué criterio selecciona la muestra de regresión?
+
+```{r}
+jovenes_reportan |> 
+  filter(reportan == 1 & !is.na(horas_lab) & !is.na(exper) & !is.na(over_obj)) |>  
+    calc_total()
+```
+
+Es decir, del total de jóvenes egresados de educación superior no se estima el efecto salarial  
+
+```{r}
+7430 / 15138
+```
+
+del 49.1% del total
+
+donde
+
+```{r}
+# ingreso_mensual
+6999 / 7430 * 100
+
+# horas_lab
+302 / 7430 * 100
+
+# exper
+25 / 7430 * 100
+
+# over
+104 / 7430 * 100
+```
+
+Del total de observaciones eliminadas en la regresión, el 94.2% corresponde a ingreso mensual no reportado, el resto a horas laboradas no reportadas (4.1%), experiencia laboral no calculada (0.3%), y donde no fue posible determinar si estaba, o no, sobrecalificado debido a que no fue posible determinar la educación requerida (1.4%)
+
+Por último
+
+```{r}
+jovenes_reportan |> 
+  group_by(anios_estudios) |> 
+  summarise(n())
+```
+
+¿Por qué no especificaron los años de estudio? Aunque podría hacerse la aportación es marginal, sólo aumentaría el tamaño de la muestra en 0.3%, es decir, menos del 1%
+
+Por otro lado, fue correcta la implementación de carrera técnica como tipo superior ya que el año educativo mínimo equivale a 13 años aunque no correspondería al número de años concluidos de una carrera técnica, esos casos están porque no reportaron su situación de ingreso
+
+```{r}
+jovenes_reportan |> 
+  group_by(cs_p16, anios_estudios) |> 
+  summarise(n())
+```
+
+Incluso se observa que en el año mínimo especificaron que sí egresaron de la carrera, entonces mis criterios y cálculos están correctos
+

@@ -1,0 +1,68 @@
+---
+date: today
+format: html
+---
+
+Este documento es la continuación de "C:/Prog/tesis/31_c3_v3_analisis_descrip_7.qmd". Se realizará el cálculo para el análisis descriptivo mediante las funciones que iteran dicho procedimiento.
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+# trabajar encuesta compleja dentro de tidyverse 
+library(srvyr)
+# regresión a encuesta compleja
+library(survey)
+# convertir a porcentaje dentro de mutate
+library(scales) 
+# operador entre llaves 
+library(rlang)
+# iterar ejecución de funciones
+library(purrr)
+
+source("C:/Prog/tesis/scripts/funciones_v6.R")
+
+# pob_15ymas <- read_rds("C:/Prog/tesis/datos/pob_15ymas.rds")
+jovenes_tot <- read_rds("C:/Prog/tesis/datos/jovenes_tot.rds")
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+# sinco19 <- read_rds("datos/sinco_19_edu_req.rds")
+```
+
+Se valida el caso general
+
+```{r}
+pmap(list("jovenes_tot"), calcular_total_map)
+```
+
+Correcto!!!
+
+```{r}
+pmap(list("jovenes_tot", "tp", "clase1", "==", 1), calcular_tasas_ocu_map)
+```
+
+Correcto!!!
+
+Se crea el `tibble` en el caso general
+
+```{r}
+argumentos <- tribble(
+  ~datos, ~nombre, ~campo, ~operador, ~valor,
+  # ---
+  "jovenes_tot", "tp", "clase1", "==", 1,
+  "jovenes_ocu", "tcco", "tcco", "!=", 0,
+  "jovenes_ocu", "til1", "emp_ppal", "==", 1
+)
+```
+
+Se valida
+
+```{r}
+argumentos |> 
+  pmap(calcular_tasas_ocu_map) |> 
+  list_rbind()
+```
+
+Está correcto!!!
+

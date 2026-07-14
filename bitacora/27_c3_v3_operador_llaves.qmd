@@ -1,0 +1,206 @@
+---
+date: today
+---
+
+En este documento se trabajará con el operador entre llaves y el paquete `rlang`
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v11.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v2.R")
+source("scripts/4_metodologia_v1.R")
+# source("scripts/5_calcular_incidencia_v1.R")
+```
+
+
+Primero se crea la tabla, sin definirla como encuesta compleja
+
+```{r}
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+# Crea la tabla de la población objetivo
+jovenes <- seleccionar_jov(general)
+
+# se pasan a factores
+jovenes <- convertir_a_factor(jovenes)
+```
+
+Ahora, se instala el paquete `rlang`
+
+```{r}
+system.file(package = "rlang")
+```
+
+Sí aparece instalado, entonces solo se activa
+
+```{r}
+library(rlang)
+```
+
+El operador entre llaves permite pasar una columna (variable) como argumento a una función para trabajar dentro de los verbos de `tidyverse`
+
+Fuente:
+
+https://www.geeksforgeeks.org/r-language/how-do-double-curly-brackets-work-in-dplyr/
+
+Hagamos un ejemplo, crearemos una función que calcule el promedio de una variable que especifiquemos
+
+Primero sin función
+
+```{r}
+jovenes |> 
+  summarise(
+    promedio = mean(ingreso_mensual, na.rm = TRUE)
+  )
+```
+
+O bien,
+
+```{r}
+jovenes |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  summarise(
+    promedio = mean(ingreso_mensual)
+  )
+```
+
+Convertido en función sería
+
+```{r}
+funcion_vgr1 <- function(datos, variable){
+  datos_procesados <- datos |> 
+    filter(!is.na( {{ variable}} )) |> 
+    summarise(
+      promedio = mean( {{ variable}} )
+    )
+  return(datos_procesados)
+}
+```
+
+Ahora se aplica
+
+```{r}
+funcion_vgr1(jovenes, ingreso_mensual)
+```
+
+Ahora se aplica a otra variable
+
+```{r}
+funcion_vgr1(jovenes, horas_lab)
+```
+
+No mms!!!!
+
+¿Puedo trabajar por grupo?
+
+```{r}
+jovenes |> 
+  group_by(educacion, over_obj) |> 
+  summarise(tot = sum(fac_tri))
+```
+
+Se crea la función con el operador de llaves
+
+```{r}
+funcion_vgr2 <- function(datos, grupo, subgrupo){
+  datos_procesados <- datos |> 
+    group_by( {{grupo}} , {{subgrupo}} ) |> 
+    summarise(tot = sum(fac_tri))
+  return(datos_procesados)
+}
+```
+
+Se hace el intento
+
+```{r}
+funcion_vgr2(jovenes, educacion, over_obj)
+```
+
+No manches!!!
+
+Cabe señalar que https://www.geeksforgeeks.org/r-language/how-do-double-curly-brackets-work-in-dplyr/ no utiliza el argumento `return`, lo hace con el operador pipe así
+
+```
+filter_data <- function(df, column, threshold) {
+  df %>%
+    filter({{ column }} > threshold)
+}
+
+# Usage
+filter_data(mtcars, mpg, 20)
+```
+
+Se hace el intento con la segunda función creada
+
+```{r}
+funcion_vgr3 <- function(datos, grupo, subgrupo){
+  datos |> 
+    group_by( {{grupo}} , {{subgrupo}} ) |> 
+    summarise(tot = sum(fac_tri))
+}
+
+funcion_vgr3(jovenes, educacion, over_obj)
+```
+
+También es posible!!!
+
+Entonces, en los casos de funciones simples no utilizo `return`, como aquí, pero en la función de construcción de variables, sí ya que realizo muchas manipulaciones y las quiero tener separadas.
+
+Ahora, validemos el ejemplo de la IA. Utiliza la función `as_label` del paquete `rlang`. Investiguemos
+
+```{r}
+?rlang::enquo
+```
+
+Según la documentación, `as_label`
+
+"Asignar nombres predeterminados a las columnas de un marco de datos. En este caso, el etiquetado es el primer paso antes de la corrección de nombres."
+
+El nombre de la columna lo asigna como tipo cadena??
+
+Por su parte,
+
+"Las funciones `enquo()` y `enquos()` desactivan los argumentos de función. Una expresión desactivada puede examinarse, modificarse e insertarse en otras expresiones.
+
+Desactivar argumentos de función es útil para:
+
+Crear funciones de enmascaramiento de datos."
+
+Según la documentación
+
+"Estas son herramientas avanzadas. Asegúrese de familiarizarse primero con el operador de enmascaramiento `{{` en los patrones de programación de enmascaramiento de datos (Data mask programming patterns). `{{` es más fácil de usar con menos teoría y es suficiente en la mayoría de las aplicaciones."
+
+En ese sentido, 
+
+"Las funciones de enmascaramiento de datos requieren patrones de programación especiales cuando se utilizan dentro de otras funciones. En este tema, revisaremos y compararemos los diferentes patrones que se pueden usar para resolver problemas específicos."
+
+Ayuda entre otros a resolver
+
+"Patrones de nombre: tu función acepta cadenas o vectores de caracteres con los nombres de las columnas."
+
+Entre otros operadores está
+
+"El operador de enmascaramiento `{{` se utiliza para crear funciones que llaman a otras funciones de enmascaramiento de datos. Transporta un argumento enmascarado (un argumento que puede hacer referencia a columnas de un marco de datos) de una función a otra."
+
+Por su parte, 
+
+"El operador de inyección `!!` inserta un valor o expresión dentro de otra expresión. En otras palabras, modifica un fragmento de código antes de que R lo evalúe.
+
+Existen dos casos principales para la inyección. Se pueden inyectar valores constantes para solucionar problemas de ambigüedad de ámbito, y se pueden inyectar expresiones difusas, como nombres de columna simbolizados."
+
+Por último, 
+
+"¿Qué es el enmascaramiento de datos y por qué lo necesito?
+
+Descripción: El enmascaramiento de datos es una característica distintiva de R que permite programar directamente sobre un conjunto de datos, definiendo las columnas como objetos normales."
+
+WOW!!! Me impresiona todo esto

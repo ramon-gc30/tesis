@@ -1,0 +1,484 @@
+---
+title: "Tesis"
+format: 
+  pdf:
+    # motor de LaTeX
+    pdf-engine: xelatex 
+    # instala paquetes faltantes
+    latex-auto-install: true 
+    cite-method: biblatex 
+    # forzar estilo APA
+    biblatexoptions: 
+      - style=apa
+      - backend=biber
+    header-includes:
+      # para saltos de línea
+      - \usepackage{makecell}
+      # cambiar orientación en página
+      - \usepackage{pdflscape}
+bibliography: referencias2.bib  
+csl: apa.csl
+---
+
+En este espacio se intentará cambiar la orientación de la página de vertical a horizontal, como nueva aproximación se añade 
+
+```
+header-includes:
+      - \usepackage{pdflscape}
+```
+
+En el encabezado YAML que añade o especifica el paquete `pdflscape` para permitir cambiar la orientación
+
+Asimismo, se intentará añadir la nota al pie de tabla importando, en primer lugar, el archivo que contiene la nota y después convirtiendo de tabla a tipo lista.
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(kableExtra)
+
+evi_emp_jov <- read_csv(
+  "evid_emp_prev_jov.csv",
+  col_types = cols(.default = col_character())
+)
+
+notas_tabla <- read_csv(
+  "notas_tablas.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+Primero se valida cómo se realiza la transformación de tabla a lista
+
+```{r}
+# notas_tabla
+# as.list(notas_tabla)
+```
+
+Al parecer considera la primera fila como columna, creo que eso se puede especificar en `read_csv`
+
+```{r}
+# ?read_csv
+```
+
+Se validan los siguientes argumentos
+
+`col_names = FALSE`: no considera la primera fila como encabezado 
+`quote`: caracter único utilizado para citar cadenas
+
+Hagamos los cambios para ver cómo quedan 
+
+```{r}
+read_csv(
+  "notas_tablas.csv",
+  col_types = cols(.default = col_character()),
+  col_names = FALSE # no considera la 1ra fila como nombre
+  # quote = "" 
+)
+```
+
+Si se quita `quote` arroja error
+
+Creo que habrían dos maneras de quitar el escape con `lineabreak` como se hizo en el documento anterior o con `read_delim`
+
+```{r}
+read_delim(
+  "notas_tablas.csv",
+  delim = ",",
+  escape_backslash = TRUE,
+  col_names = FALSE,
+  col_types = cols(.default = col_character())
+)
+```
+
+Como se observa, al añadir `escape_backlash = TRUE` la función quita la barra invertida. Entonces, se podría solucionar añadiendo otra barra invertida.
+
+Se creó otro archivo csv para validar lo dicho arriba
+
+```{r}
+read_delim(
+  "notas_tablas2.csv",
+  delim = ",",
+  escape_backslash = TRUE,
+  col_names = FALSE,
+  col_types = cols(.default = col_character())
+)
+```
+
+Sigue arrojando "problemas", entonces la mejor manera sería con `linebreak` dentro de `mutate`
+
+```{r}
+evi_emp_jov
+```
+
+¿Qué hace `linebreak`?
+
+```{r}
+evi_emp_jov |> 
+  mutate(
+    autor = linebreak(autor)
+  )
+```
+
+Añade la función `\makecell` que creo permite crear tablas multilíneas 
+
+Entonces, no hacemos ningún cambio de configuración de escapes al momento de importar, hacemos `linebreak` dentro de mutate.
+
+Ahora bien, pasando de tabla a lista cómo queda?
+
+```{r}
+notas_tabla <- read_delim(
+  "notas_tablas.csv",
+  delim = ",",
+  col_names = FALSE,
+  col_types = cols(.default = col_character())
+)
+
+notas2 <- as.list(notas_tabla)
+
+notas2 <- notas2$X1
+
+notas2
+```
+
+Esta leyenda es un problema?
+
+```
+attr(,"spec")
+cols(
+  .default = col_character(),
+  X1 = col_character()
+)
+attr(,"problems")
+<pointer: 0x0000020d8d0b2cd0>
+```
+
+```{r}
+# notas2$X1
+```
+
+Al parecer no
+
+Hagamos un ejemplo, primer definamos los nombres de las columnas
+
+```{r}
+# títulos de las columnas
+nom_cols <- c(
+  "Autor",
+  "Lugar",
+  "Periodo",
+  "Fuente de datos",
+  "Dimensión temporal",
+  "Método / Modelo",
+  "Población",
+  "Incidencia",
+  "Efecto salarial"
+)
+```
+
+Ahora hacemos lo de `linebreak`
+
+```{r}
+evi_emp_jov <- evi_emp_jov |>
+  mutate(
+    autor = linebreak(autor),
+    metodo_modelo = linebreak(metodo_modelo),
+    incidencia = linebreak(incidencia),
+    efecto_salarial = linebreak(efecto_salarial)
+  )
+```
+
+Se crea la tabla
+
+```{r}
+#| label: tbl-ejemplo
+#| tbl-cap: "Ejemplo 1"
+#| tbl-cap-location: top
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas2,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+Hay problemas con las notas al pie de página y no cambia la orientación
+
+```{r}
+notas2
+```
+
+Se debe poner otra barra invertida, se hace otro intento con `read_delim`. En especifico con el argumento `read_double` que duplica la barra invertida.
+
+```{r}
+read_delim(
+  "notas_tablas2.csv",
+  delim = ",",
+  escape_double = FALSE,
+  col_names = FALSE,
+  col_types = cols(.default = col_character())
+)
+```
+
+Se vuelve a pasar a tipo lista
+
+```{r}
+notas3 <- read_delim(
+  "notas_tablas2.csv",
+  delim = ",",
+  escape_double = FALSE,
+  col_names = FALSE,
+  col_types = cols(.default = col_character())
+)
+
+notas4 <- as.list(notas3)
+(notas4 <- notas4$X1)
+```
+
+Se vuelve a generar la tabla
+
+```{r}
+#| label: tbl-ejemplo2
+#| tbl-cap: "Ejemplo 2"
+#| tbl-cap-location: top
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    position = "center",
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  )
+  # landscape()
+```
+
+Ahora sí se pudo!! El único error fue al añadir el escape `\n` (salto de línea), creo que debo hacerlo de forma manual en Excel: `ALT + ENTER`
+
+El único problema que falta es que no permite cambiar la orientación de la página
+
+Según la IA, el problema se soluciona especificando `kable_styling`. 
+
+```{r}
+# ?kable_styling
+```
+
+
+```{r}
+#| label: tbl-ejemplo3
+#| tbl-cap: "Ejemplo 3"
+#| tbl-cap-location: top
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    latex_options = c("scale_down", "repeat_header"),
+    # position = "center",
+    # full_width = TRUE,
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+Lo que hace `scale_down` es ajustar el tamaño de la tabla al ancho de la página. En este caso, lo hace más pequeño 
+
+Las soluciones de Gemini son dos:
+
+1. Añadir `\landscape` antes del código y después del código
+2. Quitar etiqueta al bloque de código
+
+Hagamos el 2.
+
+```{r}
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE,
+    caption = "Ejemplo 4",
+    label = "tbl-ejemplo4"
+  ) |>
+  kable_styling(
+    latex_options = c("HOLD_position", "repeat_header"),
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+Ahora sí se pudo! Pero, ¿cómo funcionaría la referencia cruzada?
+
+Por ejemplo @tbl-ejemplo4
+
+Como se observa, no funciona
+
+Vayamos añadiendo configuraciones del bloque y `HOLD_position`, NO SE AÑADE `tbl-pos`
+
+```{r}
+#| label: tbl-ejemplo5
+#| tbl-cap: "Ejemplo 5"
+#| tbl-cap-location: top
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+    # caption = "Ejemplo 4",
+    # label = "tbl-ejemplo4"
+  ) |>
+  kable_styling(
+    latex_options = c("HOLD_position", "repeat_header"),
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+No produce ningún cambio, se añade `tbl-pos`
+
+```{r}
+#| label: tbl-ejemplo6
+#| tbl-cap: "Ejemplo 6"
+#| tbl-cap-location: top
+#| tbl-pos: "H"
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+    # caption = "Ejemplo 4",
+    # label = "tbl-ejemplo4"
+  ) |>
+  kable_styling(
+    latex_options = "repeat_header",
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  ) |> 
+  landscape()
+```
+
+Tampoco produce ningún cambio, se intenta con opción 1
+
+::: {.landscape}
+
+```{r}
+#| label: tbl-ejemplo7
+#| tbl-cap: "Ejemplo 7"
+#| tbl-cap-location: top
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    latex_options = "repeat_header",
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+:::
+
+Listo! Pero se añade encima del código y el código aparece dentro de la página
+
+Añadiendo `#| tbl-pos: "p"` el código se pone en una página horizontal y después la tabla en otra página horizontal
+
+::: {.landscape}
+
+```{r}
+#| label: tbl-ejemplo8
+#| tbl-cap: "Ejemplo 8"
+#| tbl-cap-location: top
+#| tbl-pos: "p"
+
+evi_emp_jov |> 
+  kableExtra::kbl(
+    format = "latex",
+    col.names = nom_cols,
+    escape = FALSE,
+    booktabs = TRUE
+  ) |>
+  kable_styling(
+    latex_options = "repeat_header",
+    font_size = 10
+  ) |>
+  footnote(
+    general = notas4,
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+:::
+
+Y añadiendo `#| tbl-pos: "hp"` pone primero el código y después la tabla ambas en una misma página horizontal
+
+Con `#| tbl-pos: "Hp"` arroja error entonces lo mejor sería `#| tbl-pos: "hp"` sin código y `#| tbl-pos: "p"` con código.
+
+Como se observa, el inconveniente es que la tabla no se ajusta a la página, esto puede solucionarse con `scale_down` o con lo que señala Gemini
+
+```
+# --- AQUÍ AJUSTAMOS EL ANCHO DE LAS COLUMNAS ---
+  column_spec(1, width = "2.5cm") |>                 # Columna 1: Autor
+  column_spec(4:5, width = "3cm") |>                 # Columnas 4 y 5: Fuente y Dimensión
+  column_spec(6, width = "4.5cm") |>                 # Columna 6: Método / Modelo
+  column_spec(8:9, width = "4cm") |>                 # Columnas 8 y 9: Incidencia y Efecto salarial
+  # -----------------------------------------------
+```
+Se deja para otro documento

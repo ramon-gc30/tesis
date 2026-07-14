@@ -1,0 +1,146 @@
+---
+date: today
+---
+
+En este documento se resolverán los siguientes pendientes:
+
+* Especificar el tamaño de la muestra
+
+Especificar 
+* cuántos individuos originalmente reportan estudios de carrera técnica,
+* Cuántos individuos tienen estudios de carrera técnica después de la manipulación,
+* Cuántos individuos reportan estudios previos
+
+Especificar
+* Cuántos individuos originalmente reportan estudios de tipo superior,
+* Cuántos individuos tienen educación superior asignado después de la manipulación,
+* Cuántos reportan estudios previos,
+* Cuántos reportan si concluyeron exitosamente el nivel educativo reportado,
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/25_importacion_v10.R")
+source("scripts/25_construccion_tablas_v10.R")
+source("scripts/25_funciones_v11.R")
+```
+
+1. TAMAÑO DE LA MUESTRA
+
+Se define tabla general, ahí estará la población ocupada después de la construcción de variables y de determinar el desajuste educativo individual (incluye procedimiento para determinar educación requerida con el enfoque normativo de OIT)
+
+```{r}
+general <- construir_variables(ocupada)
+general <- asignar_edu_mismatch(general, ciuo08)
+```
+
+Se valida la población total
+
+```{r}
+general |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+El resultado es correcto y coincide con (INEGI, 2025, p. 7)
+
+Se valida tabla original
+
+```{r}
+ocupada |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Ahora valido tamaño de la muestra 
+
+ORIGINAL
+
+```{r}
+calcular_muestra_jov_edu_sup <- function(datos){
+  muestra_tot <- datos |> 
+    filter(between(edad, 25, 34) & between(educacion, 5, 9)) |> 
+    summarise(
+      n = n(),
+      tot = sum(fac_tri)
+    )
+  return(muestra_tot)
+}
+```
+
+
+```{r}
+ocupada |> 
+  mutate(
+      educacion = as.integer(cs_p13_1),
+      fac_tri = as.double(fac_tri)
+    ) |>
+  calcular_muestra_jov_edu_sup()
+  # group_by(cs_p13_1) |> 
+  # summarise(
+  #   n = n(),
+  #   tot = sum(fac_tri)
+  # ) |> 
+  # mutate(prop = tot / sum(tot))
+```
+
+En la tabla original, solamente hay 18184 observaciones que representan 5,408,210 de jóvenes de 25 a 34 años con educación superior
+
+Ahora se calcula para la tabla construida
+
+```{r}
+calcular_muestra_jov_edu_sup(general)
+```
+
+Después de la aplicación de la metodología, se reduce el tamaño de la muestra a 15,138 que representan a 4,453,805 jóvenes de 25 a 34 años egresados de educación superior.
+
+
+INDIVIDUOS CON ESTUDIOS DE CARRERA TÉCNICA
+
+```{r}
+calcular_carrera_tec <- function(datos){
+  num_carrera_tec <- datos |> 
+    filter(between(edad, 25, 34) & between(educacion, 5, 9)) |> 
+    group_by(educacion) |> 
+    summarise(
+      n = n(),
+      tot = sum(fac_tri)
+    ) |> 
+    mutate(prop = tot / sum(tot))
+  return(num_carrera_tec)
+}
+```
+
+Original
+
+```{r}
+ocupada |> 
+  mutate(
+    educacion = as.integer(cs_p13_1),
+    fac_tri = as.double(fac_tri)
+  ) |> 
+  calcular_carrera_tec()
+```
+
+Originalmente, sólo el 4.5% reporta estudios de carrera técnica: n = 699 tot = 242,515
+
+Construida
+
+```{r}
+calcular_carrera_tec(general)
+  # summarise(n = sum(n))
+```
+
+Después de especificar carrera técnica como de tipo superior y nivel de logro educativo según CINE-11, sólo hay 241 observaciones que representan 1.6% de la muestra.
+
+QUEDA PENDIENTE 
+
+Cuántos individuos reportan estudios previos
+Cuántos reportan si concluyeron exitosamente el nivel educativo reportado,

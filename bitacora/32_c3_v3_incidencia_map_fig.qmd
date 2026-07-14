@@ -1,0 +1,721 @@
+---
+date: today
+format: html
+---
+
+En este documento se actualizarán las gráficas de la sección 3-2, a partir de las tablas creadas a través de la función `pmap`
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(scales)
+library(srvyr)
+
+source("scripts/0_funciones_v9.R")
+
+incidencia_tot <- read_rds("datos/incidencia_tot.rds")
+incidencia_sub <- read_rds("datos/incidencia_sub.rds")
+inc_edu_carreras <- read_rds("datos/incidencia_edu_car.rds")
+pib_vs_egres <- read_rds("datos/pib_vs_egres.rds")
+# egresados (ANUIES, s.f.)
+anuies <- read_csv("datos/anuies.csv")
+
+# pib (INEGI, s.f.)
+pib <- read_csv(
+  "datos/pib.csv"
+)
+```
+
+Primero se valida la incidencia total
+
+```{r}
+incidencia_tot
+```
+
+Después la tabla que contiene la incidencia por grupos
+
+```{r}
+glimpse(incidencia_sub)
+```
+
+Por ejemplo, para el caso de la educación
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "educacion")
+```
+
+En el caso de la edad
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "edad")
+```
+
+
+Se preparan las gráficas 
+
+## PIB VS EGRESADOS
+
+Solamente se mejora la creación de la tabla
+
+```{r}
+anuies
+```
+  
+Se pivotea a lo ancho
+
+```{r}
+# anuies <- anuies |> 
+#   pivot_wider(
+#     names_from = TIPO,
+#     values_from = VALOR
+#   )
+```
+
+Se separa el ciclo escolar
+
+```{r}
+# anuies <- anuies |> 
+#   separate(
+#     PERIODO,
+#     into = c("periodo_inicio", "periodo_fin"),
+#     sep = "-",
+#     convert = TRUE
+#   )
+```
+
+Se calcula tasa de variación anual mediante la función 
+
+```{r}
+# tasa de variación
+# funcion_vgr <- function(datos, nivel){
+#   datos |> 
+#     mutate(variacion = {{  nivel  }} / lag({{  nivel  }}) - 1)
+# }
+```
+
+
+```{r}
+# anuies$`EGRESADOS TOTAL`
+# 
+# anuies |>
+#   funcion_vgr(`EGRESADOS TOTAL`)
+```
+
+Aquí está el error 
+
+ANTES
+
+```
+# tasa de variación
+calcular_tasa_var <- function(datos, nivel){
+  egresados |> 
+    mutate(variacion = {{  nivel  }} / lag({{  nivel  }}) - 1)
+}
+```
+
+El error está en `egresados` se corrige en el script `funciones` y se guarda en "C:/Prog/tesis/scripts/0_funciones_v9.R"
+
+Se vuelve a ejecutar
+
+```{r}
+# anuies |>
+#   calcular_tasa_var(`EGRESADOS TOTAL`)
+```
+
+Se quiere intentar esto
+
+```{r}
+# # tasa de variación
+# funcion_vgr <- function(datos, nivel, nombre){
+#   nombre_sym <- sym(nombre)
+#   
+#   datos |> 
+#     mutate(  !!nombre_sym   := {{  nivel  }} / lag({{  nivel  }}) - 1)
+# }
+```
+
+```{r}
+# anuies |> 
+#   funcion_vgr(`EGRESADOS TOTAL`, "egresados_var")
+```
+
+Se añade en el script `funciones` y se guarda en "C:/Prog/tesis/scripts/0_funciones_v9.R"
+
+Se vuelve a ejecutar
+
+```{r}
+# anuies |> 
+#   calcular_tasa_var(`EGRESADOS TOTAL`, "egresados_var")
+```
+
+Listo! Se guarda
+
+```{r}
+# anuies <- anuies |> 
+#   calcular_tasa_var(`EGRESADOS TOTAL`, "egresados_var")
+```
+
+Para el caso del PIB
+
+Se calcula PIB anual
+
+```{r}
+# pib_anual <- pib |> 
+#   group_by(Periodo) |> 
+#   summarise(pib_nivel = sum(Valor))
+```
+
+Se calcula tasa de variación anual
+
+```{r}
+# pib_anual <- pib_anual |> 
+#   calcular_tasa_var(pib_nivel, "pib_var")
+```
+
+Se unen
+
+```{r}
+# pib_vs_egres2 <- pib_anual |> 
+#   left_join(anuies, by = c("Periodo" = "periodo_inicio"))
+```
+
+Para el filtro sería así
+
+```{r}
+# pib_vs_egres2 |> 
+#   filter(between(Periodo, 2000, 2024))
+```
+
+En resumen, quedaría así
+
+```{r}
+# # egresados (ANUIES, s.f.)
+# anuies <- read_csv("datos/anuies.csv")
+# 
+# # pib (INEGI, s.f.)
+# pib <- read_csv(
+#   "datos/pib.csv"
+# )
+
+anuies <- anuies |> 
+  pivot_wider(
+    names_from = TIPO,
+    values_from = VALOR
+  ) |> 
+  separate(
+    PERIODO,
+    into = c("periodo_inicio", "periodo_fin"),
+    sep = "-",
+    convert = TRUE
+  ) |> 
+  calcular_tasa_var(`EGRESADOS TOTAL`, "egresados_var")
+
+pib_anual <- pib |> 
+  group_by(Periodo) |> 
+  summarise(pib_nivel = sum(Valor)) |> 
+  calcular_tasa_var(pib_nivel, "pib_var")
+
+pib_vs_egres <- pib_anual |> 
+  left_join(anuies, by = c("Periodo" = "periodo_inicio"))
+```
+
+Se modifica en el script `preparacion_datos` y se guarda en "C:/Prog/tesis/scripts/1_preparacion_datos_v6.R". De una vez se guarda
+
+```{r}
+# write_rds(pib_vs_egres, "datos/pib_vs_egres.rds")
+```
+
+La gráfica quedaría así
+
+```{r}
+# elementos comunes 
+otros_elementos <- list(labs(x = NULL,y = NULL))
+
+# PIB vs Egresados --------------------------------------------------
+# leyendas para la gráfica
+labels_vars <- c(
+  "pib_var" = "PIB",
+  "egresados_var" = "Egresados"
+)
+
+# pivotar para graficar
+pib_vs_egres |> 
+  filter(between(Periodo, 2000, 2024)) |> 
+  pivot_longer(
+    cols = c(pib_var, egresados_var),
+    names_to = "variable",
+    values_to = "nivel"
+  ) |> 
+  ggplot(aes(
+    x = Periodo, y = nivel, 
+    color = variable, shape = variable, linetype = variable)
+  ) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(breaks = breaks_width(1)) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.05)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars) + 
+  scale_shape_discrete(name = NULL, labels = labels_vars) + 
+  scale_linetype_discrete(name = NULL, labels = labels_vars) + 
+  theme_classic(base_size = 16, base_family = "Trebuchet MS") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 14)
+  ) +
+  otros_elementos
+```
+
+Se continua con 
+
+POR EDAD
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "edad" & sub_val == "1") |> 
+  mutate(
+    gpo_val = as.integer(gpo_val),
+    prop_label = scales::percent(prop, accuracy = 1)
+  ) |> 
+  ggplot(aes(x = gpo_val, y = prop)) +
+  geom_point(color = "#314763", size = 3) +
+  geom_line(color = "#314763") +
+  geom_text(aes(y = prop + 0.01, label = prop_label)) +
+  scale_x_continuous(breaks = breaks_width(1)) +
+  scale_y_continuous(labels = NULL, breaks = NULL) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  otros_elementos
+```
+
+POR NIVEL EDUCATIVO
+
+```{r}
+etiquetas_var <- c(
+  "6" = "Técnico \nsuperior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+incidencia_sub |> 
+  filter(gpo_lab == "educacion" & sub_val == "1") |> 
+  mutate(
+    prop_label = scales::percent(prop, accuracy = 1)
+  ) |> 
+  ggplot(aes(gpo_val, prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.02, label = prop_label)) +
+  scale_x_discrete(labels = etiquetas_var) +
+  scale_y_continuous(
+    labels = NULL, 
+    breaks = NULL, 
+    # 0 espacio hacia abajo y 0.1 espacio hacia arriba
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks = element_blank()
+  ) + 
+  otros_elementos
+```
+
+
+POR CARRERA EDUCATIVA
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "campo_amplio" & sub_val == "1" & gpo_val != "99") |> 
+  mutate(
+    prop_label = scales::percent(prop, accuracy = 1),
+    campo_amplio = factor(gpo_val),
+    campo_amplio = fct_recode(
+      campo_amplio,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10"
+    ),
+    # etiqueta en forma de porcentaje
+    prop_label = scales::percent(prop, accuracy = 1) 
+  ) |>  
+  ggplot(aes(fct_reorder(campo_amplio, prop), prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label)) +
+  scale_x_discrete(labels = scales::label_wrap(width = 30)) + 
+  scale_y_continuous(
+    labels = NULL, 
+    breaks = NULL,
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    # eliminar línea de los ejes
+    axis.line = element_blank(),
+    # eliminar marcas en cada valor del eje
+    axis.ticks = element_blank()
+  ) +
+  otros_elementos + 
+  coord_flip()
+```
+
+POR ENTIDADES
+
+No hay cambios
+
+POR EDUCACIÓN Y CARRERAS
+
+```{r}
+# POR CARRERAS Y NIVEL EDUCATIVO ------------------------------------
+
+etiquetas_var1 <- c(
+  "1" = "Educación",
+  "2" = "Artes y humanidades",
+  "3" = "Ciencias sociales y derecho",
+  "4" = "Administración y negocios",
+  "5" = "Ciencias naturales, matemáticas y estadística",
+  "6" = "Tecnologías de la información y la comunicación",
+  "7" = "Ingeniería, manufactura y construcción",
+  "8" = "Agronomía y veterinaria",
+  "9" = "Ciencias de la salud",
+  "10" = "Servicios"
+)
+
+etiquetas_var2 <- c(
+  "6" = "Técnico superior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+inc_edu_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  ggplot(
+    aes(
+      x = campo_amplio, y = prop, 
+      color = educacion, shape = educacion
+    )
+  ) +
+  geom_point(size = 3) + 
+  scale_x_discrete(labels = label_wrap(20)(etiquetas_var1)) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = etiquetas_var2) + 
+  scale_shape_discrete(name = NULL, labels = etiquetas_var2) + 
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) + 
+  otros_elementos
+```
+
+No sé por cuál quedarme hago las dos
+
+```{r}
+inc_edu_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  mutate(campo_amplio = as.integer(campo_amplio)) |> 
+  ggplot(
+    aes(
+      x = campo_amplio, y = prop,
+      color = educacion, shape = educacion, linetype = educacion
+    )
+  ) +
+  geom_point(size = 2.5) +
+  geom_line() +
+  scale_x_continuous(
+    labels = label_wrap(20)(etiquetas_var1),
+    breaks = seq(1, 10, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = etiquetas_var2) +
+  scale_shape_discrete(name = NULL, labels = etiquetas_var2) +
+  scale_linetype_discrete(name = NULL, labels = etiquetas_var2) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) +
+  otros_elementos
+```
+
+OVER Y TIL1 POR ESTADOS
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "ent")
+```
+
+Aquí se tiene que cargar la tabla que contiene til1 a nivel estatal
+
+```{r}
+tasas_sub <- read_rds("datos/descriptivo_tasas_sub.rds")
+```
+
+Se valida
+
+```{r}
+# tasas_sub
+```
+
+No aparece los datos de origen porque no se especificó en la función
+
+```
+calcular_tasas_ocu_sub_map <- function(datos, grupo, nombre, campo, operador, valor){
+  # busca el tibble especificado por el usuario
+  poblacion <- get(datos)
+  # pasa de cadena de texto a símbolo
+  grupo_sym <- sym(grupo)
+  # concatena
+  filtro <- paste(campo, operador, valor)
+  
+  poblacion |> 
+    mutate(ponderador = as.double(fac_tri)) |> 
+    group_by(  !!grupo_sym  ) |> 
+    summarise(
+      grupo = grupo,
+      nombre = nombre,
+      numerador = sum(ponderador[  !!parse_expr(filtro)  ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador,
+      # elimina agrupación
+      .groups = "drop"
+    ) |> 
+    # renombra columna que contiene valores del grupo
+    rename("subgrupo" :=  !!grupo_sym  ) |> 
+    mutate(subgrupo = as.character(subgrupo)) |> 
+    relocate(subgrupo, .after = grupo)
+}
+```
+
+Se hace el cambio en el script `funciones` y en `cuadros` y se guarda en 
+
+* C:/Prog/tesis/scripts/0_funciones_v9.R
+* C:/Prog/tesis/scripts/2_cuadros_v7.R
+
+Se vuelve a ejecutar
+
+```{r}
+tasas_sub
+```
+
+Listo
+
+```{r}
+tasas_sub |>
+  filter(grupo == "ent" & nombre == "til1")
+```
+
+Para el caso de over
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "ent" & sub_val == "1")
+```
+
+Se unen
+
+```{r}
+til1_jov_ent <- tasas_sub |>
+  filter(grupo == "ent" & nombre == "til1") |> 
+  select(-(datos:grupo), -(nombre:denominador))
+
+incidencia_sub |> 
+  filter(gpo_lab == "ent" & sub_val == "1") |>
+  left_join(til1_jov_ent, by = c("gpo_val" = "subgrupo"))
+```
+
+Se hace gráfica
+
+```{r}
+library(ggrepel)
+
+etiquetas_var <- c(
+  "1" = "AGS",
+  "2" = "BC",
+  "3" = "BCS",
+  "4" = "CAMP",
+  "5" = "COAH",
+  "6" = "COL",
+  "7" = "CHIS",
+  "8" = "CHIH",
+  "9" = "CDMX",
+  "10" = "DGO",
+  "11" = "GTO",
+  "12" = "GRO",
+  "13" = "HGO",
+  "14" = "JAL",
+  "15" = "MÉX",
+  "16" = "MICH",
+  "17" = "MOR",
+  "18" = "NAY",
+  "19" = "NL",
+  "20" = "OAX",
+  "21" = "PUE",
+  "22" = "QRO",
+  "23" = "QROO",
+  "24" = "SLP",
+  "25" = "SIN",
+  "26" = "SON",
+  "27" = "TAB",
+  "28" = "TAMPS",
+  "29" = "TLAX",
+  "30" = "VER",
+  "31" = "YUC",
+  "32" = "ZAC"
+)
+
+incidencia_sub |> 
+  filter(gpo_lab == "ent" & sub_val == "1") |>
+  left_join(til1_jov_ent, by = c("gpo_val" = "subgrupo")) |>
+  mutate(ent = as.integer(gpo_val)) |> 
+  arrange(ent) |> 
+  ggplot(aes(tasa, prop)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = etiquetas_var)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+```
+
+```{r}
+tasas_sub |>
+  filter(grupo == "ent") |> 
+  pivot_wider(
+    id_cols = subgrupo,
+    names_from = nombre,
+    values_from = tasa
+  )
+```
+
+Mejor así
+
+```{r}
+jov_tasas_ent <- tasas_sub |>
+  filter(grupo == "ent") |> 
+  pivot_wider(
+    id_cols = subgrupo,
+    names_from = nombre,
+    values_from = tasa
+  )
+```
+
+
+```{r}
+jov_inc_ent <- incidencia_sub |> 
+  filter(gpo_lab == "ent") |> 
+  pivot_wider(
+    id_cols = gpo_val, 
+    names_from = sub_val,
+    names_prefix = "desajuste_",
+    names_sort = TRUE,
+    values_from = prop
+  )
+```
+
+Unión
+
+```{r}
+jov_ent_inc_tasas <- jov_inc_ent |> 
+  left_join(jov_tasas_ent, by = c("gpo_val" = "subgrupo"))
+```
+
+Ahora sí la gráfica
+
+```{r}
+jov_ent_inc_tasas |> 
+  mutate(ent = as.integer(gpo_val)) |> 
+  arrange(ent) |> 
+  ggplot(aes(til1, desajuste_1)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = etiquetas_var)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+```
+
+Aprovechando la información se juega con las tasas
+
+```{r}
+jov_ent_inc_tasas |> 
+  mutate(ent = as.integer(gpo_val)) |> 
+  arrange(ent) |> 
+  ggplot(aes(desajuste_1, tp)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = etiquetas_var)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS")
+  # labs(
+  #   x = "til1",
+  #   y = "Tasa de sobrecalificación"
+  # )
+```
+
+Vamos a meterlas todas en una regresión
+
+```{r}
+model_jov_inc_tasas <- lm(tp ~desajuste_1, data = jov_ent_inc_tasas)
+summary.lm(model_jov_inc_tasas)
+```
+
+Tanto TIL1 y TCCO tienen efecto positivo, y TP efecto positivo
+
+No se han validado supuestos
+
+Ya tienen los datos para el script `figuras` 
+
+Por estados
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "ent" & sub_val == "1")
+```
+

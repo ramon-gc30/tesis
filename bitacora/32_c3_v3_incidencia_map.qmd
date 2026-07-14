@@ -1,0 +1,94 @@
+---
+date: today
+format: html
+---
+
+En este documento se crearán las tablas que contendrá la incidencia a través de la función iterativa `pmap`
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+
+source("scripts/0_funciones_v9.R")
+
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+# ocupada <- read_rds("datos/ocupada_normativo.rds")
+```
+
+Primero incidencia total 
+
+```{r}
+argumentos_inc_tot <- list("jovenes_ocu", "edu_mismatch_obj")
+
+pmap(argumentos_inc_tot, calcular_prop_map)
+```
+
+Ahora la incidencia por grupos
+
+```{r}
+argumentos_inc_sub <- tribble(
+  ~datos, ~grupo, ~subgrupo,
+  # ---
+  "jovenes_ocu", "mujer", "edu_mismatch_obj",
+  "jovenes_ocu", "educacion", "edu_mismatch_obj",
+  "jovenes_ocu", "edad", "edu_mismatch_obj",
+  "jovenes_ocu", "campo_amplio", "edu_mismatch_obj",
+  "jovenes_ocu", "regiones", "edu_mismatch_obj",
+  "jovenes_ocu", "ent", "edu_mismatch_obj",
+  "jovenes_ocu", "informal", "edu_mismatch_obj",
+  "jovenes_ocu", "ingreso_nivel", "edu_mismatch_obj",
+  "jovenes_ocu", "casada", "edu_mismatch_obj",
+  "jovenes_ocu", "jefe_hogar", "edu_mismatch_obj",
+  "jovenes_ocu", "edu_mismatch_obj", "division",
+  "jovenes_ocu", "pos_ocu", "edu_mismatch_obj",
+  "jovenes_ocu", "sector_eco", "edu_mismatch_obj",
+  "jovenes_ocu", "tamanio", "edu_mismatch_obj",
+  "jovenes_ocu", "jornada", "edu_mismatch_obj",
+  "jovenes_ocu", "unidad_eco", "edu_mismatch_obj"
+)
+
+pmap(argumentos_inc_sub, calcular_prop_sub_map) |> 
+  list_rbind()
+```
+
+¿Cómo se almacenan? Se valida
+
+```{r}
+df <- pmap(argumentos_tot, calcular_prop_map)
+df
+```
+
+Se debe de añadir `list_rbind` para que lo almacene como tibble
+
+```{r}
+df <- pmap(argumentos_tot, calcular_prop_map) |> list_rbind()
+df
+```
+
+Entonces, se almacenan en el script `C:/Prog/tesis/scripts/2_cuadros_v7.R` 
+
+El único pendiente es educación por carrera educativa, se crea aquí mediante la función `calcular_prop_sub_var`
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop_sub_var(educacion, campo_amplio, edu_mismatch_obj)
+```
+
+Está correcto!!!
+
+Falta la comparación por grupos de edad y de educación, se deja para después
+
+Se añaden dichas tablas en el script `cuadros` y se guarda en "C:/Prog/tesis/scripts/2_cuadros_v7.R" 
+
+En temas de código solamente falta:
+
+* Gráficas de la incidencia
+* Regresión
+
+
+

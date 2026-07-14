@@ -1,0 +1,812 @@
+---
+date: today
+format: html
+---
+
+## INTRODUCCIÓN
+
+Este documento es la continuación de "C:/Prog/tesis/31_c3_v3_analisis_descrip_5.qmd"
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+# trabajar encuesta compleja dentro de tidyverse 
+library(srvyr)
+# regresión a encuesta compleja
+library(survey)
+# convertir a porcentaje dentro de mutate
+library(scales) 
+# operador entre llaves 
+library(rlang)
+
+source("C:/Prog/tesis/scripts/funciones_v4.R")
+
+pob_15ymas <- read_rds("C:/Prog/tesis/datos/pob_15ymas.rds")
+jovenes_tot <- read_rds("C:/Prog/tesis/datos/jovenes_tot.rds")
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+sinco19 <- read_rds("datos/sinco_19_edu_req.rds")
+```
+
+## OCUPADA 
+
+Ahora continuamos con la población ocupada. Con base en INEGI y OECD (2019), tengo en mente trabajar con los siguientes indicadores:
+
+* tasa de ocupación: `PO / PEA` 
+* tasa de desocupación: `PD / PEA`
+* tasa de condiciones críticas de ocupación: `PCCO / PO`
+* tasa de informalidad laboral 1: `POI / PO` 
+* proporción: `%`
+* tasa de participación: `PEA / pob total`
+* tasa de inactividad: `PNEA / pob total`
+
+Por
+
+* Género
+* Nivel educativo
+* Carreras
+* Entidades
+
+Primero calculemos las tasas mostradas en INEGI.
+
+Tasa de ocupación y desocupación
+
+```{r}
+pob_15ymas |> 
+  filter(clase1 == 1) |> 
+  calcular_prop(clase2)
+```
+
+Correcto
+
+Tasa de participación (PEA)
+
+```{r}
+calcular_tasas_ocup(pob_15ymas, "tp", clase1, 1)
+```
+
+Correcto
+
+Tasa de inactividad (PNEA)
+
+```{r}
+calcular_tasas_ocup(pob_15ymas, "inactividad", clase1, 2)
+```
+
+TIL1
+
+```{r}
+pob_15ymas |> 
+  filter(clase2 == 1) |> 
+  calcular_tasas_ocup("til1", emp_ppal, 1)
+```
+
+Correcto. En este caso, apliqué un filtro para que el total sea la población ocupada
+
+TCCO
+
+Aquí se escogen tres valores del campo: `tcco = 1 a 3`. Primero validemos ese campo
+
+```{r}
+calcular_prop(pob_15ymas, tcco)
+```
+
+La forma más rápida de calcular es mediante la función anterior que calcula las tasas complementarias
+
+```{r}
+# # calcular tasas complementarias de ocupación y desocupación
+# calcular_tasas_ocup_op <- function(datos, nombre, campo, operador, valor){
+#   # concatenar
+#   filtro <- paste(campo, operador, valor)
+# 
+#   datos |>
+#     mutate(ponderador = as.double(fac_tri)) |>
+#     summarise(
+#       nombre = nombre,
+#       numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+#       denominador = sum(ponderador),
+#       tasa = numerador / denominador
+#     )
+# }
+```
+
+Se valida
+
+```{r}
+pob_15ymas |> 
+  filter(clase2 == 1) |> 
+  calcular_tasas_ocup_operador("tcco", "tcco", "!=", 0)
+```
+
+Existe una ligera diferencia, se valida con la tasa de participación
+
+```{r}
+pob_15ymas |> 
+  calcular_tasas_ocup_operador("tp", "clase1", "==", 1)
+```
+
+Está correcto!! Por tanto, se deja la función en la misma versión del script de funciones.
+
+Por tanto, las funciones están realizadas de forma correcta
+
+## Jóvenes
+
+Ahora vayamos a jóvenes de 25 a 34 años egresados de educación superior
+
+```{r}
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_tasas_ocup("to", clase2, 1)
+```
+
+La tasa de ocupación es de 95.7%, 2 puntos porcentuales menor a la nacional
+
+```{r}
+calcular_tasas_ocup(jovenes_tot, "tp", clase1, 1)
+```
+
+La tasa de participación de jóvenes egresados es mayor a la nacional: 86.5% vs 59.5%
+
+Tasa de desocupación
+
+```{r}
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_tasas_ocup("td", clase2, 2)
+```
+
+La tasa de desocupación en jóvenes es mayor a la nacional: 4.3% vs 2.7%
+
+¿Por grupos de edad? ¿Por nivel educativo?
+
+PEA y PNEA
+
+```{r}
+jovenes_tot |> 
+  calcular_prop(clase1)
+```
+
+PEA (actividad): 86.5%; PNEA (inactividad): 13.5%
+
+TCCO
+
+```{r}
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador("tcco", "tcco", "!=", "0")
+```
+
+La tcco en jóvenes es menor a la nacional: 19.0% vs 34.8%
+
+TIL1
+
+```{r}
+jovenes_ocu |> 
+  calcular_tasas_ocup("til1", emp_ppal, 1)
+```
+
+La tasa de informalidad en jóvenes es mucho menor a la nacional: 27.1% vs 54.8%
+
+### Total
+
+```{r}
+# muestra
+calcular_total(jovenes_tot)
+
+# pea y pnea
+jovenes_tot |> 
+  calcular_prop(clase1)
+
+# ocupación y desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_prop(clase2)
+
+# disponibles y no disponibles
+jovenes_tot |> 
+  filter(clase1 == 2) |> 
+  calcular_prop(clase2)
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocup("tp", clase1, 1)
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador("tcco", "tcco", "!=", "0")
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocup("til1", emp_ppal, 1)
+```
+
+
+### Por género
+
+```{r}
+# muestra
+calcular_prop(jovenes_tot, mujer)
+
+# PEA y PNEA
+jovenes_tot |> 
+  calcular_prop_sub(mujer, clase1)
+
+# ocupación y desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_prop_sub(mujer, clase2)
+
+# disponible y no disponible
+jovenes_tot |> 
+  filter(clase1 == 2) |> 
+  calcular_prop_sub(mujer, clase2)
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocu_sub(mujer, clase1, 1)
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador_sub(mujer, "tcco", "!=", "0")
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocu_sub(mujer, emp_ppal, 1)
+
+# total de hijos
+jovenes_tot |> 
+  filter(mujer == 1) |> 
+  calcular_prop(hij5c)
+```
+
+Se validan resultados
+
+```{r}
+# # muestra
+# calcular_prop(pob_15ymas, mujer)
+# 
+# # PEA y PNEA
+# pob_15ymas |> 
+#   calcular_prop_sub(mujer, clase1)
+# 
+# # ocupación y desocupación
+# pob_15ymas |> 
+#   filter(clase1 == 1) |> 
+#   calcular_prop_sub(mujer, clase2)
+# 
+# # tp
+# pob_15ymas |> 
+#   calcular_tasas_ocu_sub(mujer, clase1, 1)
+# 
+# # tcco
+# pob_15ymas |>
+#   filter(clase2 == 1) |> 
+#   calcular_tasas_ocup_operador_sub(mujer, "tcco", "!=", "0")
+# 
+# # til1
+# pob_15ymas |> 
+#   filter(clase2 == 1) |> 
+#   calcular_tasas_ocu_sub(mujer, emp_ppal, 1)
+```
+
+Los resultados están correctos. Entonces, esa es la manera de calcular las tasas por grupos poblacionales.
+
+### POR EDUCACIÓN
+
+```{r}
+# muestra
+jovenes_tot |> 
+calcular_prop(educacion)
+
+# PEA y PNEA
+jovenes_tot |> 
+  calcular_prop_sub(educacion, clase1)
+
+# ocupación y desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_prop_sub(educacion, clase2)
+
+# disponible y no disponible
+jovenes_tot |> 
+  filter(clase1 == 2) |> 
+  calcular_prop_sub(educacion, clase2)
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocu_sub(educacion, clase1, 1)
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador_sub(educacion, "tcco", "!=", "0")
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocu_sub(educacion, emp_ppal, 1)
+```
+
+### POR EDAD
+
+```{r}
+# muestra
+jovenes_tot |> 
+calcular_prop(edad)
+
+# PEA y PNEA
+jovenes_tot |> 
+  calcular_prop_sub(edad, clase1)
+
+# ocupación y desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_prop_sub(edad, clase2)
+
+# disponible y no disponible
+jovenes_tot |> 
+  filter(clase1 == 2) |> 
+  calcular_prop_sub(edad, clase2)
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocu_sub(edad, clase1, 1)
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador_sub(edad, "tcco", "!=", "0")
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocu_sub(edad, emp_ppal, 1)
+```
+
+### POR CARRERAS
+
+```{r}
+# muestra
+jovenes_tot |> 
+calcular_prop(campo_amplio) |> 
+  arrange(desc(prop))
+
+# PEA y PNEA
+jovenes_tot |> 
+  calcular_prop_sub(campo_amplio, clase1)
+
+# ocupación 
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_tasas_ocu_sub(campo_amplio, clase2, 1) |> 
+    arrange(desc(tasa))
+
+# desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_tasas_ocu_sub(campo_amplio, clase2, 2) |> 
+    arrange(desc(tasa))
+
+# disponible y no disponible
+jovenes_tot |> 
+  filter(clase1 == 2) |> 
+  calcular_prop_sub(campo_amplio, clase2)
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocu_sub(campo_amplio, clase1, 1) |> 
+  arrange(desc(tasa))
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador_sub(campo_amplio, "tcco", "!=", "0") |> 
+  arrange(desc(tasa))
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocu_sub(campo_amplio, emp_ppal, 1) |> 
+  arrange(desc(tasa))
+```
+
+## POR REGIONES
+
+```{r}
+# muestra
+jovenes_tot |> 
+calcular_prop(regiones)
+
+# PEA y PNEA
+jovenes_tot |> 
+  calcular_prop_sub(regiones, clase1)
+
+# ocupación y desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_prop_sub(regiones, clase2)
+
+# disponible y no disponible
+jovenes_tot |> 
+  filter(clase1 == 2) |> 
+  calcular_prop_sub(regiones, clase2)
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocu_sub(regiones, clase1, 1)
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador_sub(regiones, "tcco", "!=", "0")
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocu_sub(regiones, emp_ppal, 1)
+```
+
+## POR ENTIDADES
+
+```{r}
+# muestra
+jovenes_tot |> 
+calcular_prop(ent) |> 
+  arrange(desc(prop))
+
+# ocupación 
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_tasas_ocu_sub(ent, clase2, 1) |> 
+    arrange(desc(tasa))
+
+# desocupación
+jovenes_tot |> 
+  filter(clase1 == 1) |> 
+  calcular_tasas_ocu_sub(ent, clase2, 2) |> 
+    arrange(desc(tasa))
+
+# tp
+jovenes_tot |> 
+  calcular_tasas_ocu_sub(ent, clase1, 1) |> 
+    arrange(desc(tasa))
+
+# tcco
+jovenes_ocu |> 
+  calcular_tasas_ocup_operador_sub(ent, "tcco", "!=", "0") |> 
+    arrange(desc(tasa))
+
+# til1
+jovenes_ocu |> 
+  calcular_tasas_ocu_sub(ent, emp_ppal, 1) |> 
+    arrange(desc(tasa))
+```
+
+### POR SECTOR
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop(sector_eco)
+
+jovenes_ocu |> 
+  filter(sector_eco == 2 | sector_eco == 3) |> 
+  calcular_prop_sub(sector_eco, rama_est2) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+### POR TAMAÑO
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop(tamanio) |> 
+  arrange(desc(prop))
+```
+
+### POR OCUPACIÓN
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop(division) |> 
+  arrange(desc(prop))
+```
+
+### EDUCACIÓN REQUERIDA POR DIVISIÓN
+
+Se valida tabla
+
+```{r}
+glimpse(sinco19)
+```
+
+Se establece educación requerida (mínimo y máximo) por división
+
+```{r}
+sinco19_edu_req <- sinco19 |> 
+  mutate(
+    objetivo_min = as.character(objetivo_min),
+    objetivo_max = as.character(objetivo_max),
+    tot_edu = str_c(objetivo_min, "-", objetivo_max)
+  ) |> 
+  separate(
+    s19_unit,
+    into = "s19_div",
+    sep = 1,
+    remove = FALSE
+  )
+
+s19_div_edu_req <- sinco19_edu_req |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop), .by_group = TRUE) |> 
+  ungroup()
+
+s19_div_edu_req
+```
+
+Por último, se realiza gráfica
+
+```{r}
+labels_vars <- c(
+  "1-2" = "Preescolar-Primaria",
+  "1-4" = "Primaria-Preparatoria",
+  "3-4" = "Secundaria-Preparatoria",
+  "3-6" = "Secundaria-Técnico superior",
+  "3-9" = "Secundaria-Doctorado",
+  "6-6" = "Técnico superior",
+  "6-9" = "Técnico superior-Doctorado",
+  "7-9" = "Licenciatura-Doctorado",
+  "NA" = "No especificado"
+)
+
+labels_vars2 <- c(
+  "1" = "Funcionarios, directores y jefes",
+  "2" = "Profesionistas y técnicos",
+  "3" = "Trabajadores auxiliares en actividades administrativas",
+  "4" = "Comerciantes, empleados en ventas y agentes de ventas",
+  "5" = "Trabajadores en servicios personales y de vigilancia",
+  "6" = "Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca",
+  "7" = "Trabajadores artesanales, en la construcción y otros oficios",
+  "8" = "Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte",
+  "9" = "Trabajadores en actividades elementales y de apoyo"
+)
+
+fig_s19_div_edu_req <- s19_div_edu_req |> 
+  mutate(
+    prop_label = if_else(prop > 0.03, scales::percent(prop, accuracy = 1), ""),
+    tot_edu = if_else(is.na(tot_edu), "NA", tot_edu)
+  ) |> 
+  ggplot(aes(s19_div, prop, group = tot_edu, fill = tot_edu)) + 
+  geom_col() + 
+  geom_text(
+    aes(label = prop_label), 
+    position = position_stack(vjust = 0.5),
+    size = 2.5
+  ) + 
+  scale_fill_brewer(palette = "Paired", name = "Educación requerida", labels = labels_vars) +
+  scale_x_discrete(labels = scales::label_wrap(30)(labels_vars2)) + 
+  scale_y_continuous(labels = NULL, breaks = NULL) + 
+  theme_classic(base_size = 10, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) + 
+  labs(x = NULL, y = NULL)
+
+guardar_figura(fig_s19_div_edu_req, "figuras/fig_s19_div_edu_req.png")
+```
+
+Truco
+
+```
+# Truco: Solo poner etiqueta si el porcentaje es mayor al 3%
+mutate(
+  prop_label = if_else(prop > 0.03, scales::percent(prop, accuracy = 1), "")
+)
+
+```
+
+### CORRESPONDENCIA
+
+```{r}
+sinco19_edu_req |> 
+  count(tot_edu) |> 
+  mutate(prop = n / sum(n))
+```
+
+Población ocupada
+
+```{r}
+ocupada <- pob_15ymas |> 
+  filter(clase2 == 1)
+```
+
+Por nivel educativo
+
+```{r}
+ocupada |> 
+  calcular_prop(educacion)
+```
+
+Por grupo unitario de ocupación
+
+```{r}
+jovenes_ocu |> 
+  select(contains(c("edu", "objetivo"))) |> 
+  head(5)
+```
+
+Se añade variable que contiene la educación requerida
+
+```{r}
+jovenes_ocu |> 
+  transmute(edu_req = str_c(objetivo_min, "-", objetivo_max)) |> 
+  head(5)
+```
+
+Sí es posible sin necesidad de convertir a caracter las variables que deseo concatenar
+
+```{r}
+jovenes_ocu <- jovenes_ocu |> 
+  mutate(edu_req = str_c(objetivo_min, "-", objetivo_max))
+```
+
+Ahora se agrupa por grupo unitario de ocupación, educación y educación requerida
+
+```{r}
+jovenes_ocu_df <- as.data.frame(jovenes_ocu)
+```
+
+Listo! Se tuvo que pasar la tabla a tipo marco de datos (data frame) para poder aplicar la función `distinct`. 
+
+```{r}
+jovenes_ocu_df |> 
+  distinct(edu_req, educacion)
+```
+
+Considero que como está permite comparar la educación requerida por ocupación, validemos
+
+También podría ser al revés
+
+```{r}
+jovenes_ocu_df |> 
+  distinct(educacion, edu_req) |> 
+  mutate(educacion = as.integer(levels(educacion))[educacion]) |> 
+  arrange(desc(educacion))
+```
+
+La interpretación sería la siguiente
+
+Del total de jóvenes egresados de estudios de doctorado, existen individuos ocupados en ocupaciones que requieren estudios de tipo superior, pero incluso hay individuos ubicados en ocupaciones que requieren una educación menor a básico
+
+Así aplicaría para los demás grupos
+
+Ahora se calcula el porcentaje
+
+```{r}
+jovenes_ocu_df |> 
+  mutate(educacion = as.integer(levels(educacion))[educacion]) |> 
+  group_by(educacion, edu_req) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  arrange(desc(educacion))
+```
+
+Listo!
+
+Interpretación: el 10.5% de jóvenes egresados de educación superior se encuentran en ocupaciones que requieren una educación menor a básico.
+
+Considero que puede hacerse directamente con `edu_req`
+
+```{r}
+jovenes_ocu_df |> 
+  mutate(educacion = as.integer(levels(educacion))[educacion]) |> 
+  group_by(edu_req) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  arrange(desc(prop))
+```
+
+Es más directo, incluso puede utilizarse la función
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop(edu_req) |> 
+  arrange(desc(prop))
+```
+
+La interpretación es como sigue. El 45.8% de jóvenes egresados de educación superior se encuentran en ocupaciones que requieren desde licenciatura hasta estudios de doctorado.
+
+En suma,
+
+```{r}
+0.458107843 + 0.106342330 + 0.058886054 + 0.010870031 + 0.005020651
+```
+
+El 63.9% se encuentran en ocupaciones que requieren al menos un nivel educativo de tipo superior
+
+Y de forma desmenuzada quedaría así
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop_sub(educacion, edu_req) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+Interpretación:
+
+El 69.5% de jóvenes egresados de doctorado se encuentran en ocupaciones que requieren desde licenciatura hasta doctorado. Por tanto,
+
+```{r}
+0.135166158 + 0.105268911 + 0.064331001
+```
+
+El 30.5% se encuentran en ocupaciones que requieren estudios inferiores al doctorado
+
+De forma gráfica, sería similar a la figura `fig_s19_div_edu_req`
+
+```{r}
+labels_vars1 <- c(
+  "6" = "Técnico \nsuperior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+labels_vars2 <- c(
+  "1-2" = "Preescolar-Primaria",
+  "1-4" = "Primaria-Preparatoria",
+  "3-4" = "Secundaria-Preparatoria",
+  "3-6" = "Secundaria-Técnico superior",
+  "3-9" = "Secundaria-Doctorado",
+  "6-6" = "Técnico superior",
+  "6-9" = "Técnico superior-Doctorado",
+  "7-9" = "Licenciatura-Doctorado",
+  "NA" = "No especificado"
+)
+
+edu_ind_req <- jovenes_ocu |> 
+  calcular_prop_sub(educacion, edu_req) |> 
+  arrange(desc(prop), .by_group = TRUE) |> 
+  ungroup()
+
+fig_edu_ind_req <- edu_ind_req |> 
+  mutate(
+    prop_label = if_else(prop > 0.03, scales::percent(prop, accuracy = 1), ""),
+    edu_req = if_else(is.na(edu_req), "NA", edu_req)
+  ) |> 
+  ggplot(aes(educacion, prop, group = edu_req, fill = edu_req)) + 
+  geom_col() +
+  geom_text(
+    aes(label = prop_label), 
+    position = position_stack(vjust = 0.5),
+    size = 2.5
+  ) + 
+  scale_fill_brewer(palette = "Paired", name = "Educación requerida", labels = labels_vars2) +
+  scale_x_discrete(labels = scales::label_wrap(10)(labels_vars1)) + 
+  scale_y_continuous(labels = NULL, breaks = NULL) + 
+  theme_classic(base_size = 10, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) + 
+  labs(x = NULL, y = NULL)
+
+guardar_figura(fig_edu_ind_req, "figuras/fig_edu_ind_req.png")
+```
+
+NOTA:
+
+Sugerencia agrupar la educación requerida como, por ejemplo:
+
+```
+  "6-6" = "Técnico superior",
+  "6-9" = "Técnico superior-Doctorado",
+  "7-9" = "Licenciatura-Doctorado",
+```
+
+Clasificarlas como "educación superior"
+
+```
+  "1-4" = "Primaria-Preparatoria",
+  "3-4" = "Secundaria-Preparatoria",
+```
+
+Como básica-media superior, etc.

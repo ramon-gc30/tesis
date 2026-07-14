@@ -1,0 +1,446 @@
+---
+date: today
+format: html
+---
+
+Este documento tiene como objetivo abordar las actividades especificadas en el borrador de la V3 de C3.2 Incidencia 
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+# archivos requeridos ----------------------------------------------- 
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v4.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v4.R")
+
+# Selección de población objetivo ----------------------------------- 
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+general_syy <- definir_encuesta(general)
+```
+
+Función para guardar figuras
+
+```{r}
+# función para guardar gráfica
+guardar_figura <- function(grafica, nombre_archivo){
+  ggsave(
+    filename = nombre_archivo,
+    plot = grafica,
+    width = 17,
+    height = 10,
+    units = "cm",
+    dpi = 300 # asegura alta calidad
+  )
+}
+```
+
+
+1. Comparar por edad y nivel educativo
+
+Por edad
+
+```{r}
+tbl_inc_ocu_edad7g <- calcular_inc_svy_des(general_syy, edad_7g, edu_mismatch_obj) |> 
+  ungroup()
+
+tbl_inc_ocu_edad7g
+```
+
+Se realiza gráfica
+
+Primero se valida grupos de edad
+
+```{r}
+tbl_inc_ocu_edad7g |> 
+  distinct(edad_7g)
+```
+
+```{r}
+labels_vars1 <- c(
+  "1" = "15 a 24 \naños",
+  "2" = "25 a 34 \naños",
+  "3" = "35 a 44 \naños",
+  "4" = "45 a 54 \naños",
+  "5" = "55 a 65 \naños",
+  "6" = "65 \naños en \nadelante"
+  # "7" = "No \nespecificado"
+  )
+
+labels_vars2 <- c(
+  "0" = "Adecuadamente emparejado",
+  "1" = "Sobrecalificación",
+  "2" = "Subcalificación"
+)
+```
+
+
+```
+ edad_7g = case_when(
+        between(edad, 15, 24) ~ 1,
+        between(edad, 25, 34) ~ 2,
+        between(edad, 35, 44) ~ 3,
+        between(edad, 45, 54) ~ 4,
+        between(edad, 55, 64) ~ 5,
+        between(edad, 65, 97) ~ 6,
+        # valor 7 indica no especificado
+        TRUE ~ 7
+```
+
+```{r}
+fig_inc_ocu_edad7g <- tbl_inc_ocu_edad7g |>  
+  filter(edad_7g != 7 & !is.na(edu_mismatch_obj)) %>% 
+  mutate(
+    # edad_7g = as.integer(edad_7g),
+    desajuste_educativo = factor(edu_mismatch_obj)
+  ) %>%
+  ggplot(aes(edad_7g, prop, color = desajuste_educativo)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(
+    labels = labels_vars1,
+    breaks = seq(1, 6, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)  
+  ) + 
+  scale_color_brewer(
+    palette = "Set1", 
+    name = NULL,
+    labels = labels_vars2
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+
+guardar_figura(fig_inc_ocu_edad7g, "figuras/fig_inc_ocu_edad7g.png")
+```
+
+Recuerda la población objetivo son jóvenes egresados de educación superior. Entonces, la comparación por edad mantengo el nivel educativo terciario. 
+
+Primero vamos a conocer la población con estudios terciarios
+
+```{r}
+obtener_tamanio_muestra(general_syy)
+```
+
+```{r}
+pob_ocu_educacion <- general_syy |> 
+  group_by(educacion) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+pob_ocu_educacion |> 
+  filter(between(educacion, 6, 9)) |> 
+  summarise(sum(n), sum(tot), sum(prop))
+```
+
+13,385,817 de personas ocupadas cuentan con estudios terciarios, que representa el 22.5% del total de la población ocupada
+
+```{r}
+tbl_inc_edu_sup_edad7g <- general |> 
+  mutate(educacion = as.integer(educacion)) |> 
+  filter(between(educacion, 6, 9)) |> 
+  group_by(edad_7g, edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ungroup()
+```
+
+Ahora se realiza gráfica
+
+```{r}
+fig_inc_edu_sup_edad7g <- tbl_inc_edu_sup_edad7g |>  
+  filter(edad_7g != 7 & !is.na(edu_mismatch_obj)) %>% 
+  mutate(
+    # edad_7g = as.integer(edad_7g),
+    desajuste_educativo = factor(edu_mismatch_obj)
+  ) %>%
+  ggplot(aes(edad_7g, prop, color = desajuste_educativo)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(
+    labels = labels_vars1,
+    breaks = seq(1, 6, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)  
+  ) + 
+  scale_color_brewer(
+    palette = "Set1", 
+    name = NULL,
+    labels = labels_vars2
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+
+guardar_figura(fig_inc_edu_sup_edad7g, "figuras/fig_inc_edu_sup_edad7g.png")
+```
+
+Por nivel educativo
+
+```{r}
+general_syy |> 
+  group_by(edad_7g) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Hay 13,682,440 de jóvenes de 25 a 34 años que representan el 23.0% del total de la población ocupada
+
+```{r}
+tbl_inc_ocu_jov_edu <- general_syy  |> 
+  filter(edad_7g == 2) |> 
+  mutate(
+    educacion = as.integer(educacion),
+    edu_tipo = case_when(
+      # menos que básica
+      between(educacion, 0, 1) ~ 0,
+      # educación básica
+      between(educacion, 2, 3) ~ 1,
+      # educación media superior
+      educacion == 4 ~ 2,
+      # educación superior
+      between(educacion, 6, 9) ~ 3,
+      TRUE ~ NA
+    )
+  ) |> 
+  calcular_inc_svy_des(edu_tipo, edu_mismatch_obj) |> 
+  ungroup()
+
+tbl_inc_ocu_jov_edu
+```
+
+Se realiza la gráfica
+
+```{r}
+labels_vars1 <- c(
+  "0" = "Menor \na \nbásica",
+  "1" = "Básica",
+  "2" = "Media \nsuperior",
+  "3" = "Superior"
+  )
+
+fig_inc_ocu_jov_edu <- tbl_inc_ocu_jov_edu %>% 
+  mutate(
+    # escolaridad = factor(escolaridad),
+    desajuste_educativo = factor(edu_mismatch_obj)
+  ) %>% 
+  filter(!is.na(edu_tipo) & !is.na(desajuste_educativo)) %>%
+  ggplot(aes(edu_tipo, prop, color = desajuste_educativo)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    breaks = seq(0, 3, by = 1),
+    labels = labels_vars1
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) + 
+  scale_color_brewer(
+    palette = "Set1",
+    name = NULL,
+    labels = labels_vars2
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+
+fig_inc_ocu_jov_edu
+
+guardar_figura(fig_inc_ocu_jov_edu, "figuras/fig_inc_ocu_jov_edu.png")
+```
+
+POR EDUCACIÓN 
+
+```{r}
+tbl_inc_ocu_educacion <- general_syy |> 
+  calcular_inc_svy_des(educacion, edu_mismatch_obj) |> 
+  ungroup()
+
+tbl_inc_ocu_educacion
+```
+
+Se realiza gráfica
+
+```{r}
+labels_vars1 <- c(
+  "0" = "Ninguna",
+  "1" = "Preescolar",
+  "2" = "Primaria",
+  "3" = "Secundaria",
+  "4" = "Preparatoria",
+  "5" = "Técnico \nsuperior",
+  "6" = "Licenciatura",
+  "7" = "Maestría",
+  "8" = "Doctorado"
+  )
+
+tbl_inc_ocu_educacion |> 
+  mutate(
+    educacion = case_when(
+      educacion == 6 ~ 5,
+      educacion == 7 ~ 6,
+      educacion == 8 ~ 7,
+      educacion == 9 ~ 8,
+      TRUE ~ educacion
+    ),
+    desajuste_educativo = factor(edu_mismatch_obj)
+  ) |>
+  filter(!is.na(educacion) & !is.na(edu_mismatch_obj)) |> 
+  ggplot(aes(educacion, prop, color = desajuste_educativo)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    breaks = seq(0, 8, by = 1),
+    labels = labels_vars1
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) + 
+  scale_color_brewer(
+    palette = "Set1",
+    name = NULL,
+    labels = labels_vars2
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+```
+
+Por tipo
+
+```{r}
+labels_vars1 <- c(
+  "0" = "Menor \na \nbásica",
+  "1" = "Básica",
+  "2" = "Media \nsuperior",
+  "3" = "Superior"
+  )
+
+tbl_inc_ocu_educacion %>% 
+  mutate(
+    edu_tipo = case_when(
+      # menos que básica
+      between(educacion, 0, 1) ~ 0,
+      # educación básica
+      between(educacion, 2, 3) ~ 1,
+      # educación media superior
+      educacion == 4 ~ 2,
+      # educación superior
+      between(educacion, 6, 9) ~ 3,
+      TRUE ~ NA
+    ),
+    desajuste_educativo = factor(edu_mismatch_obj)
+  ) %>%
+  group_by(edu_tipo, desajuste_educativo) |> 
+  summarise(
+    n = sum(n),
+    tot = sum(tot)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ungroup() |> 
+  filter(!is.na(edu_tipo) & !is.na(desajuste_educativo)) %>%
+  ggplot(aes(edu_tipo, prop, color = desajuste_educativo)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    breaks = seq(0, 3, by = 1),
+    labels = labels_vars1
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) + 
+  scale_color_brewer(
+    palette = "Set1",
+    name = NULL,
+    labels = labels_vars2
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+```
+
+Listo
+
+```{r}
+tbl_inc_edu_sup_edad7g |> 
+  summarise(sum(tot))
+```
+
+Entonces:
+
+* `tbl_inc_edu_sup_edad7g`: población ocupada con educación superior por grupos de edad
+
+```{r}
+tbl_inc_ocu_jov_edu |> 
+  summarise(tot = sum(tot))
+```
+
+* `tbl_inc_ocu_jov_edu`: jóvenes ocupados 
+
+```{r}
+pob_ocu_educacion
+```
+

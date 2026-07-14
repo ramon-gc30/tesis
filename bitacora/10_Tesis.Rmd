@@ -1,0 +1,1603 @@
+---
+title: "Tesis"
+output:
+  word_document: default
+  html_document: default
+date: "2025-11-16"
+bibliography: references.bib
+---
+
+# 2. Metodología
+
+El objetivo de la investigación es determinar la incidencia y el efecto salarial de la sobre-educación en un periodo determinado para el caso mexicano, lo cual se utilizarán los *microdatos* de la Encuesta Nacional de Ocupación y Empleo correspondiente al segundo trimestre de 2025 (ENOE 2T-25) debido a que contiene todas las variables de interés a nivel individual desde aspectos sociodemográficos como lugar de residencia, sexo, estado civil, anios_estudios, etc., así como cuestiones relacionadas a la situación ocupacional: ingreso salarial, horas trabajadas, grupo ocupacional, etc. En este espacio se describirá la series de pasos a realizar para obtener las variables de interés, así como la metodología para determinar la incidencia y el efecto salarial.
+
+## Librerías
+
+```{r setup, message=FALSE, warning=FALSE}
+# paquetes ==========================================================
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# # calcular la moda
+# library(DescTools)
+# # coeficiente de asimetría
+# library(moments)
+# library(EnvStats)
+library(modelr)
+# análisis de residuos
+library(performance)
+library(car)
+library(stats)
+library(nortest)
+library(moments)
+library(lmtest)
+library(see)
+```
+
+## Fuente de datos
+
+De acuerdo a @inegiconociendoenoe2023, los microdatos de la ENOE se encuentran divididos en las siguientes tablas, con sus respectivos números de campos (variables) según el tipo de cuestionario (ampliado o básico) del primer trimestre de 2023 hasta la actualidad.
+
++----------------+------------------------------------------------+-------------+-----------+-------+----------+--------+
+| Tabla de datos | Descripción                                    | Abreviatura | Trimestre | Año   | Ampliado | Básico |
++================+================================================+=============+===========+=======+==========+========+
+| VIVT225.csv    | Tabla de vivienda                              | VIV         | 2         | 2025  | 25       | 25     |
++----------------+------------------------------------------------+-------------+-----------+-------+----------+--------+
+| HOGT225.csv    | Tabla de hogares                               | HOG         | 2         | 2025  | 37       | 37     |
++----------------+------------------------------------------------+-------------+-----------+-------+----------+--------+
+| SDEMT225.csv   | Tabla de sociodemográfico                      | SDEM        | 2         | 2025  | 110      | 114    |
++----------------+------------------------------------------------+-------------+-----------+-------+----------+--------+
+| COE1T225.csv   | Tabla de cuestionario de ocupación y empleo I  | COE1        | 2         | 2025  | 189      | 172    |
++----------------+------------------------------------------------+-------------+-----------+-------+----------+--------+
+| COE2T225.csv   | Tabla de cuestionario de ocupación y empleo II | COE2        | 2         | 2025  | 137      | 82     |
++----------------+------------------------------------------------+-------------+-----------+-------+----------+--------+
+
+Fuente: @inegiconociendoenoe2023 p. 1
+
+Cabe mencionar que desde 2009 a la fecha, sólo en el trimestre I se utiliza el cuestionario de ocupación y empleo (COE) ampliado, en los demás trimestres se emplea el cuestionario básico.
+
+```{r}
+# importación =======================================================
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+En la siguiente tabla, se enlistan el total de variables a utilizar con su correspondiente descripción, tipo de datos y tabla en la que se encuentra. Para más información acerca de los valores válidos y sus descripciones, consulte @inegienoebd2024; sólo en casos específicos se señalará algunos valores que en breve se revisarán.
+
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| Variable    | Descripción                                                                                                                            | Valores válidos                                      | Descripción de los valores válidos                                                                                                                                   | Tabla  |
++=============+========================================================================================================================================+======================================================+======================================================================================================================================================================+========+
+| `ent`       | Entidad federativa                                                                                                                     |                                                      |                                                                                                                                                                      | VIV    |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `par_c`     | Clave de parentesco                                                                                                                    |                                                      | Consulte @inegi2020c                                                                                                                                                 | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `sex`       | Sexo                                                                                                                                   | 1<br>2                                               | Hombre <br>Mujer                                                                                                                                                     | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `eda`       | Edad actual                                                                                                                            | 0<br>01-96<br>97<br>98<br>99                         | Menores de 1 año<br>Número de años<br>97 años y más<br>Edad no especificada para 12 años y más<br>Edad no especificada de 0 a 11 años                                | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `cs_p13_1`  | ¿Hasta qué grado aprobó... en la escuela (nivel escolar)?                                                                              | 0<br>1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>99 | Ninguna <br>Preescolar <br>Primaria <br>Secundaria <br>Preparatoria o bachillerato <br>Normal <br>Carrera técnica Profesional <br>Maestría <br>Doctorado <br>No sabe | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `cs_p14_c`  | Clave de la carrera                                                                                                                    |                                                      | Consulte @inegi2016c                                                                                                                                                 | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `n_hij`     | En total cuántas hijas e hijos que nacieron vivos ha tenido                                                                            | 0<br>1-25<br>99                                      | Ninguno<br>Número de hijos<br>No especificado                                                                                                                        |        |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `e_con`     | Estado conyugal                                                                                                                        |                                                      |                                                                                                                                                                      | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `anios_esc` | Años de escolaridad<br>(a)                                                                                                             | 1 a 24 <br>99                                        | Años de estudio  <br>No especificado                                                                                                                                 | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `ingocup`   | Ingreso mensual reportado<br>(a)                                                                                                       | 1-999998<br>0                                        | Valor registrado en la pregunta 6B<br>Equivale a `NA` en `p6b2`                                                                                                      | SDEM   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `p3`        | Si ... tiene más de un trabajo, hablemos del principal ¿Cuáles son las tareas o funciones principales que ... desempeña en su trabajo? |                                                      | Consulte @inegisinco2019                                                                                                                                             | COE1   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+| `p5_thrs`   | Total de horas trabajadas en la última semana                                                                                          | 1-998<br>999                                         | Total de número de horas en pregunta 5BNo especificado                                                                                                               | COE1   |
++-------------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+
+
+a) Campos precodificados por INEGI\
+Fuente: @inegienoebd2024
+
+## Segmentación
+
+En la tabla `sdem`, se segmentan (cambian el tipo de dato) en las variables de interés., e incluso se modifican ciertos valores de las siguientes variables:
+
+`anios_esc` y `cs_p13_1`
+
+Según @inegienoebd2024 (pp. 16; 25), ambas variables contienen el valor `99` que describe los casos que no se especificaron los años de anios_estudios y el nivel escolar, respectivamente.
+
+```{r}
+sdem %>% 
+  count(cs_p13_1)
+
+sdem %>% 
+  count(anios_esc)
+```
+
+Para determinar el tipo de desajuste educativo, aspecto que se verá más adelante, se restará la educación requerida de la educación que posee el individuo, pero en estos casos que no se especificó la anios_estudios, ya sea en nivel o año, no se puede realizar ninguna operación por lo que se decide cambiar el valor `99` a `NA`.
+
+`ingocup` e `ing_x_hrs`
+
+Estas variables corresponden a un campo precodificado que añade el INEGI para facilitar el manejo de los *microdatos* y simplificar las operaciones que puedadn realizarse a partir de aquellas (\@inegiconociendoenoe2023); consulte @inegienoebd2024 (pp. 19-27) para ver una lista de todos los campos precodificados disponibles en la tabla `SDEM`.
+
+En este caso, describen el ingreso mensual (`ingocup`) y el promedio de ingreso por hora trabajada (`ing_x_hrs`), en pesos nominales, que reportan los individuos; los valores registrados son los mismos que en la variable (campo) `p6b2` de la tabla `COE2`, con una ligera discrepancia. El valor `0` en ambas variables es equivalente al valor `NA` de `p6b2`, es decir, indica los casos que las personas no especificaron el ingreso mensual por lo que se decide convertir el valor `0` a `NA` en `ingocup`.
+
+```{r}
+# ingreso mensual
+sdem %>% 
+  full_join(coe2, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>% 
+  select(ingocup, p6b2) %>% 
+  filter(ingocup == 0) %>% 
+  mutate(
+    iguales = if_else(ingocup == 0 & is.na(p6b2), 1, 0)
+  ) %>% 
+  count(iguales)
+
+# promedio de ingreso por hora trabajada
+sdem %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  select(ing_x_hrs, p6b2) %>%
+  filter(ing_x_hrs == 0) %>%
+  mutate(
+    iguales = if_else(ing_x_hrs == 0 & is.na(p6b2), 1, 0)
+  ) %>% 
+  count(iguales)
+```
+
+Para el caso de `ing_x_hrs`, se observa que hay 3,681 observaciones que no cumplen con la condición, éstos se ubican con el campo precodificado que clasifica a la población ocupada por la duración de la jornada laboral (`dur9c`) cuando éste es igual a `1` (ausentes temporales con vínculo laboral) e igual a `9` (no especificado).
+
+```{r}
+sdem %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  select(ing_x_hrs, p6b2, dur9c) %>%
+  filter(ing_x_hrs == 0) %>%
+  mutate(
+    iguales = if_else(ing_x_hrs == 0 & is.na(p6b2), 1, 0)
+  ) %>% 
+  count(dur9c, iguales) %>% 
+  filter(iguales == 0)
+```
+
+`p5b_thrs`
+
+El valor `999` indica los casos que no se espeficaron las horas trabajadas en la última semana por lo que también se convierte `NA`.
+
+```{r}
+coe1 %>% 
+  select(p5b_thrs) %>% 
+  filter(p5b_thrs == 999) %>% 
+  count()
+```
+
+```{r}
+# segmentación ======================================================
+sdem<- sdem %>% mutate(
+  # edad
+  edad = as.integer(eda),
+  # años de estudios
+  anios_estudios = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_estudios = if_else(anios_estudios != 99, anios_estudios, NA),
+  # grado escolar
+  escolaridad = as.integer(cs_p13_1),
+  # 99 pasa a NA para evitar 99 - edu_req
+  escolaridad = if_else(escolaridad != 99, escolaridad, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingreso_mensual = as.double(ingocup),
+  # 0 pasa a NA ya que 0==NA en p6b2
+  ingreso_mensual = if_else(ingreso_mensual != 0, ingreso_mensual, NA),
+  # promedio de ingreso por hora
+  ingreso_hora = as.double(ing_x_hrs),
+  # 0 pasa a NA ya que 0==NA en p6b2 y en dur9c == 1 & 9
+  ingreso_hora = if_else(ingreso_hora != 0, ingreso_hora, NA)
+)
+```
+
+### ¿Valor `0` en `anios_estudios`?
+
+Cabe la pena señalar que hay el valor `0` en `anios_estudios`, a pesar de que los individuos sí reportan su nivel escolar (`cs_p13_1`) y los correspondientes años aprobados (`cs_p13_2`). ¿Por qué?
+
+```{r}
+sdem %>% 
+  select(cs_p13_1, cs_p13_2, anios_esc, anios_estudios) %>% 
+  filter(anios_estudios == 0 & (!is.na(cs_p13_1) & cs_p13_1 != 0)) %>% 
+  head(10)
+```
+
+¿Cuál es la proporción por nivel escolar?
+
+```{r}
+sdem %>% 
+  select(cs_p13_1, cs_p13_2, anios_esc, anios_estudios) %>% 
+  filter(anios_estudios == 0 & !is.na(cs_p13_1)) %>% 
+  count()
+
+sdem %>% 
+  select(contains("cs_p13"), cs_p16, anios_esc, anios_estudios) %>% 
+  filter(anios_esc == 0 & !is.na(cs_p13_1)) %>% 
+  count(cs_p13_1) %>% 
+  mutate(prop = n / sum(n) * 100)
+```
+
+Se observa que el 52% se ubica en el valor `2` (Primaria) a pesar de que en dicho nivel escolar empiezan a contabilizarse los años escolares. En caso de no estar justificado esta situación, es sugerible realizar el cálculo de años de anios_estudios a partir de los años escolares en cada nivel escolar, desde primaria hasta estudios de nivel superior, mediante la suma de `cs_p13_1` y `cs_p13_2`.
+
+## Construcción de variables
+
+En esta sección se construirán las siguientes variables: grupos de edadd, grupos de carreras técnicas (media superior) y profesionales (superior) y grupos ocupacionales.
+
+En primer lugar, la variable `edadd_7g` contiene los siguientes grupos de edadd:
+
+| Grupos de edadd                              | Valor asignado |
+|----------------------------------------------|----------------|
+| 0 a 14 años                                  | 1              |
+| 15 a 24 años                                 | 2              |
+| 25 a 34 años                                 | 3              |
+| 35 a 44 años                                 | 4              |
+| 45 a 54 años                                 | 5              |
+| 55 a 64 años                                 | 6              |
+| 65 años en adelante                          | 7              |
+| Edad no especificada de 12 años en adelante  | 98             |
+| Edad no especificada de 0 a 11 años          | 99             |
+
+Fuente: elaboración propia con datos de @inegienoebd2024 (p. 16)
+
+Se considerará a jóvenes a personas entre 25 a 34 años, se determinó este grupo para poder comparar nuestros resultados con los mostrados en @oecd2019.
+
+En cuanto a las carreras de educación media superior y superior, se tomaron como referencia los criterios señalados por @inegi2016c para construir los campos de estudio hasta el campo detallado que contiene 118 carreras educativas (p. 13).
+
+Y, por último, para los grupos ocupacionales se siguieron los criterios de @inegisinco2019 para construir los grupos ocupacionales hasta 3 dígitos del SINCO-19, es decir, hasta el subgrupo que contiene 163 ocupaciones (p. 22).
+
+```{r}
+# construcción de variables =========================================
+# grupos de edadd OECD(2019: 135)
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(edad, 0, 14) ~ "1",
+      between(edad, 15, 24) ~ "2",
+      between(edad, 25, 34) ~ "3",
+      between(edad, 35, 44) ~ "4",
+      between(edad, 45, 54) ~ "5",
+      between(edad, 55, 64) ~ "6",
+      between(edad, 65, 97) ~ "7",
+      # edad no especificada mayores a 12 INEGI(2024:16)
+      edad == "98" ~ "98",
+      # edad no especificada menores a 12 INEGI(2024:16)
+      edad == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitaria INEGI(2016: 13)
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales INEGI(2019: 22)
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3,
+    ocupacion3 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    ocupacion3,
+    into = c("ocupacion3", "res"),
+    sep = 3
+  ) %>%
+  select(-res)
+```
+
+### Comprobación
+
+```{r}
+# grupos de edad
+sdem %>% 
+  count(edad_7g)
+
+# carreras universitarias
+sdem %>% 
+  filter(!is.na(cs_p14_c)) %>% 
+  select(cs_p14_c, contains("carrera"))
+
+# grupos ocupacionales 
+coe1 %>% 
+  filter(!is.na(p3)) %>% 
+  select(p3, contains("ocupacion"))
+```
+
+## Creación de tablas
+
+En primer lugar, se unirán las tablas `SDEM` y `COE` mediante las llaves principales señaladas en @inegiconociendoenoe2023 p. 7
+
+![](INEGI-2023_llaves-principales.JPG)
+
+Fuente: @inegiconociendoenoe2023 p. 7
+
+Para lo cual deben de seguirse los siguientes criterios:
+
+1.  En la tabla `SDEM`, se elimina el valor *Ausente definitivo* en la *Condición de residencia*: `c_res = 2`
+2.  En la tabla `SDEM`, se seleccionan sólo a las personas con edadd superior a 12 años: `edad >= 12 & edad <= 98`.
+3.  Una vez aplicados los criterios previos, se unen las tablas `SDEM` y `COE`.
+
+La aplicación de los pasos 1 y 2 se almacena en la tabla `pob_12ymas`. Cabe señalar que al aplicar los pasos 1 y 2, el número de filas de la tabla sociodemográfica se iguala a la de ocupación y empleo.
+
+```{r}
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(edad, 12, 98)
+  )
+
+nrow(pob_12ymas)
+nrow(coe1)
+```
+
+A continuación, se enlistarán las tablas a crear con su respectivo criterio utilizado, en línea con @inegiconociendoenoe2023 pp. 21-40.
+
+| Tabla        | Descripción                        | Criterio                                                                                                                                                                                       |
+| ------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pob_total`  | Población total                    | Seleccionar sólo Entrevista completa en el Resultado definitivo de la entrevista igual a :<br>`r_def = 0`<br><br>Eliminar "Ausente definitivo" en Condición de Residencia:<br>`c_res != 2`<br> |
+| `pob_15ymas` | Población de 15 años y más         | Criterio de `pob_total` + <br>Seleccionar personas con edad de 15 años y más:<br>`eda >= 15 & eda <= 98`                                                                                       |
+| `ocupada`    | Población ocupada                  | Criterio de `pob_15ymas` +<br>`clase2 = 1`                                                                                                                                                     |
+| `desocupada` | Población desocupada               | Criterio de `pob_15ymas` +<br>`clase2 = 2`                                                                                                                                                     |
+| `pnea`       | Población No Económicamente Activa | Criterio de `pob_15ymas` +<br>`clase1 = 1`                                                                                                                                                     |
+
+Fuente: @inegiconociendoenoe2023 pp. 21-40
+
+```{r}
+# creación de tablas ================================================
+# población total INEGI(2023:21)
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(edad, 12, 98)
+  )
+
+# unión de sdem y coe INEGI(2023:9)
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más INEGI(2023:21)
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(edad, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+```
+
+## Incidencia
+
+Existen tres métodos para determinar la incidencia de la sobre-educación [^1] : objetivo (*job analysis*), subjetivo (*worker self-assessment*), y estadístico (*realized matches*); todos determinan, en primer lugar, la educación requerida en cada ocupación (a nivel agregado o desagregado) para después validar si la educación formal que posee el individuo es superior, adecuada o inferior a la requerida por el puesto de trabajo. En el primer caso, se dice que el individuo presenta sobre-educación (*over-education*), en el segundo una educación acorde (*proper match*), y en el último infra-educación (*under-education*).
+
+[^1]: No obstante, existen ciertos estudios que han utilizado otros métodos para analizar la sobre-educación, por ejemplo @quinnyrubb2006 utilizaron una regresión por MCO (*OLS*, por sus siglas de inglés).
+
+En cuanto al método objetivo, la educación requerida se establece de forma exógena, es decir, mediante analistas laborales que pueden pertenecer a organismos públicos nacionales o internacionales, por ejemplo @oecd2019 utilizó el método objetivo para calcular la tasa de sobre-calificación de los jóvenes profesionistas.
+
+Con respecto al método subjetivo, son los propios trabajadores que indican la educación requerida y según la pregunta realizada establecen la adecuada al momento de ingresar, en el momento presente y/o determinan si las actividades que realizan se alinea a la educación formal; consideramos que los distintos tipos de preguntas abordan el mismo fenómeno (sobre-educación), pero desde distintas perspectivas, la primera aborda la sobre-educación formal, la segunda la sobre-educación real, que también puede referir a un tema de inflación de credenciales educativas (@dipietroyurwin2006; @doltonysilles2001; @capsada-munsech2019), y la última al problema de exceso de habilidades (*over-skilled*), esto es, el individuo puede estar ocupado en un puesto acorde a su formación educativa, pero considera que las actividades no se adecuan a tal educación; incluso existen estudios que intentan determinan la incidencia y el efecto salarial en el caso de desajuste educativo horizontal, es decir, cuando el individuo está adecuadamente emparejado al nivel educativo, pero no al campo educativo (@salasvelasco2021).
+
+Por último, en el método estadístico se utilizan estadísticos de tendencia central (media, moda, mediana) para determinar la educación requerida.
+
+Cada método tiene ventajas y limitantes, véase @hartog2000 para una mayor discusión, sin embargo, se establece utilizar cierto método a partir de la disponibilidad de los datos. En ese sentido, se decide emplear el método objetivo y estadístico para darle mayor rigor al análisis y poder así efectuar una comparativa entre ellos.
+
+### Método objetivo
+
+De acuerdo a la Organización Internacional del Trabajo (*ILO*, por sus siglas en inglés), se determina la educación requerida a 1 dígito de las ocupaciones, es decir, mediante el grupo **división** @inegisinco2019 p. 29. Cabe señalar que ILO el nivel escolar, y no los años de anios_estudios, requerido en cada grupo ocupacional para los [Indicadores de Educación y Desajuste](https://ilostat.ilo.org/methods/concepts-and-definitions/description-education-and-mismatch-indicators) (*EMI*, por sus siglas en inglés). La siguiente tabla describe el nivel de competencia (*skill level*) adecuado para cada grupo ocupacional, según la Clasificación Internacional Uniforme de Ocupaciones (CIUO, o ISCO por sus siglas en inglés) y, a su vez, se especifica el nivel escolar (*level of education*) equivalente de acuerdo al nivel de competencia, según la Clasificación Internacional Normalizada de la Educación (CINE, o ISCED por sus siglas en inglés).
+
+| ISCO-08 skill level | ISCED-11                                                                                                                                                  | ISCO-08                                                                                                                                        |
+| ------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill level 3 and 4 | 3:<br>5. Short-cycle tertiary education<br>4: <br>6. Bachelor’s or equivalent level<br>7. Master’s or equivalent level<br>8. Doctoral or equivalent level | 1 Managers <br>(Personal directivo de la administración pública y de empresas y miembros del poder ejecutivo y de los cuerpos<br>legislativos) |
+| Skill level 4       | 6. Bachelor’s or equivalent level<br>7. Master’s or equivalent level<br>8. Doctoral or equivalent level                                                   | 2 Professionals<br>(Profesionales científicos e intelectuales)                                                                                 |
+| Skill level 3       | 5. Short-cycle tertiary education                                                                                                                         | 3 Technicians and Associate Professionals<br>(Técnicos profesionales de nivel medio)                                                           |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 4 Clerical Support Workers<br>(Empleados administrativos de oficina)                                                                           |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 5 Services and Sales Workers<br>(Trabajadores de los servicios y vendedores de comercios y mercados)                                           |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 6 Skilled Agricultural, Forestry and Fishery Workers<br>(Agricultores y trabajadores califi cados agropecuarios, forestales y pesqueros)       |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 7 Craft and Related Trades Workers<br>(Oficiales, operarios y artesanos de artes mecánicas y de otros oficios)                                 |
+| Skill level 2       | 2. Lower secondary education<br>3. Upper secondary education<br>4. Post-secondary non-tertiary education                                                  | 8 Plant and Machine Operators and Assemblers<br>(Operadores de instalaciones y máquinas, y montadores)                                         |
+| Skill level 1       | 1. Primary education                                                                                                                                      | 9 Elementary Occupations<br>(Trabajadores no calificados)                                                                                      |
+
+Fuente: ILO(s.f. a; s.f. b; 2023) y UNESCO(2013)
+
+Nota: traducción de las ocupaciones basadas en INEGI(2011: 277-278)
+
+Según @inegi2016c (pp. 75-76), el grado escolar del Sistema Educativo Nacional equivalente a cada nivel escolar de CINE-11 que, a su vez, corresponde con cada valor de `cs_p13_1` @inegienoebd2024 p. 16 es el siguiente; cabe señalar que para hacer el emparejamiento con cada valor de `cs_p13_1` nos basamos en el cuadro mostrado en @inegi2016c p. 11.
+
+| ISCO-08 skill level | ISCED-11 levels of education             | Sistema Educativo Nacional de México                                                                                                     | `cs_p13_1`                 |
+| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+|                     | X. No schooling                          |                                                                                                                                          | 0 Ninguna                  |
+|                     | 0. Early childhood education             | Preescolar                                                                                                                               | 1 Preescolar               |
+| Skill level 1       | 1. Primary education                     | Primaria                                                                                                                                 | 2 Primaria                 |
+| Skill level 2       | 2. Lower secondary education             | Secundaria                                                                                                                               | 3 Secundaria               |
+| Skill level 2       | 3. Upper secondary education             | Tipo medio superior<br>Bachillerato general<br>Profesional técnico, <br>profesional técnico bachiller y bachillerato tecnológico         | 4 Preparatoria             |
+| Skill level 2       | 4. Post-secondary non-tertiary education | No hay equivalente                                                                                                                       |                            |
+| Skill level 3       | 5. Short-cycle tertiary education        | Tipo superior<br>Técnico superior <br>(incluye: <br>profesional asociado, <br>técnico superior universitario y <br>licencia profesional) | 6 Carrera técnica          |
+| Skill level 4       | 6. Bachelor’s or equivalent level        | Licenciatura (normal, universitaria y tecnológica)                                                                                       | 5 Normal <br>7 Profesional |
+| Skill level 4       | 7. Master’s or equivalent level          | Maestría                                                                                                                                 | 8 Maestría                 |
+| Skill level 4       | 8. Doctoral or equivalent level          | Doctorado                                                                                                                                | 9 Doctorado                |
+| Skill level 4       | 9. Not elsewhere classified              |                                                                                                                                          | 99 No sabe                 |
+
+Fuente: UNESCO(2013) e INEGI (2016: pp. 11; 75-76)
+
+Ahora, se debe convertir los grupos ocupacionales de CUIO-08 a SINCO-19; no existe un documento que nos oriente a realizar la conversión, solamente @inegisinco2019 señala que la SINCO-19: "Se apega, en la medida de lo posible, a la CIUO de 2008 de la OIT y considera de las clasificaciones de ocupaciones de Canadá y Estados Unidos de América, los aspectos teóricos y metodológicos en los que coinciden con la internacional." p. 17. Y en cuanto a SINCO-11 (INEGI, 2011: 277-278) sólo muestra la traducción al español de los grupos de CUIO-08, pero NO su ocupación equivalente a SINCO. Por lo que se propone la siguiente conversión con su respectivo grado escolar correspondiente:
+
+| ISCO-08 skill level | ISCO-08                                                                                                                                        | SINCO-19                                                                                                          | Grado escolar                                                                                   | `cs_p13_1`                                                                   |
+| ------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| Skill level 3 and 4 | 1 Managers <br>(Personal directivo de la administración pública y de empresas y miembros del poder ejecutivo y de los cuerpos<br>legislativos) | 1 Funcionarios, directores y jefes                                                                                | Técnico superior<br>Licenciatura (normal, universitaria y tecnológica)<br>Maestría<br>Doctorado | 6 Carrera técnica<br>5 Normal <br>7 Profesional<br>8 Maestría<br>9 Doctorado |
+| Skill level 4       | 2 Professionals<br>(Profesionales científicos e intelectuales)                                                                                 | 2 Profesionistas y técnicos                                                                                       | Licenciatura (normal, universitaria y tecnológica)<br>Maestría<br>Doctorado                     | 5 Normal <br>7 Profesional<br>8 Maestría<br>9 Doctorado                      |
+| Skill level 3       | 3 Technicians and Associate Professionals<br>(Técnicos profesionales de nivel medio)                                                           | 2 Profesionistas y técnicos                                                                                       | Técnico superior                                                                                | 6 Carrera técnica                                                            |
+| Skill level 2       | 4 Clerical Support Workers<br>(Empleados administrativos de oficina)                                                                           | 3 Trabajadores auxiliares en actividades administrativas                                                          | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 5 Services and Sales Workers<br>(Trabajadores de los servicios y vendedores de comercios y mercados)                                           | 4 Comerciantes, empleados en ventas y agentes de ventas<br>5 Trabajadores en servicios personales y de vigilancia | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 6 Skilled Agricultural, Forestry and Fishery Workers<br>(Agricultores y trabajadores calificados agropecuarios, forestales y pesqueros)        | 6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca                                      | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 7 Craft and Related Trades Workers<br>(Oficiales, operarios y artesanos de artes mecánicas y de otros oficios)                                 | 7 Trabajadores artesanales, en la construcción y otros oficios                                                    | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 2       | 8 Plant and Machine Operators and Assemblers<br>(Operadores de instalaciones y máquinas, y montadores)                                         | 8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte                        | Secundaria<br>Tipo medio superior                                                               | 3 Secundaria<br>4 Preparatoria                                               |
+| Skill level 1       | 9 Elementary Occupations<br>(Trabajadores no calificados)                                                                                      | 9 Trabajadores en actividades elementales y de apoyo                                                              | Primaria                                                                                        | 2 Primaria                                                                   |
+
+Fuente: elaboración propia con datos de ILO(s.f. a; s.f. b; 2023), UNESCO(2013) e INEGI(2011; 2016; 2020)
+
+En resumen, el nivel de educación, grado escolar, requerida para cada grupo ocupacional a 1 dígito es el siguiente:
+
+| SINCO-19                                                                                                          | `cs_p13_1`                                                                   |
+| :---------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| 1 Funcionarios, directores y jefes                                                                                | 5 Normal <br>6 Carrera técnica<br>7 Profesional<br>8 Maestría<br>9 Doctorado |
+| 2 Profesionistas y técnicos                                                                                       | 5 Normal <br>6 Carrera técnica<br>7 Profesional<br>8 Maestría<br>9 Doctorado |
+| 3 Trabajadores auxiliares en actividades administrativas                                                          | 3 Secundaria<br>4 Preparatoria                                               |
+| 4 Comerciantes, empleados en ventas y agentes de ventas<br>5 Trabajadores en servicios personales y de vigilancia | 3 Secundaria<br>4 Preparatoria                                               |
+| 6 Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca                                      | 3 Secundaria<br>4 Preparatoria                                               |
+| 7 Trabajadores artesanales, en la construcción y otros oficios                                                    | 3 Secundaria<br>4 Preparatoria                                               |
+| 8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte                        | 3 Secundaria<br>4 Preparatoria                                               |
+| 9 Trabajadores en actividades elementales y de apoyo                                                              | 2 Primaria                                                                   |
+
+Fuente: elaboración propia con datos de ILO(s.f. a; s.f. b; 2023), UNESCO(2013) e INEGI(2011; 2016; 2020)
+
+```{r}
+# método: objetivo --------------------------------------------------
+# con el grupo división INEGI(2020: 22)
+educacion_req_objetivo <- ocupada %>%
+  count(ocupacion1) %>% 
+  mutate(
+    objetivo_min = case_when(
+      ocupacion1 == 1 ~ 5,
+      ocupacion1 == 2 ~ 5,
+      ocupacion1 == 3 ~ 3,
+      ocupacion1 == 4 ~ 3,
+      ocupacion1 == 5 ~ 3,
+      ocupacion1 == 6 ~ 3,
+      ocupacion1 == 7 ~ 3,
+      ocupacion1 == 8 ~ 3,
+      ocupacion1 == 9 ~ 2,
+      TRUE ~ NA
+    ),
+    objetivo_max = case_when(
+      ocupacion1 == 1 ~ 9,
+      ocupacion1 == 2 ~ 9,
+      ocupacion1 == 3 ~ 4,
+      ocupacion1 == 4 ~ 4,
+      ocupacion1 == 5 ~ 4,
+      ocupacion1 == 6 ~ 4,
+      ocupacion1 == 7 ~ 4,
+      ocupacion1 == 8 ~ 4,
+      ocupacion1 == 9 ~ 2,
+      TRUE ~ NA
+    )
+    # objetivo_min = as.integer(objetivo_min),
+    # objetivo_max = as.integer(objetivo_max)
+  ) %>% 
+  select(-n)
+
+# comprobación
+educacion_req_objetivo
+```
+
+Se observa que las ocupaciones que requieren una educación superior son: 1 Funcionarios, directores y jefes; y 2 Profesionistas y técnicos, entonces aquellos individuos ocupados en los grupos restantes se encontrarán, por defecto, sobre-educados.
+
+### Método estadístico
+
+@verdugoyverdugo1989 fueron los primeros en utilizar este método, en específico propusieron determinar la educación requerida a partir de la media +/- 1 desviación estándar a 3 dígitos de los grupos ocupacionales:
+
+"In contrast, the concept of overeducation as used here stems from the Sullivan (1978) and Clogg (1979), and is defined within three-digit census occupations. The mean education and standard deviation were computed for each of more than 300 occupations. (These computations were made using all full time-workers, and were not limited to white males). Workers with educational attainment greater than one standard deviation above the mean for their specific occupation are defined as overeducated. Conversely, undereducated workers are those whose education is less than one standard deviation below the mean. Adequately educated workers comprise the middle range; within +/- one standard deviation of the mean." (Verdugo & Verdugo, 1989: 631-633).
+
+Es decir, si el individuo tiene una educación mayor al intervalo de la media + 1 desviación estándar se considerará como sobre-educado, si es menor a la media - 1 desviación estándar se catalogará como infra-educado, y en caso contrario, dentro del intervalo, tendrá un puesto acorde a su formación.
+
+Por su parte, @kikeretal1997 propusieron el método la moda también a 3 dígitos de los grupos ocupacionales:
+
+"The second index (Mode) is also determined within 3-digit occupations. Adequately educated workers (ADSCHOOL) are those whose educational attainments equal the modal value within each occupation. Workers with educational attainments greater than the modal educational level for their specific occupation are defined as overeducated (OVERSCH); those whose educational attainments are below the mode in the occupation are defined as undereducated (UNDERSCH).5 The variables OVERSCH and UNDERSCH are measured by the number of years of overeducation or undereducaton." (Kiker et al., 1997, p. 115)
+
+De igual manera, si el individuo posee una educación superior a la moda se dirá que está sobre-educado para el puesto, si es menor estará infra-educado y en caso contrario estará emparejado correctamente.
+
+Y la mediana se utilizó en el trabajo de @zamudioeislas1999 que aplicaron el mismo criterio de los métodos previos, aunque no especifican a qué dígito de las ocupaciones:
+
+"Lo que hacemos en este trabajo es identificar a una medida de posición central de la distribución como el nivel educativo correspondiente a cada ocupación, la medida de posición que utilizamos es la mediana. A este nivel educativo lo identificamos como los años de educación requerida para desempeñar la ocupación considerada." (Zamudio y Islas, 1999, p. 10).
+
+Por tanto, con la mediana se decide también determinar la educación requerida a 3 dígitos de la SINCO-19.
+
+Ahora, se procede a realizar el código para agregar la educación requerida.
+
+```{r}
+# método: verdugo ---------------------------------------------------
+# con el subgrupo INEGI(2020: 22) 
+
+educacion_req_verdugo <- ocupada %>%
+  filter(!is.na(anios_estudios)) %>% 
+  group_by(ocupacion3) %>%
+  summarise(
+    verdugo_neg = mean(anios_estudios) - sd(anios_estudios),
+    verdugo_media = mean(anios_estudios),
+    verdugo_pos = mean(anios_estudios) + sd(anios_estudios)
+  )
+
+# método: mediana ---------------------------------------------------
+# con el subgrupo INEGI(2020: 22) 
+educacion_req_mediana <- ocupada %>%
+  filter(!is.na(anios_estudios)) %>% 
+  group_by(ocupacion3) %>%
+  summarise(
+    mediana = median(anios_estudios)
+  )
+
+# método: moda ------------------------------------------------------
+# con el subgrupo INEGI(2020: 22) 
+educacion_req_moda <- ocupada %>%
+  filter(!is.na(anios_estudios)) %>% 
+  group_by(ocupacion3, anios_estudios) %>% 
+  summarise(
+    tot = sum(n())
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda" = "anios_estudios") %>% 
+    select(-tot)
+
+# comprobación
+educacion_req_verdugo
+educacion_req_moda
+educacion_req_mediana
+```
+
+Al parecer existen ocupaciones con más de una moda, se valida qué ocupaciones son.
+
+```{r}
+ocupada %>%
+  filter(!is.na(anios_estudios)) %>% 
+  group_by(ocupacion3, anios_estudios) %>% 
+  summarise(
+    tot = sum(n())
+  ) %>% 
+  filter(tot == max(tot)) %>% 
+  count(ocupacion3) %>% 
+  filter(n > 1)
+```
+
+Se observa que existen ocupaciones con dos o hasta 4 modas. Se valida si es un error de cómputo cuando `ocupacion3 = 720`.
+
+```{r}
+ocupada %>%
+  filter(!is.na(anios_estudios)) %>% 
+  group_by(ocupacion3, anios_estudios) %>% 
+  summarise(
+    tot = sum(n())
+  ) %>% 
+  filter(ocupacion3 == 720)
+```
+
+Se confirma que no es error de cómputo, entonces en este caso si el individuo reporta una escolaridad equivalente a cualquier valor de la moda (9, 12, 16 o 17) no se catalogará como sobre-educado. Se intentarán añadir las modas adicionales.
+
+```{r}
+# original
+df <- educacion_req_moda %>% 
+  mutate(valid = (ocupacion3 == lag(ocupacion3)))
+
+# 163 
+moda1 <- df %>% 
+  filter(is.na(valid)) %>% 
+  rename("moda1" = "moda")
+
+df <- df %>% 
+  filter(!is.na(valid)) %>% 
+  mutate(valid = (ocupacion3 == lag(ocupacion3)))
+
+# 13
+moda2 <- df %>% 
+  filter(is.na(valid)) %>% 
+  rename("moda2" = "moda")
+
+df <- df %>% 
+  filter(!is.na(valid)) %>% 
+  mutate(valid = (ocupacion3 == lag(ocupacion3)))
+
+# 2
+moda3 <- df %>% 
+  filter(is.na(valid)) %>% 
+  rename("moda3" = "moda")
+
+# 1
+moda4 <- df %>% 
+  filter(!is.na(valid)) %>% 
+  rename("moda4" = "moda")
+
+educacion_req_moda <- moda1 %>% 
+  left_join(moda2, by = "ocupacion3") %>% 
+  left_join(moda3, by = "ocupacion3") %>% 
+  left_join(moda4, by = "ocupacion3") %>% 
+  select(-contains("valid"))
+```
+
+Comprobación
+
+```{r}
+educacion_req_moda
+```
+
+Se observa que el total de ocupaciones coincide con las tablas del método Verdugo y de la mediana; cabe mencionar que como existen ocupaciones con más de una moda no es posible emplear el modelo ORU debido a que en esos casos no se puede obtener los años de sobre o infra educación, entonces sólo se utilizará el modelo ORU con el método de la mediana.
+
+### Determinación de la incidencia
+
+#### Objetivo
+
+```{r}
+# desajuste educativo con el método objetivo
+objetivo <- ocupada %>% left_join(educacion_req_objetivo, by = "ocupacion1") %>%  
+  mutate(
+    desajuste_educativo = case_when(
+      # required
+      between(escolaridad, objetivo_min, objetivo_max) ~ 0,
+      # over
+      escolaridad > objetivo_max ~ 1,
+      # under
+      escolaridad < objetivo_min ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias
+    over_obj = if_else(escolaridad > objetivo_max, 1, 0),
+    required_obj = if_else(between(escolaridad, objetivo_min, objetivo_max), 1, 0),
+    under_obj = if_else(escolaridad < objetivo_max, 1, 0)
+    # variables de años de sobre o infra
+    # objetivo: no se puede obtener ya que son grados y están en intervalos
+  )
+```
+
+El lector recordará que con el método objetivo no es posible obtener los años de sobra o infra educación.
+
+Comprobación
+
+```{r}
+objetivo %>% 
+  select(ocupacion1, escolaridad, contains("objetivo"), contains("desajuste"), contains("_obj"))
+```
+
+#### Estadístico
+
+```{r}
+# variable de desajuste educativo con método verdugo
+verdugo <- ocupada %>% left_join(educacion_req_verdugo, by = "ocupacion3") %>% 
+  mutate(
+    # verdugo y verdugo
+    desajuste_educativo = case_when(
+      # required
+      between(anios_estudios, verdugo_neg, verdugo_pos) ~ 0,
+      # over
+      anios_estudios > verdugo_pos ~ 1,
+      # under
+      anios_estudios < verdugo_neg ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias 
+    over_vv = if_else(anios_estudios > verdugo_pos, 1, 0),
+    required_vv = if_else(between(anios_estudios, verdugo_neg, verdugo_pos), 1, 0),
+    under_vv = if_else(anios_estudios < verdugo_neg, 1, 0)
+  )
+```
+
+Comprobación
+
+```{r}
+# verdugo
+verdugo %>% 
+  select(ocupacion3, anios_estudios, contains("verdugo"), contains("desajuste"), contains("_vv"))
+```
+
+```{r}
+# variable de desajuste educativo con método moda
+moda <- ocupada %>% left_join(educacion_req_moda , by = "ocupacion3") %>%
+  mutate(
+    # moda
+    desajuste_educativo = case_when(
+      # required
+      !is.na(moda4) & between(anios_estudios, moda1, moda4) | !is.na(moda3) & between(anios_estudios, moda1, moda3) | !is.na(moda2) & between(anios_estudios, moda1, moda2) | anios_estudios == moda1 ~ 0,
+      # over
+      (!is.na(moda4) & anios_estudios > moda4) | (!is.na(moda3) & anios_estudios > moda3) | (!is.na(moda2) & anios_estudios > moda2) | (anios_estudios > moda1) ~ 1,
+      # under
+      anios_estudios < moda1 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias 
+    over_moda = if_else(desajuste_educativo == 1, 1, 0),
+    required_moda = if_else(desajuste_educativo == 0, 1, 0),
+    under_moda = if_else(desajuste_educativo == 2, 1, 0)
+  )
+```
+
+Comprobación
+
+```{r}
+moda %>% 
+  select(ocupacion3, anios_estudios, contains("moda"), desajuste_educativo) %>%
+  filter(ocupacion3 == 760)
+```
+
+Cabe señalar que en los casos donde hay más de una moda, se estableció un intervalo como educación requerida donde el valor mínimo corresponde a `moda1` y el valor máximo a `moda4`. En casos contrarios, se establece con `moda1`.
+
+```{r}
+moda %>% 
+  select(ocupacion3, anios_estudios, contains("moda"), desajuste_educativo) %>%
+  filter(is.na(moda2))
+```
+
+Mediana
+
+```{r}
+# variable de desajuste educativo con método mediana
+mediana <- ocupada %>% left_join(educacion_req_mediana, by = "ocupacion3") %>% 
+  mutate(
+    # mediana
+    desajuste_educativo = case_when(
+      # required
+      anios_estudios == mediana ~ 0,
+      # over
+      anios_estudios > mediana ~ 1,
+      # under
+      anios_estudios < mediana ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias 
+    over_mediana = if_else(anios_estudios > mediana, 1, 0),
+    required_mediana = if_else(anios_estudios == mediana, 1, 0),
+    under_mediana = if_else(anios_estudios < mediana, 1, 0),
+    # variables de años de desajuste
+    so_mediana = if_else(anios_estudios > mediana, anios_estudios - mediana, 0),
+    sr_mediana = if_else(anios_estudios == mediana, anios_estudios, 0),
+    su_mediana = if_else(anios_estudios < mediana, mediana - anios_estudios , 0)
+  )
+```
+
+Comprobación
+
+```{r}
+mediana %>% 
+  select(ocupacion3, anios_estudios, mediana, desajuste_educativo, contains("mediana"))
+```
+
+### Efecto salarial
+
+Los estudios empíricos que han analizado el efecto salarial de la sobre-educación han utilizado dos modelos de regresión: modelo Verdugo y el modelo ORU (*Over-Required-Under*).
+
+El modelo Verdugo fue utilizado por primera vez por @verdugoyverdugo1989, se basa en el modelo de @mincer1974 el cual añaden variables dicotómicas asociadas a la sobre-educación y a la infra-educación, además de algunas variables explicativas sociodemográficas y relacionadas a la Teoría de Capital Humano (@becker1983; @schultz1961).
+
+$$
+\ln{y_i} = \alpha_0 + \beta_1 EDUC_i + \beta_2 OVER_i + \beta_3 UNDER_i + \gamma X_i + \epsilon_i
+$$
+
+Donde:
+
+$y_i$: logaritmo natural del ingreso,\
+$EDUC$: años de anios_estudios formal,\
+$OVER$: variable dicotómica de la sobre-educación,\
+$UNDER$: variable dicotómica de la infra-educación,\
+$X_i$: variables exógenas como edad, experiencia laboral, género, región de residencia, horas trabajadas, etc.
+
+Con base en la literatura, se espera que el coeficiente asociado a la sobre-educación sea negativo ($\beta_2 < 0$), es decir, que exista una penalización salarial, en términos porcentuales, por estar sobre-educado, y en cuanto al coeficiente de la infra-educación se espera que sea positivo ($\beta_3 > 0$); en ambos casos el grupo base, o de comparación, son individuos con el mismo nivel educativo pero ubicados en puestos acordes a su formación.
+
+Por otra parte, cuando @duncanyhoffman1981 analizaron el efecto salarial de la sobre-educación propusieron el modelo que sería conocido posteriormente como el modelo ORU (Over, Required, Under), llamado así por @hartog2000. donde la anios_estudios del individuo se divide en tres variables que contienen, cada uno, los años de sobre-educación, infra-educación, y educación acorde al puesto:
+
+$$
+\ln y_i = \alpha_0 + \beta_1 S_i^o + \beta_2 S_i^R + \beta_3 S_i^u + \gamma X_i + \epsilon_i
+$$
+
+Con
+
+$$
+S^o_i = S_i - S^R_i; S_i > S^R_i \\
+S^u_i = S^R_i - S_i; S_i < S^R_i
+$$
+
+Donde:
+
+$y_i$: logaritmo natural del ingreso,\
+$S_i^R$: años de educación requerida,\
+$S_i^o$: años de sobre-educación,\
+$S_i^u$: años de infra-educación,\
+$G_i$: variable dicotómica que indica sobre-educación,\
+$H_i$: variable dicotómica que indica infra-educación,\
+$X_i$: variables exógenas como edad, experiencia laboral, género, región de residencia, horas trabajadas, etc.
+
+De igual manera, considerando la literatura se espera que el coeficiente de la sobre-educación, medida en años, sea positivo pero menor a la educación requerida ($\beta_1 < \beta_2$), este resultado evidencia que la sobre-educación puede ser el segundo mejor empleo (@rubb2003b), y que el coeficiente de la infra-educación sea negativo ($\beta_3 < 0$), es decir, existe una tasa de retorno de la sobre-educación positiva pero menor a la tasa de educación ajustada al puesto; en este modelo se compara individuos con distintos niveles educativos pero ocupados en el mismo puesto laboral.
+
+Cabe señalar que el modelo ORU también permite contrastar las afirmaciones de la Teoría de Capital Humano (@becker1983, @mincer1974, @schultz1961) con el Modelo de Competencia de Puestos de trabajo (@thurow1975). El primero sostiene que la formación del ingreso se explica únicamente por elementos de capital humano como la escolarización, experiencia laboral, formación en el puesto de trabajo, etc.; mientras que el segundo señala que el ingreso se forma solamente en los puestos laborales lo que provoca una competencia para acceder a los mejores puestos. En el contexto del modelo ORU, la Teoría de Capital Humano se encuentra representada en $\beta_1$ y $\beta_3$, mientras que el Modelo de Thurow en $\beta_2$.
+
+Los resultados indican que la formación del ingreso se explica por elementos de capital humano así como por aspectos relacionados al puesto de trabajo (@hartog2000; @grootymaassenvandenbrink2000; @rubb2003; @mcguinness2006; @capsada-munsech2017), en línea con la Teoría de Asignación de @sattinger1993.
+
+En ese sentido, el modelo a utilizar debe considerar ambos aspectos como, por ejemplo, el estudio llevado a cabo por @zamudioeislas1999 para el caso mexicano donde emplearon el modelo ORU y añadieron variables dicotómicas asociadas a cada grupo ocupacional.
+
+$$
+\ln y_i = \alpha_0 + \beta_1 S_i^o + \beta_2 S_i^R + \beta_3 S_i^u + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+Con
+
+$$
+S^o_i = S_i - S^R_i; S_i > S^R_i \\
+S^u_i = S^R_i - S_i; S_i < S^R_i
+$$
+
+Donde:
+
+$y_i$: logaritmo natural del ingreso,\
+$S_i^R$: años de educación requerida,\
+$S_i^o$: años de sobre-educación,\
+$S_i^u$: años de infra-educación,\
+$G_i$: variable dicotómica que indica sobre-educación,\
+$H_i$: variable dicotómica que indica infra-educación,\
+$\sum_{j = 1}^J L_{ij}$: variables dicotómicas de las $J$ ocupaciones,\
+$X_i$: variables exógenas como edad, experiencia laboral, género, región de residencia, horas trabajadas, etc.
+
+Cabe mencionar que para utilizar el modelo ORU, la educación requerida de las distintas ocupaciones debe ser puntos específicos, y no intervalos, para poder efectuar el cálculo de años de sobre-educación o infra-educación. Esta situación sólo aplica para el método estadístico, en específico, de la moda y mediana; para el caso del método objetivo y estadístico de la media se empleará el modelo de Verdugo con variables dicotómicas asociadas a las ocupaciones:
+
+$$
+\ln{y_i} = \alpha_0 + \beta_1 EDUC_i + \beta_2 OVER_i + \beta_3 UNDER_i + \gamma X_i + \sum_{j = 1}^J L_{ij} + \epsilon_i
+$$
+
+Donde:
+
+$y_i$: logaritmo natural del ingreso,\
+$EDUC$: años de educación formal,\
+$OVER$: variable dicotómica de la sobre-educación,\
+$UNDER$: variable dicotómica de la infra-educación,\
+$X_i$: variables exógenas como edad, experiencia laboral, género, región de residencia, horas trabajadas, etc.,\
+$\sum_{j = 1}^J L_{ij}$: variables dicotómicas de las $J$ ocupaciones
+
+Pero para fines comparativos, se utilizará el modelo Verdugo ampliado con todos los métodos desarrollados.
+
+#### Construcción de las demás variables explicativas
+
+Por último, se añaden el resto de las variables explicativas a utilizar. En el caso de la experiencia laboral, se construye la experiencia laboral potencial que, según @mincer1974, se obtiene así:
+
+$$
+EXPER = A - s - b
+$$
+
+Donde\
+$A$: edadd actual,\
+$s$: años de escolarización\
+$b$: edad al comenzar la escolarización
+
+Para el caso mexicano, $b = 6$ (@zamudioeislas1999). En casos de valor sea menor a `0` o la edad no se encuentre especificada (`edad = 98`), se convertirá a `NA`.
+
+```{r}
+# otras variables explicativas ======================================
+
+# objetivo ------------------------------------------------
+objetivo <- objetivo %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si edad == 98, se convierte a NA
+    # experiencia = edadd - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exper = edad - anios_estudios - 6,
+    exper = if_else(exper > 0 & edad != 98, exper, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exper2 = exper ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casadao
+    casada = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jefe_hogar = if_else(par_c == 101, 1, 0),
+    # variables dicotómicas para los grupos ocupacionales
+    # grupo de referencia: 9 INEGI(2020: 27)
+    func_dir_jefes = if_else(ocupacion1 == 1, 1, 0),
+    prof_tecnicos = if_else(ocupacion1 == 2, 1, 0),
+    aux_admin = if_else(ocupacion1 == 3, 1, 0),
+    comerc_ventas = if_else(ocupacion1 == 4, 1, 0),
+    serv_vig = if_else(ocupacion1 == 5, 1, 0),
+    agric_gan_for = if_else(ocupacion1 == 6, 1, 0),
+    art_constr = if_else(ocupacion1 == 7, 1, 0),
+    maq_ens = if_else(ocupacion1 == 8, 1, 0),
+    elementales = if_else(ocupacion1 == 9, 1, 0)
+  )
+
+# verdugo -------------------------------------------------
+verdugo <- verdugo %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si edad == 98, se convierte a NA
+    # experiencia = edadd - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exper = edad - anios_estudios - 6,
+    exper = if_else(exper > 0 & edad != 98, exper, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exper2 = exper ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casadao
+    casada = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jefe_hogar = if_else(par_c == 101, 1, 0),
+    # variables dicotómicas para los grupos ocupacionales
+    # grupo de referencia: 9 INEGI(2020: 27)
+    func_dir_jefes = if_else(ocupacion1 == 1, 1, 0),
+    prof_tecnicos = if_else(ocupacion1 == 2, 1, 0),
+    aux_admin = if_else(ocupacion1 == 3, 1, 0),
+    comerc_ventas = if_else(ocupacion1 == 4, 1, 0),
+    serv_vig = if_else(ocupacion1 == 5, 1, 0),
+    agric_gan_for = if_else(ocupacion1 == 6, 1, 0),
+    art_constr = if_else(ocupacion1 == 7, 1, 0),
+    maq_ens = if_else(ocupacion1 == 8, 1, 0),
+    elementales = if_else(ocupacion1 == 9, 1, 0)
+  )
+
+# moda ----------------------------------------------------
+moda <- moda %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si edad == 98, se convierte a NA
+    # experiencia = edadd - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exper = edad - anios_estudios - 6,
+    exper = if_else(exper > 0 & edad != 98, exper, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exper2 = exper ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casadao
+    casada = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jefe_hogar = if_else(par_c == 101, 1, 0),
+    # variables dicotómicas para los grupos ocupacionales
+    # grupo de referencia: 9 INEGI(2020: 27)
+    func_dir_jefes = if_else(ocupacion1 == 1, 1, 0),
+    prof_tecnicos = if_else(ocupacion1 == 2, 1, 0),
+    aux_admin = if_else(ocupacion1 == 3, 1, 0),
+    comerc_ventas = if_else(ocupacion1 == 4, 1, 0),
+    serv_vig = if_else(ocupacion1 == 5, 1, 0),
+    agric_gan_for = if_else(ocupacion1 == 6, 1, 0),
+    art_constr = if_else(ocupacion1 == 7, 1, 0),
+    maq_ens = if_else(ocupacion1 == 8, 1, 0),
+    elementales = if_else(ocupacion1 == 9, 1, 0)
+  )
+
+# mediana -------------------------------------------------
+mediana <- mediana %>% 
+  mutate(
+    # horas trabajadas
+    # 999 indica no específicado, se convierte a NA INEGI(2024:81)
+    horas_lab = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    horas_lab = as.double(horas_lab),
+    # experiencia laboral potencial
+    # si es <= 0, se convierte a NA; no afecta al grupo de jóvenes
+    # si edad == 98, se convierte a NA
+    # experiencia = edadd - años estudios - 6 
+    # Zamudio e Islas(1999) y Mincer(1974)
+    exper = edad - anios_estudios - 6,
+    exper = if_else(exper > 0 & edad != 98, exper, NA),
+    # experiencia ^ 2 para que el ingreso tenga una forma de U
+    exper2 = exper ** 2,
+    # género == 1 si es hombre
+    hombre = if_else(sex == 1, 1, 0),
+    # estado civil == 1 si es casadao
+    casada = if_else(e_con == 5, 1, 0),
+    # situación de hogar == 1 si es jefe INEGI(2020:37)
+    jefe_hogar = if_else(par_c == 101, 1, 0),
+    # variables dicotómicas para los grupos ocupacionales
+    # grupo de referencia: 9 INEGI(2020: 27)
+    func_dir_jefes = if_else(ocupacion1 == 1, 1, 0),
+    prof_tecnicos = if_else(ocupacion1 == 2, 1, 0),
+    aux_admin = if_else(ocupacion1 == 3, 1, 0),
+    comerc_ventas = if_else(ocupacion1 == 4, 1, 0),
+    serv_vig = if_else(ocupacion1 == 5, 1, 0),
+    agric_gan_for = if_else(ocupacion1 == 6, 1, 0),
+    art_constr = if_else(ocupacion1 == 7, 1, 0),
+    maq_ens = if_else(ocupacion1 == 8, 1, 0),
+    elementales = if_else(ocupacion1 == 9, 1, 0)
+  )
+```
+
+## Tabla de jóvenes profesionistas
+
+```{r}
+# Se considera licenciatura, maestría y doctorado
+
+# objetivo ------------------------------------------------
+jov_prof_obj <- objetivo %>% 
+  mutate(escolaridad = as.integer(cs_p13_1)) %>% 
+  filter(between(escolaridad, 7, 9) & edad_7g == 3)
+
+# verdugo -------------------------------------------------
+jov_prof_vv <- verdugo %>% 
+  mutate(escolaridad = as.integer(cs_p13_1)) %>% 
+  filter(between(escolaridad, 7, 9) & edad_7g == 3)
+
+# moda ----------------------------------------------------
+jov_prof_moda <- moda %>% 
+  mutate(escolaridad = as.integer(cs_p13_1)) %>% 
+  filter(between(escolaridad, 7, 9) & edad_7g == 3)
+
+# mediana -------------------------------------------------
+jov_prof_mediana <- mediana %>% 
+  mutate(escolaridad = as.integer(cs_p13_1)) %>% 
+  filter(between(escolaridad, 7, 9) & edad_7g == 3)
+```
+
+## Tamaño de las tablas
+
+| Tabla                    | Tamaño        |
+|--------------------------|---------------|
+| `SDEM`                   | 423,744 x 123 |
+| `pob_total`              | 413,004 x 123 |
+| `pob_12ymas`             | 346,404 x 123 |
+| `COE1`                   | 346,404 x 175 |
+| `COE2`                   | 346,404 x 82  |
+| `completo`               | 346,404 x 362 |
+| `pob_15ymas`             | 324,613 x 362 |
+| `ocupada`                | 190,687 x 362 |
+| `pnea`                   | 128,643 x 362 |
+| `desocupada`             | 5,283 x 362   |
+| `educacion_req_objetivo` | 9 x 3         |
+| `educacion_req_verdugo`  | 163 x 4       |
+| `educacion_req_moda`     | 163 x 5       |
+| `educacion_req_mediana`  | 163 x 2       |
+| `objetivo`               | 190,687 x 383 |
+| `verdugo`                | 190,687 x 384 |
+| `moda`                   | 190,687 x 385 |
+| `mediana`                | 190,687 x 385 |
+| `jov_prof_obj`           | 17,485 x 383  |
+| `jov_prof_vv`            | 17,485 x 384  |
+| `jov_prof_moda`          | 17,485 x 385  |
+| `jov_prof_moda`          | 17,485 x 385  |
+
+Fuente: elaboración propia con datos de ENOE 2T-25 (INEGI)
+
+# 3. Resultados
+
+## Ingreso mensual promedio
+
+### General
+
+```{r}
+ingreso_obj <- objetivo %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(objetivo = mean(ingreso_mensual))
+
+ingreso_vv <- verdugo %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(verdugo = mean(ingreso_mensual))
+
+ingreso_moda <- moda %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(moda = mean(ingreso_mensual))
+
+ingreso_mediana <- mediana %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(mediana = mean(ingreso_mensual))
+
+ingreso_promedio <- ingreso_obj %>% 
+  full_join(ingreso_vv, by = "desajuste_educativo") %>% 
+  full_join(ingreso_moda, by = "desajuste_educativo") %>% 
+  full_join(ingreso_mediana, by = "desajuste_educativo")
+
+ingreso_promedio
+```
+
+### Jóvenes profesionistas
+
+```{r}
+ingreso_obj <- jov_prof_obj %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(objetivo = mean(ingreso_mensual))
+
+ingreso_vv <- jov_prof_vv %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(verdugo = mean(ingreso_mensual))
+
+ingreso_moda <- jov_prof_moda %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(moda = mean(ingreso_mensual))
+
+ingreso_mediana <- jov_prof_mediana %>% 
+  filter(!is.na(ingreso_mensual)) %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(mediana = mean(ingreso_mensual))
+
+ingreso_promedio <- ingreso_obj %>% 
+  full_join(ingreso_vv, by = "desajuste_educativo") %>% 
+  full_join(ingreso_moda, by = "desajuste_educativo") %>% 
+  full_join(ingreso_mediana, by = "desajuste_educativo")
+
+ingreso_promedio
+```
+
+## Incidencia
+
+### General
+
+```{r}
+incidencia_obj <- objetivo %>% 
+  count(desajuste_educativo) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- verdugo %>% 
+  count(desajuste_educativo) %>% 
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- moda %>% 
+  count(desajuste_educativo) %>% 
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- mediana %>% 
+  count(desajuste_educativo) %>% 
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = "desajuste_educativo") %>% 
+  full_join(incidencia_moda, by = "desajuste_educativo") %>% 
+  full_join(incidencia_mediana, by = "desajuste_educativo")
+
+incidencia
+```
+
+Por sexo
+
+```{r}
+incidencia_obj <- objetivo %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- verdugo %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- moda %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- mediana %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = c("sex", "desajuste_educativo")) %>% 
+  full_join(incidencia_moda, by = c("sex", "desajuste_educativo")) %>% 
+  full_join(incidencia_mediana, by = c("sex", "desajuste_educativo"))
+
+incidencia %>% 
+  filter(desajuste_educativo == 1)
+```
+
+Por grupos de edad
+
+```{r}
+incidencia_obj <- objetivo %>% 
+  group_by(edad_7g, desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- verdugo %>% 
+  group_by(edad_7g, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- moda %>% 
+  group_by(edad_7g, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- mediana %>% 
+  group_by(edad_7g, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = c("edad_7g", "desajuste_educativo")) %>% 
+  full_join(incidencia_moda, by = c("edad_7g", "desajuste_educativo")) %>% 
+  full_join(incidencia_mediana, by = c("edad_7g", "desajuste_educativo"))
+
+incidencia %>% 
+  filter(desajuste_educativo == 1)
+```
+
+Por nivel de estudios
+
+```{r}
+incidencia_obj <- objetivo %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- verdugo %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- moda %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- mediana %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = c("escolaridad", "desajuste_educativo")) %>% 
+  full_join(incidencia_moda, by = c("escolaridad", "desajuste_educativo")) %>% 
+  full_join(incidencia_mediana, by = c("escolaridad", "desajuste_educativo"))
+
+incidencia %>% 
+  filter(desajuste_educativo == 1)
+```
+
+### Jóvenes profesionistas
+
+Agregado
+
+```{r}
+incidencia_obj <- jov_prof_obj %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- jov_prof_vv %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- jov_prof_moda %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- jov_prof_mediana %>% 
+  group_by(desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = "desajuste_educativo") %>% 
+  full_join(incidencia_moda, by = "desajuste_educativo") %>% 
+  full_join(incidencia_mediana, by = "desajuste_educativo")
+
+incidencia
+```
+
+Por sexo
+
+```{r}
+incidencia_obj <- jov_prof_obj %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- jov_prof_vv %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- jov_prof_moda %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- jov_prof_mediana %>% 
+  group_by(sex, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = c("sex", "desajuste_educativo")) %>% 
+  full_join(incidencia_moda, by = c("sex", "desajuste_educativo")) %>% 
+  full_join(incidencia_mediana, by = c("sex", "desajuste_educativo"))
+
+incidencia %>% 
+  filter(desajuste_educativo == 1)
+```
+
+Por nivel de estudios
+
+```{r}
+incidencia_obj <- jov_prof_obj %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- jov_prof_vv %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- jov_prof_moda %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- jov_prof_mediana %>% 
+  group_by(escolaridad, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = c("escolaridad", "desajuste_educativo")) %>% 
+  full_join(incidencia_moda, by = c("escolaridad", "desajuste_educativo")) %>% 
+  full_join(incidencia_mediana, by = c("escolaridad", "desajuste_educativo"))
+
+incidencia %>% 
+  filter(desajuste_educativo == 1)
+```
+
+Por carreras educativas
+
+```{r}
+incidencia_obj <- jov_prof_obj %>% 
+  group_by(carrera1, desajuste_educativo) %>% 
+  summarise(n = n()) %>% 
+  mutate(prop_obj = n / sum(n)) %>% 
+  rename("objetivo" = "n")
+
+incidencia_vv <- jov_prof_vv %>% 
+  group_by(carrera1, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_vv = n / sum(n)) %>% 
+  rename("verdugo" = "n")
+
+incidencia_moda <- jov_prof_moda %>% 
+  group_by(carrera1, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_moda = n / sum(n)) %>% 
+  rename("moda" = "n")
+
+incidencia_mediana <- jov_prof_mediana %>% 
+  group_by(carrera1, desajuste_educativo) %>% 
+  summarise(n = n()) %>%
+  mutate(prop_mediana = n / sum(n)) %>% 
+  rename("mediana" = "n")
+
+incidencia <- incidencia_obj %>% 
+  full_join(incidencia_vv, by = c("carrera1", "desajuste_educativo")) %>% 
+  full_join(incidencia_moda, by = c("carrera1", "desajuste_educativo")) %>% 
+  full_join(incidencia_mediana, by = c("carrera1", "desajuste_educativo"))
+
+incidencia %>% 
+  filter(desajuste_educativo == 1)
+```
+
+## Efecto salarial
+
+### Jóvenes profesionistas
+
+#### Modelo Verdugo
+
+Objetivo
+
+```{r}
+# prof_tecnicos, required_obj y under _obj no significativos
+modelo_obj <- lm(log(ingreso_mensual) ~ anios_estudios + over_obj + exper + exper2 + log(horas_lab) + hombre + casada + jefe_hogar + func_dir_jefes + aux_admin + comerc_ventas + serv_vig + agric_gan_for + art_constr + maq_ens, data = jov_prof_obj)
+
+summary.lm(modelo_obj)
+```
+
+Verdugo
+
+```{r}
+# required_obj y under _obj no significativos
+modelo_vv <- lm(log(ingreso_mensual) ~ anios_estudios + over_vv + exper + exper2 + log(horas_lab) + hombre + casada + jefe_hogar + func_dir_jefes + prof_tecnicos + aux_admin + comerc_ventas + serv_vig + agric_gan_for + art_constr + maq_ens, data = jov_prof_vv)
+
+summary.lm(modelo_vv)
+```
+
+Moda
+
+```{r}
+# required_obj y under _obj no significativos
+modelo_moda <- lm(log(ingreso_mensual) ~ anios_estudios + over_moda + exper + exper2 + log(horas_lab) + hombre + casada + jefe_hogar + func_dir_jefes + prof_tecnicos + aux_admin + comerc_ventas + serv_vig + agric_gan_for + art_constr + maq_ens, data = jov_prof_moda)
+
+summary.lm(modelo_moda)
+```
+
+Mediana
+
+```{r}
+# under_obj no significativo
+modelo_mediana <- lm(log(ingreso_mensual) ~ anios_estudios + over_mediana + required_mediana + exper + exper2 + log(horas_lab) + hombre + casada + jefe_hogar + func_dir_jefes + prof_tecnicos + aux_admin + comerc_ventas + serv_vig + agric_gan_for + art_constr + maq_ens, data = jov_prof_mediana)
+
+summary.lm(modelo_mediana)
+```
+
+#### Modelo ORU
+
+```{r}
+# su_mediana no significativo
+modelo_mediana <- lm(log(ingreso_mensual) ~ anios_estudios + so_mediana + sr_mediana + exper + exper2 + log(horas_lab) + hombre + casada + jefe_hogar + func_dir_jefes + prof_tecnicos + aux_admin + comerc_ventas + serv_vig + agric_gan_for + art_constr + maq_ens, data = jov_prof_mediana)
+
+summary.lm(modelo_mediana)
+```
+
+## Análisis de residuos
+
+### Objetivo
+
+```{r}
+mean(modelo_obj$residuals)
+moments::skewness(resid(modelo_obj))
+
+
+hist(modelo_obj$residuals, prob = TRUE)
+lines(density(modelo_obj$residuals))
+```
+
+Gráficas
+
+```{r}
+plot(modelo_obj, 1)
+plot(modelo_obj, 2)
+plot(modelo_obj, 3)
+plot(modelo_obj, 4)
+```
+
+Pruebas estadísticas
+
+```{r}
+# normalidad
+moments::jarque.test(resid(modelo_obj)) # se rechaza H0
+nortest::ad.test(resid(modelo_obj)) # se rechaza H0
+
+# homocedasticidad
+lmtest::bptest(modelo_obj) # se rechaza H0
+
+# autocorrelación
+lmtest::dwtest(modelo_obj) # no se rechaza H0
+```
+
+# Referencias
+
+ILO (2023). The International Standard Classification of Occupations (ISCO-08) companion guide. <https://www.ilo.org/publications/international-standard-classification-occupations-isco-08-companion-guide>
+
+ILO (s.f.). Education and Mismatch Indicators (EMI database). ILOSTAT database description. <https://ilostat.ilo.org/methods/concepts-and-definitions/description-education-and-mismatch-indicators>
+
+ILO (s.f.). International Standard Classification of Occupations (ISCO). ILOSTAT. <https://ilostat.ilo.org/methods/concepts-and-definitions/classification-occupation>
+
+INEGI. (2011). Sistema Nacional de Clasificación de Ocupaciones 2011. SINCO. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825003336>
+
+INEGI. (2016). Clasificación mexicana de planes de estudio por campos de formación académica 2016. Educación superior y media superior. México: INEGI. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825003335>
+
+INEGI. (2020). Sistema Nacional de Clasificación de Ocupaciones 2019. SINCO. <https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=702825198411>
+
+INEGI. (2024). Encuesta Nacional de Ocupación y Empleo (ENOE). Estructura de la base de datos. <https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/enoe_123_fd_c_bas_amp.pdf>
+
+OECD. (2019). Educación superior en México: Resultados y relevancia para el mercado laboral. París: OECD Publishing. <https://doi.org/10.1787/a93ed2b7-es>
+
+UNESCO (2013). Clasificación Internacional Normalizada de la Educación CINE 2011. <https://unesdoc.unesco.org/ark:/48223/pf0000220782>

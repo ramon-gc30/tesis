@@ -1,0 +1,363 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+```
+
+
+---
+
+## URL de la ENOE
+
+En este documento se intentará descargar los microdatos de la ENOE desde su liga URL. Para lo cual, utilizaremos las funciones vistas en "Aprende escribiendo/Sin título 8: CÓDIGO PARA UTILIZAR URL PARA MICRODATOS DE INEGI"
+
+Primero: `base::tempfile` utiliza una cadena de caracteres como nombre de un archivo temporal; digamos que devuelve el nombre de un archivo cualquiera.
+
+`base::tempdir`: crea un directorio temporal, creo que en blanco devuelve la ubicación del directorio temporal de la sesión actual con la cual estamos trabajando. Persiste a pesar de cerrar y volver a abrir el archivo Quarto.
+
+```{r}
+base::tempdir()
+```
+
+`utils::download.file(url, destfile)`: función que permite descargar archivos de internet, donde 
+
+* `url` indica la liga donde se descargará el archivo y 
+* `destfile` la carpeta destino donde se guardara el archivo descargado
+
+`utils::unzip`: descomprimir archivos zip donde
+
+* `zipfile`: ruta del archivo zip
+* `files`: nombre del archivo zip a extraer/descomprimir
+* `exdir`: ubicación de directorio donde está contenido el archivo zip
+* `overwrite = TRUE`: sobreescribe
+
+`base::file.path`: construye la ruta de un archivo 
+
+`base::unlink`: elimina el directorio o archivo especificado
+
+Por tanto,
+
+```
+#Descarga de archivos
+url<-"https://www.inegi.org.mx/contenidos/programas/enigh/nc/2018/microdatos/enigh2018_ns_viviendas_csv.zip"
+
+##Creación de directorio temporal
+td<- tempdir()
+
+# Descarga del archivo temporal
+tf = tempfile(tmpdir=td, fileext=".zip")
+download.file(url, tf)
+
+# unzip
+unzip(tf, files="viviendas.csv", exdir=td, 
+      overwrite=TRUE)
+      
+fpath=file.path(td,"viviendas.csv")
+
+unlink(td)
+```
+
+1. El URL es un vector de cadenas
+2. Crea directorio temporal
+3. Crea el nombre del archivo en formato zip
+4. Descarga dicho archivo
+5. Descomprime/extrae el archivo
+6. Inserta dicho archivo en un directorio temporal
+7. Elimina directorio temporal
+
+
+Por su parte, (Martínez Sánchez, 2017) utliza el siguiente código
+
+```
+temporal <- tempfile()
+download.file("http://www.beta.inegi.org.mx/contenidos/proyectos/enchogares/regulares/enoe/microdatos/enoe_15ymas/2016/2016trim1_dbf.zip",temporal)
+files = unzip(temporal, list=TRUE)$Name
+unzip(temporal, files=files[grepl("dbf",files)])
+SDEMT116 <- data.frame(read.dbf("sdemt116.dbf"))
+```
+
+Fuente: <https://rpubs.com/jcms2665/MAHSDU> 
+
+A primera vista me gusta más el segundo. Se observa que
+
+* `download.file` si requiere especificar el directorio destino donde se guardará el archivo
+* `unzip(directorio, list = TRUE)`: solamente enlista los archivos pero no extrae ninguno
+* `grepl` busca las cadenas especificadas 
+
+Ahora, vamos a preguntarle a la IA:
+
+Sugiere el paquete `importinegi` <https://cran.r-project.org/web/packages/importinegi/index.html> 
+
+Además del código de Pacheco, el primero que aparece en el documento
+
+Vamos a realizar los dos
+
+### Código 1
+
+```{r}
+# liga 
+url <- "https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/microdatos/enoe_2026_trim1_csv.zip"
+
+# se crea directorio temporal
+directorio <- tempdir()
+
+# se crea archivo temporal
+archivo <- tempfile(tmpdir = directorio, fileext = ".zip")
+
+# se descarga carpeta
+download.file(url, archivo)
+
+# se descomprime
+unzip(archivo, files = "ENOE_SDEMT126.csv", exdir = directorio, overwrite = TRUE)
+
+# almacena en un directorio temporal
+destino <- file.path(directorio, "ENOE_SDEMT126.csv")
+
+# elimina directorio temporal
+unlink(directorio)
+
+# se carga el archivo
+sdem <- read_csv(destino)
+```
+
+Se valida
+
+```{r}
+# glimpse(sdem)
+```
+
+Sí se pudo!!!
+
+Aún el código no me queda del todo claro
+
+Hagámoslo paso a paso, pero ahora descarguemos todos
+
+```{r}
+url2 <- "https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/microdatos/enoe_2026_trim1_csv.zip"
+
+dir <- tempdir()
+
+arc2 <- tempfile(tmpdir = dir, fileext = ".zip")
+```
+
+```{r}
+download.file(url = url2, destfile = arc2)
+```
+
+Descarga el archivo contenido en `url` y una vez que lo descarga lo manda al archivo especificado en `destfile`
+
+```{r}
+unzip(
+  # ubicación del archivo comprimido
+  zipfile = arc2,
+  # extrae todos los archivos
+  files = NULL,
+  # sobreescribe
+  overwrite = TRUE,
+  # directorio donde se almacenarán los archivos
+  exdir = dir
+)
+
+destino_tot <- unzip(
+  # ubicación del archivo comprimido
+  zipfile = arc2,
+  # extrae todos los archivos
+  files = NULL,
+  # sobreescribe
+  overwrite = TRUE,
+  # directorio donde se almacenarán los archivos
+  exdir = dir
+)
+```
+
+```{r}
+destino_tot
+```
+
+```{r}
+unlink(dir)
+destino_tot
+```
+
+
+
+```{r}
+# file.path(directorio, "ENOE_SDEMT126.csv")
+# file.path(directorio, "ENOE_COE1T126.csv")
+# file.path(directorio, "ENOE_COE2T126.csv")
+# 
+# destino_sdem <- file.path(directorio, "ENOE_SDEMT126.csv")
+# destino_coe1 <- file.path(directorio, "ENOE_COE1T126.csv")
+# destino_coe2 <- file.path(directorio, "ENOE_COE2T126.csv")
+```
+
+```{r}
+read_csv(
+  destino_tot[[3]],
+  col_types = cols(.default = col_character())
+)
+```
+
+Se pudo!! **VALIDAR**
+
+
+---
+
+## Paquete `pacman`
+
+Por su parte, 
+
+`base::requiere`: adjunta paquetes 
+
+Asimismo, el paquete `pacman`es una
+
+"Herramienta de gestión de paquetes. Herramientas para realizar tareas relacionadas con paquetes adicionales de forma más sencilla. Pacman organiza las funciones de bibliotecas y paquetes, nombrándolas de manera intuitiva y coherente. Su objetivo es combinar la funcionalidad de funciones de bajo nivel para agilizar el flujo de trabajo."
+
+En ese sentido, `pacman::p_load` 
+
+"Esta función encapsula las funciones library y require. Comprueba si un paquete está instalado; de no ser así, intenta instalarlo desde CRAN o cualquier otro repositorio de la lista de repositorios de pacman." 
+
+Además, `pacman::p_version`: valida la versión del paquete instalado
+
+```{r}
+# system.file(package = "pacman")
+# install.packages("pacman", dependencies = TRUE)
+library(pacman)
+```
+
+```{r}
+pacman::p_version("tidyverse")
+```
+
+Así,
+
+```
+# Librerías ====
+if(!require('pacman')) install.packages('pacman')
+pacman::p_load(tidyverse, srvyr,
+               kableExtra)
+```
+
+Instala los paquetes en caso de ser instalados
+
+---
+
+## Paquete `here`
+
+```{r}
+# system.file(package = "here")
+# install.packages("here", dependencies = TRUE)
+library(here)
+```
+
+Ahora vamos a cargar un archivo
+
+```{r}
+pib <- read_csv(here::here("datos", "pib.csv"))
+```
+
+Listo!
+
+## Paquete `fs`
+
+Visualización de directorio en forma de árbol: `fs::dir_tree`
+
+```{r}
+# system.file(package = "fs")
+library(fs)
+```
+
+```{r}
+fs::dir_tree("C:/Prog/tesis/datos")
+fs::dir_tree(here::here("datos"))
+```
+
+Órales!
+
+---
+
+## Paquete `renv`
+
+Permite la reproducibilidad de los proyectos generados en R dado que "congela" los paquetes utilizados para que puedan utilizarse independientemente de la versión actual de dichos paquetes.
+
+```{r}
+# system.file(package = "renv")
+library(renv)
+```
+
+Empieza a utilizarse con la función `renv::init` y se guarda con `renv::snapshot`
+
+Véase <https://rstudio.github.io/renv/articles/renv.html> para más información
+
+---
+
+## Exportar a un Excel
+
+La IA sugiere exportar a Excel con `writexl::write_xlsx`
+
+```{r}
+library(writexl)
+```
+
+Donde `x` puede ser un data frame o una lista `list` donde `list(nombre_pestaña = df)`
+
+Vamos a intentarlo
+
+```{r}
+incidencia_sub <- read_rds(here::here("datos", "incidencia_sub.rds"))
+
+# exportar a Excel
+write_xlsx(incidencia_sub, "incidencia.xlsx")
+```
+
+Hay que especifica la extensión del archivo Excel, se observa en el archivo que `NA` lo pasa como valor vacío, es decir, la celda queda vacía. Intentaremos ponerle nombre de pestaña
+
+```{r}
+# list("incidencia", "incidencia2")
+write_xlsx(list("incidencia" = incidencia_sub), path = "incidencia.xlsx")
+```
+
+Sí pone ese título a la pestaña
+
+```{r}
+incidencia_sub <- incidencia_sub |> 
+  mutate(
+    gpo_val = as.integer(gpo_val),
+    sub_val = as.integer(sub_val)
+  )
+
+write_xlsx(list("incidencia" = incidencia_sub), path = "incidencia.xlsx")
+```
+
+Aunque se pase a valor entero, la función elimina `NA` ¿cómo solucionarlo?
+
+```{r}
+incidencia_sub2 <- incidencia_sub |> 
+  mutate(
+    sub_val = as.character(sub_val),
+    sub_val = if_else(is.na(sub_val), "NA", sub_val)
+  )
+
+write_xlsx(list("incidencia" = incidencia_sub2), path = "incidencia.xlsx")
+```
+
+Sí se corrige, pero la columna es de tipo caracter.
+
+Por último, sobreescribe?
+
+```{r}
+write_xlsx(list("incidencia" = incidencia_sub), path = "incidencia.xlsx")
+write_xlsx(list("incidencia" = incidencia_sub), path = "incidencia.xlsx")
+```
+
+Sí sobreescribe aunque esté abierto Excel
+
+URL IA:
+
+<https://share.google/aimode/blQzv6ihfTHnsDMlY> 
+

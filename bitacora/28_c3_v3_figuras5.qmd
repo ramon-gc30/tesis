@@ -1,0 +1,931 @@
+---
+date: today
+format: html
+---
+
+Este documento sirve como apoyo para la escritura de la versión 3 del capítulo 3 Resultados
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("C:/Prog/tesis/scripts/7_figuras_v2.R")
+```
+
+```{r}
+tbl_inc_carreras
+```
+
+Se modifica `fig_inc_carreras` para eliminar los casos no especificados.
+
+```{r}
+tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) %>% 
+  mutate(
+    campo_amplio = factor(campo_amplio),
+    campo_amplio = fct_recode(
+      campo_amplio,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10"
+      # nivel no registrado en INEGI(2016)
+      # "No especificado" = "99"
+      
+    )
+  ) %>% 
+  ggplot(aes(fct_reorder(campo_amplio, prop), prop)) + 
+  geom_col(fill = "#314763") + 
+  scale_x_discrete(labels = scales::label_wrap(width = 30)) + 
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  ) + 
+  otros_elementos + 
+  coord_flip()
+```
+
+Se intentará añadir etiqueta en la gráfica
+
+```{r}
+tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) %>% 
+  mutate(prop_label = scales::percent(prop)) |> 
+  ggplot(aes(fct_reorder(campo_amplio, prop), prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label))
+```
+
+Sí se pudo!!! La manera en que lo logré fue la siguiente:
+
+* Crear una variable que contiene las etiquetas a mostrar dentro de la gráfica `prop_label` con `scales::percent`.
+* En `geom_text` la ubicación de la etiqueta la puse un poco por encima de la barra: `y = prop + 0.05` e inserte la variable que contiene la etiqueta `label = prop_label`
+
+En ese sentido, la gráfica final queda así
+
+```{r}
+tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) %>% 
+  mutate(
+    campo_amplio = factor(campo_amplio),
+    campo_amplio = fct_recode(
+      campo_amplio,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10"
+    ),
+    # etiqueta en forma de porcentaje
+    prop_label = scales::percent(prop) 
+  ) %>% 
+  ggplot(aes(fct_reorder(campo_amplio, prop), prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label)) +
+  scale_x_discrete(labels = scales::label_wrap(width = 30)) + 
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  ) + 
+  otros_elementos + 
+  coord_flip()
+```
+
+Mejorando 
+
+```{r}
+tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) %>% 
+  mutate(
+    campo_amplio = factor(campo_amplio),
+    campo_amplio = fct_recode(
+      campo_amplio,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10"
+    ),
+    # etiqueta en forma de porcentaje
+    prop_label = scales::percent(prop) 
+  ) %>% 
+  ggplot(aes(fct_reorder(campo_amplio, prop), prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label)) +
+  scale_x_discrete(labels = scales::label_wrap(width = 30)) + 
+  scale_y_continuous(
+    labels = NULL,
+    breaks = NULL
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  ) + 
+  otros_elementos + 
+  coord_flip()
+```
+
+Según yo, no puedo poner en el eje y la variable `prop_label` porque no es una variable continua, se valida
+
+```{r}
+tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) %>% 
+  transmute(
+    prop_label = scales::percent(prop) 
+  )
+```
+
+En efecto, es de tipo caracter. Por tanto, si se pone en el eje y arrojará error
+
+Por fortuna, el código para crear la figura no modifica sustancialmente. Se guarda
+
+```{r}
+fig_inc_carreras2 <- tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) %>% 
+  mutate(
+    campo_amplio = factor(campo_amplio),
+    campo_amplio = fct_recode(
+      campo_amplio,
+      "Educación" = "01",
+      "Artes y humanidades" = "02",
+      "Ciencias sociales y derecho" = "03",
+      "Administración y negocios" = "04",
+      "Ciencias naturales, matemáticas y estadística" = "05",
+      "Tecnologías de la información y la comunicación" = "06",
+      "Ingeniería, manufactura y construcción" = "07",
+      "Agronomía y veterinaria" = "08",
+      "Ciencias de la salud" = "09",
+      "Servicios" = "10"
+    ),
+    # etiqueta en forma de porcentaje
+    prop_label = scales::percent(prop) 
+  ) %>% 
+  ggplot(aes(fct_reorder(campo_amplio, prop), prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label)) +
+  scale_x_discrete(labels = scales::label_wrap(width = 30)) + 
+  scale_y_continuous(labels = NULL, breaks = NULL) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) + 
+  otros_elementos + 
+  coord_flip()
+
+guardar_figura(fig_inc_carreras2, "figuras/fig_inc_carreras2.png")
+```
+
+Se validan las otras gráficas
+
+Por edad
+
+```{r}
+tbl_inc_edad |> 
+  filter(edu_mismatch_obj == 1) |> 
+  mutate(prop_label = scales::percent(prop)) |>
+  ggplot(aes(x = edad, y = prop)) +
+  geom_point(color = "#314763", size = 3) + 
+  geom_line(color = "#314763") + 
+  geom_text(aes(y = prop + 0.01, label = prop_label)) +
+  scale_x_continuous(breaks = breaks_width(1)) +
+  scale_y_continuous(labels = NULL, breaks = NULL) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") + 
+  otros_elementos
+```
+
+Listo! Se guarda
+
+```{r}
+fig_inc_edad2 <- tbl_inc_edad |> 
+  filter(edu_mismatch_obj == 1) |> 
+  mutate(prop_label = scales::percent(prop)) |>
+  ggplot(aes(x = edad, y = prop)) +
+  geom_point(color = "#314763", size = 3) + 
+  geom_line(color = "#314763") + 
+  geom_text(aes(y = prop + 0.01, label = prop_label)) +
+  scale_x_continuous(breaks = breaks_width(1)) +
+  scale_y_continuous(labels = NULL, breaks = NULL) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") + 
+  otros_elementos
+
+guardar_figura(fig_inc_edad2, "figuras/fig_inc_edad2.png")
+```
+
+Por nivel educativo
+
+```{r}
+labels_vars <- c(
+  "6" = "Técnico \nsuperior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+tbl_inc_educacion |> 
+  filter(edu_mismatch_obj == 1) %>% 
+  mutate(
+    edu_mismatch_obj = factor(edu_mismatch_obj),
+    prop_label = scales::percent(prop)
+  ) %>% 
+  ggplot(aes(educacion, prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label)) +
+  scale_x_discrete(labels = labels_vars) +
+  scale_y_continuous(labels = NULL, breaks = NULL) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) + 
+  otros_elementos
+```
+
+Listo! Se guarda
+
+```{r}
+labels_vars <- c(
+  "6" = "Técnico \nsuperior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+fig_inc_educacion2 <- tbl_inc_educacion |> 
+  filter(edu_mismatch_obj == 1) %>% 
+  mutate(
+    edu_mismatch_obj = factor(edu_mismatch_obj),
+    prop_label = scales::percent(prop)
+  ) %>% 
+  ggplot(aes(educacion, prop)) + 
+  geom_col(fill = "#314763") + 
+  geom_text(aes(y = prop + 0.05, label = prop_label)) +
+  scale_x_discrete(labels = labels_vars) +
+  scale_y_continuous(labels = NULL, breaks = NULL) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) + 
+  otros_elementos
+
+guardar_figura(fig_inc_educacion2, "figuras/fig_inc_educacion2.png")
+```
+
+Se realizan modificaciones del archivo "C:/Prog/tesis/scripts/7_figuras_v2.R" y se guardan en:
+
+"C:/Prog/tesis/scripts/7_figuras_v3.R"
+
+```{r}
+tbl_inc_carreras |> 
+  filter(edu_mismatch_obj == 1) |> 
+  arrange(desc(prop))
+```
+
+```{r}
+669322 / 130017 - 1
+```
+
+POR CARRERAS ENTRE NIVEL EDUCATIVO
+
+```{r}
+inc_educacion_carreras <- datos_svy |> 
+group_by(educacion, campo_amplio, edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ungroup() |> 
+  ungroup()
+
+inc_educacion_carreras |> 
+  filter(edu_mismatch_obj == 1) 
+```
+
+Se intenta crear gráfica
+
+```{r}
+inc_educacion_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99)
+```
+
+Al parecer si hay resultados interesantes cuando se desglosa por nivel educativo
+
+```{r}
+inc_educacion_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |> 
+  mutate(campo_amplio = as.integer(campo_amplio)) |> 
+  ggplot(aes(campo_amplio, prop, color = educacion, linetype = educacion)) + 
+  geom_point() +
+  geom_line() + 
+  scale_x_continuous(
+    breaks = breaks_width(1)
+  ) + 
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  )
+```
+
+Ya funciona. Ahora hay que darle estilo
+
+```{r}
+labels_vars <- c(
+   "Educación" = "1",
+   "Artes y humanidades" = "2",
+   "Ciencias sociales y derecho" = "3",
+   "Administración y negocios" = "4",
+   "Ciencias naturales, matemáticas y estadística" = "5",
+   "Tecnologías de la información y la comunicación" = "6",
+   "Ingeniería, manufactura y construcción" = "7",
+   "Agronomía y veterinaria" = "8",
+   "Ciencias de la salud" = "9",
+   "Servicios" = "10"
+)
+
+labels_vars2 <- c(
+  "6" = "Técnico \nsuperior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+# inc_educacion_carreras |>
+#   filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+#   mutate(campo_amplio = as.integer(campo_amplio)) |>
+#   ggplot(aes(campo_amplio, prop, color = educacion, linetype = educacion)) +
+#   geom_point() +
+#   geom_line() +
+#   scale_x_continuous(
+#     labels = labels_vars,
+#     breaks = breaks_width(1)
+#   ) +
+#   scale_y_continuous(
+#     labels = scales::label_percent(),
+#     breaks = breaks_width(0.1)
+#   ) 
+```
+
+Arroja error. También puede funcionar con una gráfica apilada de barras
+
+```{r}
+inc_educacion_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |> 
+  ggplot(aes(campo_amplio, prop, fill = educacion)) + 
+  geom_col(position = "dodge")
+```
+
+
+No me gusta como se, se vuelve a intentar con `geom_point`
+
+```{r}
+labels_vars <- c(
+   "1" = "Educación",
+   "2" = "Artes y humanidades",
+   "3" = "Ciencias sociales y derecho",
+   "4" = "Administración y negocios",
+   "5" = "Ciencias naturales, matemáticas y estadística",
+   "6" = "Tecnologías de la información y la comunicación",
+   "7" = "Ingeniería, manufactura y construcción",
+   "8" = "Agronomía y veterinaria",
+   "9" = "Ciencias de la salud",
+   "10" = "Servicios"
+)
+
+labels_vars2 <- c(
+  "6" = "Técnico \nsuperior",
+  "7" = "Licenciatura",
+  "8" = "Maestría",
+  "9" = "Doctorado"
+)
+
+inc_educacion_carreras |>
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  mutate(campo_amplio = as.integer(campo_amplio)) |>
+  ggplot(aes(campo_amplio, prop, color = educacion, linetype = educacion)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    labels = labels_vars,
+    breaks = seq(1, 10, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) 
+```
+
+Si funciona, pero no hace ningún cambio ya que el proceso de renombrar debe ser así
+
+```
+variable <- c(
+  "valor_actual" = "nuevo_valor"
+)
+```
+
+Y yo lo tengo al revés, se hace el cambio
+
+
+Ahora se hace el cambio de estilo
+
+```{r}
+inc_educacion_carreras |>
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  mutate(campo_amplio = as.integer(campo_amplio)) |>
+  ggplot(
+    aes(
+      x = campo_amplio, y = prop, 
+      color = educacion, shape = educacion, linetype = educacion
+    )
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    labels = labels_vars,
+    breaks = seq(1, 10, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars2) + 
+  scale_shape_discrete(name = NULL, labels = labels_vars2) + 
+  scale_linetype_discrete(name = NULL, labels = labels_vars2) +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  )
+```
+
+Tengo que usar dos funciones en `labels`: `label_wrap` y el vector que contiene las etiquetas. Según la IA, va así:
+
+`labels = label_wrap(ancho)(vector)`
+
+Se valida
+
+```{r}
+inc_educacion_carreras |>
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  mutate(campo_amplio = as.integer(campo_amplio)) |>
+  ggplot(
+    aes(
+      x = campo_amplio, y = prop, 
+      color = educacion, shape = educacion, linetype = educacion
+    )
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    labels = label_wrap(20)(labels_vars),
+    breaks = seq(1, 10, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars2) + 
+  scale_shape_discrete(name = NULL, labels = labels_vars2) + 
+  scale_linetype_discrete(name = NULL, labels = labels_vars2) +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  )
+```
+
+Sí funciona ¿por qué con esa sintaxis? Entiendo que aplica la función `label_wrap` a cada elemento del vector
+
+Se continua con la aplicación de estilo
+
+```{r}
+inc_educacion_carreras |>
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  mutate(campo_amplio = as.integer(campo_amplio)) |>
+  ggplot(
+    aes(
+      x = campo_amplio, y = prop, 
+      color = educacion, shape = educacion, linetype = educacion
+    )
+  ) +
+  geom_point(size = 2.5) +
+  geom_line() +
+  scale_x_continuous(
+    labels = label_wrap(20)(labels_vars),
+    breaks = seq(1, 10, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars2) + 
+  scale_shape_discrete(name = NULL, labels = labels_vars2) + 
+  scale_linetype_discrete(name = NULL, labels = labels_vars2) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) + 
+  otros_elementos
+```
+
+Listo! Se guarda
+
+```{r}
+fig_inc_carreras_edu <- inc_educacion_carreras |>
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |>
+  mutate(campo_amplio = as.integer(campo_amplio)) |>
+  ggplot(
+    aes(
+      x = campo_amplio, y = prop, 
+      color = educacion, shape = educacion, linetype = educacion
+    )
+  ) +
+  geom_point(size = 2.5) +
+  geom_line() +
+  scale_x_continuous(
+    labels = label_wrap(20)(labels_vars),
+    breaks = seq(1, 10, by = 1)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) +
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars2) + 
+  scale_shape_discrete(name = NULL, labels = labels_vars2) + 
+  scale_linetype_discrete(name = NULL, labels = labels_vars2) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) + 
+  otros_elementos
+
+guardar_figura(fig_inc_carreras_edu, "figuras/fig_inc_carreras_edu.png")
+```
+
+Se valida tabla
+
+```{r}
+inc_educacion_carreras |> 
+  filter(edu_mismatch_obj == 1 & campo_amplio != 99) |> 
+  select(educacion, campo_amplio, n, tot, prop)
+```
+
+Cabe señalar que se guarda
+
+* tabla que contiene la incidencia por carreras y nivel educativo con el nombre de `tbl_inc_carreras_educacion` en `C:/Prog/tesis/scripts/6_cuadros_v4.R`
+
+* figura que contiene la incidencia por carreras y nivel educativo bajo el nombre de `fig_inc_carreras_edu` en `C:/Prog/tesis/scripts/7_figuras_v4.R`
+
+Se crea tabla que contiene TIL1 estatal
+
+```{r}
+# Obtener tasa en general
+calcular_t_ocup_gpo <- function(datos, grupo, ponderador, poblacion, condicion, valor){
+  # concatenar
+  filtro <- paste(poblacion, condicion, valor)
+  
+  datos |> 
+    mutate(ponderador = as.double({{ ponderador }})) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+
+crear_fig_tasa_vs_over <- function(datos, grupo, tasa, prop){
+  datos |> 
+    ggplot(aes({{ tasa }}, {{ prop }})) + 
+    geom_point() + 
+    geom_smooth() +
+    geom_text_repel(aes(label = {{ grupo }}))
+}
+
+til1_estados <- calcular_t_ocup_gpo(ocupada, ent, fac_tri, "emp_ppal", "==", "1")
+
+til1_estados_over <- tbl_inc_estados |> 
+  filter(edu_mismatch_obj == 1) |> 
+  left_join(til1_estados, by = "ent")
+
+crear_fig_tasa_vs_over(til1_estados_over, ent, tasa, prop)
+```
+
+Listo! Se añade estilo
+
+```{r}
+til1_estados_over |> 
+  ggplot(aes(tasa, prop)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = ent)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+```
+
+Listo! Ahora se cambian las etiquetas de cada observación
+
+```{r}
+labels_vars <- c(
+  "1" = "AGS",
+  "2" = "BC",
+  "3" = "BCS",
+  "4" = "CAMP",
+  "5" = "COAH",
+  "6" = "COL",
+  "7" = "CHIS",
+  "8" = "CHIH",
+  "9" = "CDMX",
+  "10" = "DGO",
+  "11" = "GTO",
+  "12" = "GRO",
+  "13" = "HGO",
+  "14" = "JAL",
+  "15" = "MÉX",
+  "16" = "MICH",
+  "17" = "MOR",
+  "18" = "NAY",
+  "19" = "NL",
+  "20" = "OAX",
+  "21" = "PUE",
+  "22" = "QRO",
+  "23" = "QROO",
+  "24" = "SLP",
+  "25" = "SIN",
+  "26" = "SON",
+  "27" = "TAB",
+  "28" = "TAMPS",
+  "29" = "TLAX",
+  "30" = "VER",
+  "31" = "YUC",
+  "32" = "ZAC"
+)
+
+til1_estados_over |> 
+  ggplot(aes(tasa, prop)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = labels_vars)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+```
+
+Se valida
+
+```{r}
+til1_estados_over
+```
+
+Hay un error, por ejemplo muestra CDMX (9) con una TIL1 y % over cercana al 60% cuando están cercanas al 40% ¿por qué?
+
+Porque como la variable `ent` es de tipo caracter no ordena los valores del 1 al 32 de forma consecutiva, por tanto la forma de solucionarlo es pasándolo a entero y ordenando
+
+```{r}
+til1_estados_over |> 
+  mutate(ent = as.integer(ent)) |> 
+  arrange(ent) |> 
+  ggplot(aes(tasa, prop)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = labels_vars)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+```
+
+Ahora sí está correcto. Se guarda gráfica
+
+```{r}
+fig_ent_til1_over <- til1_estados_over |> 
+  mutate(ent = as.integer(ent)) |> 
+  arrange(ent) |> 
+  ggplot(aes(tasa, prop)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = labels_vars)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+
+guardar_figura(fig_ent_til1_over, "figuras/fig_ent_til1_over.png")
+```
+
+Se añade tabla y figura a "C:/Prog/tesis/scripts/6_cuadros_v4.R" y "C:/Prog/tesis/scripts/7_figuras_v4.R"
+
+```{r}
+estados_til1_over <- tbl_inc_estados |> 
+  filter(edu_mismatch_obj == 1) |> 
+  left_join(
+    calcular_t_ocup_gpo(ocupada, ent, fac_tri, "emp_ppal", "==", "1"), 
+    by = "ent"
+  ) |> 
+  ungroup()
+
+labels_vars <- c(
+  "1" = "AGS",
+  "2" = "BC",
+  "3" = "BCS",
+  "4" = "CAMP",
+  "5" = "COAH",
+  "6" = "COL",
+  "7" = "CHIS",
+  "8" = "CHIH",
+  "9" = "CDMX",
+  "10" = "DGO",
+  "11" = "GTO",
+  "12" = "GRO",
+  "13" = "HGO",
+  "14" = "JAL",
+  "15" = "MÉX",
+  "16" = "MICH",
+  "17" = "MOR",
+  "18" = "NAY",
+  "19" = "NL",
+  "20" = "OAX",
+  "21" = "PUE",
+  "22" = "QRO",
+  "23" = "QROO",
+  "24" = "SLP",
+  "25" = "SIN",
+  "26" = "SON",
+  "27" = "TAB",
+  "28" = "TAMPS",
+  "29" = "TLAX",
+  "30" = "VER",
+  "31" = "YUC",
+  "32" = "ZAC"
+)
+
+fig_estados_til1_over <- estados_til1_over |> 
+  mutate(ent = as.integer(ent)) |> 
+  arrange(ent) |> 
+  ggplot(aes(tasa, prop)) + 
+  geom_point(color = "#314763") + 
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = labels_vars)) +
+  scale_x_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) + 
+  scale_y_continuous(
+    breaks = breaks_width(0.05),
+    labels = scales::label_percent()
+  ) +
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  labs(
+    x = "Tasa de informalidad laboral 1 (TIL1)",
+    y = "Tasa de sobrecalificación"
+  )
+
+guardar_figura(fig_estados_til1_over, "figuras/fig_estados_til1_over.png")
+```
+
+Por condición de informalidad
+
+```{r}
+tbl_inc_informal |> 
+  filter(edu_mismatch_obj == 1)
+```
+
+Por nivel educativo
+
+```{r}
+general |> 
+  group_by(educacion, informal) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ungroup() |> 
+  filter(informal == 1)
+```
+
+```{r}
+datos_svy |> 
+  group_by(edu_mismatch_obj) |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri),
+    promedio = survey_mean(ingreso_mensual, vartype = NULL)
+  )
+```
+
+Se calcula el porcentaje de personas ocupadas por nivel educativo
+
+```{r}
+general |> 
+  mutate(
+    educacion = as.integer(educacion),
+    edu_tipo = case_when(
+      between(educacion, 0, 1) ~ "0",
+      between(educacion, 2, 3) ~ "1",
+      educacion == 4 ~ "2",
+      between(educacion, 6, 9) ~ "3",
+      TRUE ~ NA
+    )
+  ) |> 
+  group_by(edu_tipo) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Se calcula incidencia general por tipo de educación
+
+```{r}
+general |> 
+  mutate(
+    educacion = as.integer(educacion),
+    edu_tipo = case_when(
+      between(educacion, 0, 1) ~ "0",
+      between(educacion, 2, 3) ~ "1",
+      educacion == 4 ~ "2",
+      between(educacion, 6, 9) ~ "3",
+      TRUE ~ NA
+    )
+  ) |> 
+  group_by(edu_tipo, edu_mismatch_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Se calcula incidencia en individuos con educación superior por grupos de edad
+
+```{r}
+general |> 
+  mutate(educacion = as.integer(educacion)) |> 
+  filter(between(educacion, 6, 9)) |> 
+  group_by(edad_7g, edu_mismatch_obj) |> 
+  summarise(n = n(), tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  filter(edu_mismatch_obj == 1)
+```
+
+
+
+```{r}
+general |> 
+  mutate(educacion = as.integer(educacion)) |> 
+  filter(between(educacion, 6, 9)) |> 
+  group_by(edad_7g) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+

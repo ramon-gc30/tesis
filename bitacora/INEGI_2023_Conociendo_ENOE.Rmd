@@ -1,0 +1,320 @@
+---
+title: "Conociendo la base de datos de la ENOE"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+El documento de INEGI(2023) permite:
+
+-   Conocer cómo se organiza la base de datos de la ENOE,
+
+-   Relacionar las tablas mediante las llaves únicas (primarias),
+
+-   Calcular el ponderador de subgrupos poblacionales,
+
+-   Utilizar los campos precodificados para obtener los indicadores estratégicos
+
+Con el objetivo de facilitar el manejo de datos de la ENOE.
+
+# 2. Conformación de la base de datos de la ENOE
+
+La ENOE guarda su información en cinco tablas: \* vivienda,\
+\* hogar,\
+\* sociodemográfico,\
+\* ocupación I y II
+
+![](INEGI-2023_tablas.JPG)
+
+Fuente: INEGI(2023: 1).
+
+Los nombres de las tablas, y en consecuencia de los archivos, se constituyen, por ejemplo, así:\
+`SDEMT125.DBF`\
+donde\
+`SDEM` señala que pertenece a la sección Demográfica de la encuesta,\
+`1` especifica que corresponde al primer trimestre y\
+`25` que refiere al año 2025.
+
+Desde el 2009 a la fecha, sólo en el trimestre I se utiliza el cuestion de ocupación y empleo (COE) ampliado; en los demás el cuestionario básico. Véase p. 2.
+
+# 3. Registros
+
+Desde el trimestre I de 2023 a la fecha, la ENOE tiene el siguiente número de campos en cada tabla:
+
+| Tabla            | Ampliado | Básico |
+|------------------|----------|--------|
+| Vivienda         | 25       | 25     |
+| Hogares          | 37       | 37     |
+| Sociodemográfico | 110      | 114    |
+| COE I            | 189      | 172    |
+| COE II           | 137      | 82     |
+
+Fuente: INEGI (2023)
+
+Consulte INEGI(2024) para conocer la relación de los campos con cada pregunta de la ENOE.
+
+# 4. La llave principal y su relación con cada tabla
+
+La siguiente imagen muestra las llaves principales (*primary key*) de cada tabla:
+
+![](INEGI-2023_llaves-principales.JPG)
+
+Fuente: INEGI(2023) p. 7
+
+Relacionar la tabla sociodemográfico con la tabla COE (I y II)
+
+1.  Eliminar a los Ausentes definitivos (`2`) del campo Condición de residencia (`C_RES`).
+
+```         
+# C_RES: condición de residencia
+# 2: ausente definitivo
+filter(C_RES != 2)
+```
+
+2.  Conservar del campo `EDA` los códigos desde `12` hasta `98`, es decir, a personas con 12 años de edad hasta edad no especificada para mayores.
+
+```         
+between(EDA, 12, 98)
+```
+
+En otras palabras, se eliminan a las personas con condición de residencia de ausencia definitivo y menores a 12 años, incluso con edad no especificada, debido a que no existe registro de ellos en la tabla COE y sólo en la tabla Sociodemográfico.
+
+# 5. Ponderaciones
+
+¿Qué es el ponderador?
+
+"El ponderador es el coeficiente que le otorga determinado peso en la muestra en función de su representatividad de otros tantos casos similares a él tomando en cuenta su estrato socioeconómico y lugar de residencia." INEGI (2023: 9). Es decir, valor que indica cuántas personas de la población general están representadas en un único registro (observación). Por ejemplo, @contrerascueva2024 hace alusión al término pero con otro nombre: factor de expansión.
+
+Desde el III trimestre de 2020, el ponderador trimestral se encuentra en las cinco tablas mediante el campo `FAC_TRIM` que "almacenan un valor numérico de 6 dígitos y este indica a cuántas personas representan de la población total." INEGI(2023: 9).
+
+¿Cómo unir las tablas de Sociodemográfica y de COE?
+
+1.  De la tabla Sociodemográfico, eliminar los valores distintos de `0` del campo asocioado al resultado definitivo de la entrevista `R_DEF`
+
+```         
+# en la tabla SDEMT
+filter(R_DEF == 0)
+```
+
+2.  Suprimir los registros (observaciones) con condición de residencia ausente `C_RES == 2`
+
+```         
+filter(C_RES != 2)
+```
+
+3.  Eliminar a los menos de 12 años
+
+```         
+between(EDA, 12, 98)
+```
+
+Después, se procede a realizar la unión mediante la llave principal. Ejemplo: véase p. 10
+
+# 6. Principales variables de la ENOE
+
+En la ENOE se aplica el cuestionario de ocupación y empleo solo a personas de 12 años y más a partir de lo establecido en la Ley Federal de Trabajo que señala la edad de 15 años como la edad mínima legal para trabajar.
+
+La ENOE determina las siguientes variables y agrupaciones principales:
+
+-   Población total
+
+    -   Población menor de 15 años
+
+    -   Población de 15 años y más
+
+        -   Población económicamente activa (PEA)
+
+            -   Población ocupada
+
+            -   Población desocupada
+
+        -   Población no económicamente activa (PNEA)
+
+            -   Población disponible
+
+            -   Población no disponible
+
+Para calcular las poblaciones de cualquier variable deben aplicarse ciertos criterios (filtros y condiciones). Consulte pp. 11-12 o el documento “Reconstrucción de variables de la ENOE” para ver los criterios que deben aplicarse a cada agrupación.
+
+# 8. Precodificación
+
+¿Qué son los campos precodificados?
+
+"... son aquellos a los cuales se les asigna un valor, dependiendo del criterio de cada variable de los indicadores estratégicos o tabulados básicos..." INEGI (2023, p. 19). Es decir, son campos que no están asociados a alguna pregunta de la encuesta pero permiten identificar cada registro (observación) con cada variable o agrupación principal.
+
+¿Dónde se localizan?
+
+En la tabla Sociodemográfico y aparecen después el campo `FAC_TRI`, véase INEGI(2024, pp. 19-27) para ver la lista de todos los campos precodificados.
+
+Cabe señalar que con los campos precodificados los criterios se simplifican como se observa en la p. 20
+
+# 9. Indicadores estratégicos con campos precodificados
+
+En esta sección se muestra un ejemplo de cómo obtener los indicadores estratégicos a partir de los campos precodificados con datos de la ENOE del cuarto trimestre de 2022. Se realizará dicho ejemplo al final de la sección.
+
+Asimismo, se muestra los métodos de cálculo para obtener diversas tasas como la tasa de participación (TP), la tasa de desocupación (TD), etc. desde la página 28 hasta 31.
+
+Por otra parte, también se pueden calcular los indicadores estratégicos siguiendo ciertos criterios por:
+
+-   Ámbito (tamaño de la localidad): véase capítulo 10 p. 32
+
+-   Entidad o ciudad: véase capítulo 11 p. 33
+
+-   Tabulados básicos: véase capítulo 12 pp. 34-35
+
+## Realización del ejemplo
+
+Según INEGI(2023), los campos precodificados se encuentran en la tabla sociodemográfica por lo que sólo se trabajará con dicha tabla.
+
+```{r setup}
+library(tidyverse)
+sdem <- read_csv(
+  "enoet42022/ENOEN_SDEMT422.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+Se observa que la tabla sociodemográfica `sdem` está compuesta por `r nrow(sdem)` filas y `r ncol(sdem)` columnas. De inicio, todos los valores de todas las columnas están de tipo caracter así que, en primer lugar, se segmentará únicamente la variable `fac_trim` a tipo numérico.
+
+```{r}
+sdem <- sdem %>% mutate(
+  fac_tri = as.double(fac_tri)
+)
+```
+
+Ahora, procedemos a calcular los indicadores estratégicos.
+
+### 9.1 Población total
+
+```{r}
+poblacion_total <- sdem %>% filter(
+  r_def == "0",
+  c_res != "2"
+) 
+
+poblacion_total %>% 
+  summarise(
+    sum(fac_tri)
+  )
+```
+
+### 9.2 Población de 15 años y más
+
+En este caso, la variable `eda` se segmenta a tipo numérico (entero) para aplicar correctamente la función `between`
+
+```{r}
+poblacion_total %>% 
+  mutate(
+    eda = as.integer(eda)
+  ) %>% 
+  filter(between(eda, 15, 98)) %>% 
+  summarise(
+    sum(fac_tri)
+  )
+```
+
+Cabe la pena destacar que el paso previo de segmentar la variable (columna) `eda` es la adecuada para obtener el dato que se observa en INEGI (2023, p. 21). En otras palabras, si se deja el tipo en caracter se obtendrá un resultado erróneo.
+
+```{r}
+poblacion_total %>% 
+  filter(between(eda, "15", "98")) %>% 
+  summarise(sum(fac_tri))
+
+# arroja el mismo resultado aunque se ordene
+poblacion_total %>% 
+  arrange(eda) %>%  
+  filter(between(eda, "15", "98")) %>%   
+  summarise(sum(fac_tri))
+```
+
+¿Por qué el resultado es distinto si el tipo es numérico o caracter? Porque la función `between` ordena los valores en el tipo numérico y no ocurre lo mismo en el tipo caracter.
+
+```{r}
+poblacion_total %>% 
+  select(eda) %>% 
+  arrange(eda) %>%  
+  filter(between(eda, "15", "98"))  
+  
+poblacion_total %>% 
+  transmute(
+    eda = as.integer(eda)
+  ) %>% 
+  filter(between(eda, 15, 98))
+```
+
+No obstante, INEGI(2024, p. 16) señala que el campo `eda` es de tipo caracter y para que pueda obtenerse el mismo resultado con tal tipo de dato debe modificarse la condición en `filter`.
+
+```{r}
+poblacion_total %>% 
+  filter(
+    eda != "0",
+    eda != "1",
+    eda != "2",
+    eda != "3",
+    eda != "4",
+    eda != "5",
+    eda != "6",
+    eda != "7",
+    eda != "8",
+    eda != "9",
+    eda != "10",
+    eda != "11",
+    eda != "12",
+    eda != "13",
+    eda != "14",
+    eda != "99"
+  ) %>% 
+  summarise(sum(fac_tri))
+```
+
+Posiblemente dicha sintaxis, se podría mejorar a través del operador de bucle `for`. Se plantea la duda en Obsidian, mientras se queda el primer procedimiento: segmentar a tipo númerico y después aplicar el criterio especificado.
+
+```{r}
+pob_15_o_mas <- poblacion_total %>% 
+  mutate(eda = as.integer(eda)) %>% 
+  filter(between(eda, 15, 98))
+
+pob_15_o_mas %>% 
+  summarise(sum(fac_tri))
+```
+
+### 9.3 PEA y PNEA
+
+```{r}
+#pea
+pob_15_o_mas %>% 
+  filter(clase1 == "1") %>% 
+  summarise(pea = sum(fac_tri))
+
+#pnea
+pob_15_o_mas %>% 
+  filter(clase1 == "2") %>% 
+  summarise(pea = sum(fac_tri))
+
+# pea y pnea desagrupados
+pob_15_o_mas %>% 
+  group_by(clase1, clase2) %>% 
+  summarise(sum(fac_tri))
+```
+
+### 9.4 Condición de informalidad
+
+```{r}
+pob_15_o_mas %>% 
+  filter(clase2 == "1") %>% 
+  group_by(emp_ppal) %>% 
+  summarise(sum(fac_tri)) 
+```
+
+## Resumen
+
+Como se observa, los resultados coinciden con los mostrados en INEGI(2023, pp. 21-27).
+
+# Referencias
+
+INEGI (2023). Encuesta Nacional de Ocupación y Empleo (ENOE). Conociendo la base de datos de la ENOE <https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/con_basedatos_proy2010.pdf>
+
+--- (2024). Encuesta Nacional de Ocupación y Empleo (ENOE). Estructura de la base de datos <https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/enoe_123_fd_c_bas_amp.pdf>

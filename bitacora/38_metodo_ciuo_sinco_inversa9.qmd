@@ -1,0 +1,291 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(writexl)
+library(readxl)
+
+source("scripts/0_funciones_v9.R")
+
+sinco11_ciuo08 <- read_csv(
+  "C:/Prog/tesis/datos/sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character())
+)
+
+sinco19_11 <- read_csv(
+  "C:/Prog/tesis/datos/sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character())
+)
+
+# ciuo08 <- read_xlsx(
+#   "C:/Prog/tesis/datos/ISCO.xlsx",
+#   sheet = 2,
+#   col_types = "text"
+# )
+```
+
+Valores únicos de `sinco11`
+
+```{r}
+glimpse(sinco19_11)
+```
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_11) == 4) |> 
+  group_by(sinco_11) |> 
+  mutate(id = row_number()) |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19,
+    values_fill = ""
+  )
+```
+
+Aquello crea la tabla `sinco11`
+
+```{r}
+sinco11 <- sinco19_11 |> 
+  filter(str_length(sinco_11) == 4) |> 
+  group_by(sinco_11) |> 
+  mutate(id = row_number()) |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19,
+    values_fill = ""
+  )
+```
+
+Se une con tabla comparativa entre SINCO-11 y CIUO-08
+
+```{r}
+glimpse(sinco11_ciuo08)
+```
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11")) 
+```
+
+Se asigna nivel de competencia
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11")) |> 
+  mutate(
+    c08_major = str_sub(ciuo08, 1, 1),
+    c08_submajor = str_sub(ciuo08, 1, 2),
+    # asignar nivel de competencia
+    skill_level = case_when(
+        # skill level 4
+        c08_submajor == "11" | c08_submajor == "12" |
+          c08_submajor == "13" | c08_major == "2" |
+          c08_submajor == "01" ~ "4",
+        # skill level 3
+        c08_submajor == "14" | c08_major == "3" ~ "3",
+        # skill level 2
+        c08_major == "4" | c08_major == "5" |
+          c08_major == "6" | c08_major == "7" |
+          c08_major == "8" | c08_submajor == "02" ~ "2",
+        # skill level 1
+        c08_major == "9" | c08_submajor == "03" ~ "1",
+        TRUE ~ NA
+      ) 
+  )
+```
+
+Necesito tener las ocupaciones del SINCO-19 de forma vertical ¿cómo?
+
+Se me ocurre pivotar a lo largo
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11")) |> 
+  mutate(
+    c08_major = str_sub(ciuo08, 1, 1),
+    c08_submajor = str_sub(ciuo08, 1, 2),
+    # asignar nivel de competencia
+    skill_level = case_when(
+        # skill level 4
+        c08_submajor == "11" | c08_submajor == "12" |
+          c08_submajor == "13" | c08_major == "2" |
+          c08_submajor == "01" ~ "4",
+        # skill level 3
+        c08_submajor == "14" | c08_major == "3" ~ "3",
+        # skill level 2
+        c08_major == "4" | c08_major == "5" |
+          c08_major == "6" | c08_major == "7" |
+          c08_major == "8" | c08_submajor == "02" ~ "2",
+        # skill level 1
+        c08_major == "9" | c08_submajor == "03" ~ "1",
+        TRUE ~ NA
+      ) 
+  ) |> 
+  pivot_longer(
+    s19_1:s19_9,
+    values_to = "sinco19"
+  )
+```
+
+De ahí reordenar para después pivotar a lo ancho
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11")) |> 
+  mutate(
+    c08_major = str_sub(ciuo08, 1, 1),
+    c08_submajor = str_sub(ciuo08, 1, 2),
+    # asignar nivel de competencia
+    skill_level = case_when(
+        # skill level 4
+        c08_submajor == "11" | c08_submajor == "12" |
+          c08_submajor == "13" | c08_major == "2" |
+          c08_submajor == "01" ~ "4",
+        # skill level 3
+        c08_submajor == "14" | c08_major == "3" ~ "3",
+        # skill level 2
+        c08_major == "4" | c08_major == "5" |
+          c08_major == "6" | c08_major == "7" |
+          c08_major == "8" | c08_submajor == "02" ~ "2",
+        # skill level 1
+        c08_major == "9" | c08_submajor == "03" ~ "1",
+        TRUE ~ NA
+      ) 
+  ) |> 
+  pivot_longer(
+    s19_1:s19_9,
+    values_to = "sinco19"
+  ) |> 
+  filter(sinco19 != "") |> 
+  group_by(sinco19, skill_level) |>
+  arrange(skill_level, .by_group = TRUE) |> 
+  ungroup() |> 
+  group_by(sinco19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco19,
+    names_from = id,
+    names_prefix = "skill_",
+    values_from = skill_level,
+    values_fill = ""
+  ) |> 
+  unite("skill_level", skill_1:skill_8, sep = "") |> 
+  mutate(
+    # extrae el primer caracter para obtener mínimo
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter para obtener máximo
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) 
+```
+
+Se une para añadir total de ocupaciones y descripción
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(sinco11, by = c("sinco11" = "sinco_11")) |> 
+  mutate(
+    c08_major = str_sub(ciuo08, 1, 1),
+    c08_submajor = str_sub(ciuo08, 1, 2),
+    # asignar nivel de competencia
+    skill_level = case_when(
+        # skill level 4
+        c08_submajor == "11" | c08_submajor == "12" |
+          c08_submajor == "13" | c08_major == "2" |
+          c08_submajor == "01" ~ "4",
+        # skill level 3
+        c08_submajor == "14" | c08_major == "3" ~ "3",
+        # skill level 2
+        c08_major == "4" | c08_major == "5" |
+          c08_major == "6" | c08_major == "7" |
+          c08_major == "8" | c08_submajor == "02" ~ "2",
+        # skill level 1
+        c08_major == "9" | c08_submajor == "03" ~ "1",
+        TRUE ~ NA
+      ) 
+  ) |> 
+  pivot_longer(
+    s19_1:s19_9,
+    values_to = "sinco19"
+  ) |> 
+  filter(sinco19 != "") |> 
+  group_by(sinco19, skill_level) |>
+  arrange(skill_level, .by_group = TRUE) |> 
+  ungroup() |> 
+  group_by(sinco19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  pivot_wider(
+    id_cols = sinco19,
+    names_from = id,
+    names_prefix = "skill_",
+    values_from = skill_level,
+    values_fill = ""
+  ) |> 
+  unite("skill_level", skill_1:skill_8, sep = "") |> 
+  mutate(
+    # extrae el primer caracter para obtener mínimo
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter para obtener máximo
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  right_join(sinco19_11, by = c("sinco19" = "sinco_19"), multiple = "any") |> 
+  filter(str_length(sinco19) == 4)
+```
+
+Es mucho código, me quedo con el procedimiento 1 y 4

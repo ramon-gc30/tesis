@@ -1,0 +1,838 @@
+---
+title: "Efecto salarial"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+7.  C:/Prog/tesis/5_Sobre-educacion_2.Rmd
+8.  C:/Prog/tesis/5_Sobre-educacion_3.Rmd
+9.  C:/Prog/tesis/5_Sobre-educacion_4.Rmd
+10. C:/Prog/tesis/5_Sobre-educacion_5.Rmd
+
+El objetivo es construir el modelo a utilizar que se basa en el trabajo @zamudioeislas1999
+
+# Efecto salarial
+
+Recordemos que los estudios empíricos llevados a cabo rechazan los postulados de la Teoría de Capital Humano (@becker1983, @mincer1974, @schultz1961) y el Modelo de Competencia de Puestos de trabajo (@thurow1975) con el modelo ORU (Over, Required, Under) propuesto por @duncanyhoffman1981, entonces al rechazar ambas teorías se acepta lo propuesto por la Teoría de Asignación @sattinger1993, es decir, que existe tanto un efecto educación como un efecto ocupación en la formación del ingreso (@zamudioeislas1999).
+
+## ORU ampliado
+
+En ese sentido, el modelo ORU que considera ambos efectos es el siguiente (@zamudioeislas1999):
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 G_i S_i^o + \phi_4 H_i S_i^u + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+Con
+
+$$
+S^o_i = S_i - S^R_i; S_i > S^R_i \\
+S^u_i = S^R_i - S_i; S_i < S^R_i
+$$
+
+Donde:
+
+$y_i$: logaritmo natural del ingreso,\
+$S_i^R$: años de educación requerida,\
+$S_i^o$: años de sobre-educación,\
+$S_i^u$: años de infra-educación,\
+$G_i$: variable dicotómica que indica sobre-educación,\
+$H_i$: variable dicotómica que indica infra-educación,\
+$\sum_{j = 1}^J L_{ij}$: variables dicotómicas de las $J$ ocupaciones,\
+$X_i$: variables exógenas como edad, experiencia laboral, género, región de residencia, horas trabajadas, etc.
+
+Cabe señalar que los autores utilizan variables dicotómicas "para los casos en que las discrepancias en educación sean positivas o negativas" (@zamudioeislas1999 p. 7).
+
+## ORU original
+
+No obstante, el modelo ORU planteado por @hartog2000 no existe ninguna variable dicotómica similar:
+
+$$
+\ln{W} = X \beta + \gamma_r S_r + \gamma_o S_o + \gamma_u S_u + \epsilon  
+$$
+
+Donde:
+
+$S_r$: años de educación requerida para el puesto,\
+$S_o$: años de sobre-educación (educación adquirida menos la educación requerida, si es positivo, en caso contrario será cero),\
+$S_u$: años de infra-educación,\
+$X$: otras variables explicativas
+
+## Comparación
+
+Sin embargo, no son modelos iguales; el modelo de Zamudio e Islas considera el efecto educación y ocupación en la formación del ingreso mediante las variables dicotómicas asociadas a cada ocupación, mientras que el modelo ORU también contempla ambos efectos pero sólo en la variable $S_o$. 
+
+# Actividades a realizar
+
+Por otra parte, como la población objetivo son los jóvenes profesionistas se espera que la proporción de infra-educados sea prácticamente cero por lo que el modelo puede quedar de la siguiente manera:
+
+$$
+y_i = \phi_1 + \phi_2 S_i^R + \phi_3 G_i S_i^o + \sum_{j = 1}^J L_{ij} + \gamma X_i + \epsilon_i
+$$
+
+De igual manera, se construirán variables categóricas que nos permitan contar el número (absoluto y relativo) de individuos con desajuste educativo, tanto con sobre-educación como con infra-educación.
+
+Por último, cabe señalar que @zamudioeislas1999 se basaron en el trabajo de @hartog1985 para construir el modelo ORU ampliado. Sin embargo, este último no ha sido leído. 
+
+# Observaciones
+
+* Modificar valor `0` en `ingocup` porque representa `NA` en `p6b2`
+* Modificar valor `0` en `ing_x_hrs` porque representa `NA` en `p6b2` y `dur9c == 1 & 9`.
+* Trabajar con `ing_x_hrs` debido a que hay una relación positiva entre el ingreso mensual promedio y el número de horas trabajadas
+* No eliminar el valor `0` en `anios_esc` ya que es un valor válido
+* Trabajar con `ocupacion1` e incluso con `ocupacion2` para determinar los años de educación requeridos.
+* Realizar un subapartado que divida los años de educación requeridos por grupos de edad generacionales, como Zamudio e Islas (1999).
+
+# ¿Qué otras variables explicativas a utilizar?
+
+* experiencia laboral potencial (11) , **REALIZADO**
+* el cuadrado de esta variable (12), **REALIZADO**
+* logaritmo natural de las horas trabajadas, **REALIZADO**
+* género (13), 
+* estado civil (14) y 
+* situación relativa en el hogar (15). **par_c**
+
+"11 Se calcula como Edad - Años de Educación Formal - 6. 
+12 Se incluye para modelar trayectorias de ingreso en forma de "'U'' invertida. 
+13 Variable dicotómica que toma el valor unitario cuando i es hombre y cero si i es mujer." 
+14 Variable dicotómica que indica si el individuo es casado. 
+15 Variable dicotómica que indica si el individuo es jefe de hogar."
+(Zamudio y Islas, 1999, p. 10) [notas al pie de página]  
+
+# Dudas
+
+* Validar si utilizar el ingreso mensual o el ingreso por horas trabajadas, yo me decantaría por la segunda opción
+* Crear n-1 variables dicotómicas para las ocupaciones.
+* Construir `S_r`, `S_o`, y `S_u` para los años ORU. **REALIZADO**
+* Validar $G_i$ y $H_i$, variables dicotómicas “para los casos en que las discrepancias en educación sean positivas o negativas” (Zamudio and Islas (1999) p. 7).
+* Validar si utilizar un cuadro comparativo con los tres métodos: media, mediana y moda, o quedarse con uno, por ejemplo, la moda. 
+
+# Bloque `setup`
+
+```{r setup}
+# paquetes ==========================================================
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# calcular la moda
+library(DescTools)
+# coeficiente de asimetría
+library(moments)
+library(EnvStats)
+
+# importación =======================================================
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación ======================================================
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  anios_esc = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_esc = if_else(anios_esc != 99, anios_esc, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # 0 pasa a NA ya que 0==NA en p6b2
+  ingocup = if_else(ingocup != 0, ingocup, NA),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs),
+  # 0 pasa a NA ya que 0==NA en p6b2 y en dur9c == 1 & 9
+  ing_x_hrs = if_else(ing_x_hrs != 0, ing_x_hrs, NA)
+)
+
+# construcción de variables =========================================
+# grupos de edad OECD(2019: 135)
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitaria INEGI(2016: 13)
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales INEGI(2019: 22)
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# creación de tablas ================================================
+# población total INEGI(2023:21)
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe INEGI(2023:9)
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más INEGI(2023:21)
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+
+# sobre-educación ===================================================
+
+# con el grupo división INEGI(2020: 22) -----------------------------
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu1 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_ocu1 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu1" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu1, by = "ocupacion1") %>% 
+  left_join(edu_req2_ocu1, by = "ocupacion1") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_ocu1 = as.double(moda_ocu1),
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      # required
+      between(anios_esc, vv_neg_ocu1, vv_pos_ocu1) ~ 0,
+      # over
+      anios_esc > vv_pos_ocu1 ~ 1,
+      # under
+      anios_esc < vv_neg_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu1 = case_when(
+      # required
+      anios_esc == mediana_ocu1 ~ 0,
+      # over
+      anios_esc > mediana_ocu1 ~ 1,
+      # under
+      anios_esc < mediana_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu1 = case_when(
+      # required
+      anios_esc == moda_ocu1 ~ 0,
+      # over
+      anios_esc > moda_ocu1 ~ 1,
+      # under
+      anios_esc < moda_ocu1 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias 
+    # media
+    over_vv_ocu1 = if_else(anios_esc > vv_pos_ocu1, 1, 0),
+    req_vv_ocu1 = if_else(between(anios_esc, vv_neg_ocu1, vv_pos_ocu1), 1, 0),
+    under_vv_ocu1 = if_else(anios_esc < vv_neg_ocu1, 1, 0),
+    # mediana
+    over_med_ocu1 = if_else(anios_esc > mediana_ocu1, 1, 0),
+    req_med_ocu1 = if_else(anios_esc == mediana_ocu1, 1, 0),
+    under_med_ocu1 = if_else(anios_esc < mediana_ocu1, 1, 0),
+    # moda
+    over_mod_ocu1 = if_else(anios_esc > moda_ocu1, 1, 0),
+    req_mod_ocu1 = if_else(anios_esc == moda_ocu1, 1, 0),
+    under_mod_ocu1 = if_else(anios_esc < moda_ocu1, 1, 0),
+    # variables de años de sobre o infra
+    # mediana
+    so_med_ocu1 = if_else(anios_esc > mediana_ocu1, anios_esc - mediana_ocu1, 0),
+    sr_med_ocu1 = if_else(anios_esc == mediana_ocu1, anios_esc, 0),
+    su_med_ocu1 = if_else(anios_esc < mediana_ocu1, mediana_ocu1 - anios_esc, 0),
+    # moda
+    so_mod_ocu1 = if_else(anios_esc > moda_ocu1, anios_esc - moda_ocu1, 0),
+    sr_mod_ocu1 = if_else(anios_esc == moda_ocu1, anios_esc, 0),
+    su_mod_ocu1 = if_else(anios_esc < moda_ocu1, moda_ocu1 - anios_esc, 0)
+  )
+
+# con el grupo principal INEGI(2020: 22) ----------------------------
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu2 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion2) %>%
+  summarise(
+    vv_neg_ocu2 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu2 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu2 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_ocu2 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion2, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu2" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu2, by = "ocupacion2") %>% 
+  left_join(edu_req2_ocu2, by = "ocupacion2") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_ocu2 = as.double(moda_ocu2),
+    # verdugo y verdugo
+    edu_mis_vv_ocu2 = case_when(
+      # required
+      between(anios_esc, vv_neg_ocu2, vv_pos_ocu2) ~ 0,
+      # over
+      anios_esc > vv_pos_ocu2 ~ 1,
+      # under
+      anios_esc < vv_neg_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # mediana
+    edu_mis_med_ocu2 = case_when(
+      # required
+      anios_esc == mediana_ocu2 ~ 0,
+      # over
+      anios_esc > mediana_ocu2 ~ 1,
+      # under
+      anios_esc < mediana_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # moda
+    edu_mis_mod_ocu2 = case_when(
+      # required
+      anios_esc == moda_ocu2 ~ 0,
+      # over
+      anios_esc > moda_ocu2 ~ 1,
+      # under
+      anios_esc < moda_ocu2 ~ 2,
+      TRUE ~ NA
+    ),
+    # variables binarias
+    # media
+    over_vv_ocu2 = if_else(anios_esc > vv_pos_ocu2, 1, 0),
+    req_vv_ocu2 = if_else(between(anios_esc, vv_neg_ocu2, vv_pos_ocu2), 1, 0),
+    under_vv_ocu2 = if_else(anios_esc < vv_neg_ocu2, 1, 0),
+    # mediana
+    over_med_ocu2 = if_else(anios_esc > mediana_ocu2, 1, 0),
+    req_med_ocu2 = if_else(anios_esc == mediana_ocu2, 1, 0),
+    under_med_ocu2 = if_else(anios_esc < mediana_ocu2, 1, 0),
+    # moda
+    over_mod_ocu2 = if_else(anios_esc > moda_ocu2, 1, 0),
+    req_mod_ocu2 = if_else(anios_esc == moda_ocu2, 1, 0),
+    under_mod_ocu2 = if_else(anios_esc < moda_ocu2, 1, 0),
+    # variables de años de sobre o infra
+    # mediana
+    so_med_ocu2 = if_else(anios_esc > mediana_ocu2, anios_esc - mediana_ocu2, 0),
+    sr_med_ocu2 = if_else(anios_esc == mediana_ocu2, anios_esc, 0),
+    su_med_ocu2 = if_else(anios_esc < mediana_ocu2, mediana_ocu2 - anios_esc, 0),
+    # moda
+    so_mod_ocu2 = if_else(anios_esc > moda_ocu2, anios_esc - moda_ocu2, 0),
+    sr_mod_ocu2 = if_else(anios_esc == moda_ocu2, anios_esc, 0),
+    su_mod_ocu2 = if_else(anios_esc < moda_ocu2, moda_ocu2 - anios_esc, 0)
+  )
+```
+
+# Comprobación
+
+## `ocupacion1`
+
+```{r}
+ocupada %>% 
+  select(ocupacion1, anios_esc, vv_pos_ocu1, vv_neg_ocu1, mediana_ocu1, moda_ocu1, edu_mis_vv_ocu1, edu_mis_med_ocu1, edu_mis_mod_ocu1, over_vv_ocu1, req_vv_ocu1, under_vv_ocu1, over_med_ocu1, req_med_ocu1, under_med_ocu1, over_mod_ocu1, req_mod_ocu1, under_mod_ocu1, so_med_ocu1, sr_med_ocu1, su_med_ocu1, so_mod_ocu1, sr_mod_ocu1, su_mod_ocu1)
+```
+
+Los cálculos están correctos
+
+## `ocupacion2`
+
+```{r}
+ocupada %>% 
+  select(ocupacion2, anios_esc, vv_pos_ocu2, vv_neg_ocu2, mediana_ocu2, moda_ocu2, edu_mis_vv_ocu2, edu_mis_med_ocu2, edu_mis_mod_ocu2, over_vv_ocu2, req_vv_ocu2, under_vv_ocu2, over_med_ocu2, req_med_ocu2, under_med_ocu2, over_mod_ocu2, req_mod_ocu2, under_mod_ocu2, so_med_ocu2, sr_med_ocu2, su_med_ocu2, so_mod_ocu2, sr_mod_ocu2, su_mod_ocu2)
+```
+
+Los cálculos también están correctos
+
+# ¿Horas trabajadas?
+
+Según el cuestionario básico, las horas trabajadas corresponden a la pregunta 5b y 5d que están en la tabla `coe1`, al validar en @inegienoebd2024 p. 47 el total de horas se encuentran en las variables:
+
+* `P5b_THRS`: total de horas dedicadas al trabajo la semana pasada
+* `P5d_THRS`: total de horas dedicadas habitualmente (véase cuestionario básico p. 8) 
+
+Contienen los siguientes valores:
+
+* 1-998: Total de Número de horas
+* 999: No especificado
+
+En primer lugar, ¿son excluyentes? 
+
+```{r}
+coe1 %>% 
+  select(contains("thrs"))
+```
+
+Al parecer sí son excluyentes, dependen de la pregunta `p5c` donde:
+* el valor uno: señala que si son el número de horas que habitualmente trabaja, 
+* el valor cero indica caso contrario (véase metadatos de coe2t22025 [^1]).
+
+```{r}
+coe1 %>% 
+  select(contains("thrs"), p5c)
+```
+
+Entonces, puedo añadir otra variable que contenga ambos valores.
+
+```{r}
+coe1 %>% 
+  select(contains("thrs"), p5c) %>% 
+  mutate(
+    thrs = if_else(p5c == 1, p5b_thrs, p5d_thrs)
+  )
+```
+
+Arroja un error, pero... no me interesa conocer el número de horas trabajadas habitulamente sino las reales, es decir, las que efectivamente reporta efectuar el individuo, por ende, sólo trabajaré con `p5b_thrs`. Validemos su variación.
+
+```{r}
+ocupada %>% 
+  mutate(thrs = as.integer(p5b_thrs)) %>% 
+  count(thrs, .drop = FALSE)
+  # ggplot(aes(thrs)) + 
+  # geom_histogram()
+```
+
+El valor `999` indica "Total de horas no especificadas" por lo que puede transformarse a `NA`.
+
+```{r}
+ocupada %>% 
+  mutate(
+    p5b_thrs = if_else(p5b_thrs != 999, p5b_thrs, NA),
+    thrs = as.integer(p5b_thrs)
+  ) %>%
+  ggplot(aes(thrs)) +
+  geom_histogram(binwidth = 5)
+```
+
+Se decide trabajar con `p5b_thrs` y pasar `999` a `NA`
+
+# ¿Ingreso por hora trabajada?
+
+Validemos variación de `ing_x_hrs`
+
+```{r}
+ocupada %>% 
+  ggplot(aes(ing_x_hrs)) + 
+  geom_histogram(binwidth = 50) + 
+  scale_x_continuous(breaks = seq(0, 6000, by = 1000))
+```
+
+Existe un fuerte sesgo a la derecha, la mayoría de las observaciones se concentran a menos de 500 pesos por hora trabajada, sin embargo, existen valores atípicos en un ingreso de 6000 pesos por hora.
+
+```{r}
+ocupada %>% 
+  ggplot(aes(ing_x_hrs)) + 
+  geom_histogram(binwidth = 50) + 
+  scale_x_continuous(breaks = seq(0, 6000, by = 1000)) + 
+  coord_cartesian(ylim = c(0, 50))
+```
+
+Busquemos a los individuos que reportaron un ingreso por hora igual o superior a 1000 pesos
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs >= 1000)
+```
+
+Son 120 individuos.
+
+Busquemos del lado de la oferta, nivel de estudios y grupos de edad
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs >= 1000) %>% 
+  count(edad_7g) %>% 
+  mutate(prop = n / sum(n))
+```
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs >= 1000) %>% 
+  count(cs_p13_1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Del lado de la demanda
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs >= 1000) %>% 
+  count(ocupacion1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+El 50% pertenece al grupo 1 y 2.
+
+Por último, por tipo de desajuste
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs >= 1000) %>% 
+  count(edu_mis_mod_ocu1) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Se decide incluir los valores atípicos
+
+# Experiencia laboral
+
+Recordemos que la experiencia laboral se calcula como sigue: "11 Se calcula como Edad - Años de Educación Formal - 6.", hagamos un ejemplo por grupos de edad. Se espera que a menor edad, menor sea la experiencia laboral
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6
+  ) %>% 
+  ggplot(aes(exp_lab)) + 
+  geom_histogram(binwidth = 5) + 
+  scale_x_continuous(breaks = seq(0, 100, by = 10))
+```
+
+¿Experiencia laboral menor a cero e igual a 90?
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6
+  ) %>% 
+  ggplot(aes(exp_lab)) + 
+  geom_histogram(binwidth = 5) + 
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) + 
+  coord_cartesian(ylim = c(0, 10))
+```
+
+Validemos por grupos de edad
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6
+  ) %>% 
+  filter(exp_lab < 10) %>% 
+  count(edad_7g, exp_lab)
+```
+
+En el grupo de 15 a 24 años, hay valores negativos de incluso -3 años de experiencia laboral potencial.
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6
+  ) %>% 
+  filter(exp_lab <= 0) %>% 
+  count(eda.x, anios_esc, exp_lab)
+```
+
+¿Qué hacer con los valores menores e iguales a cero? 
+
+```{r}
+log(-3)
+log(0)
+log(1)
+```
+Se observa que arroja error cuando `exp_lab` es menor e igual a cero. 
+
+Por otra parte, @mcguinnessybennett2007 p. 526 define "7 Experience is calculated as age—years in full-time schooling." (McGuinness y Bennett, 2007, p. 526). Veamos
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc
+  ) %>% 
+  ggplot(aes(exp_lab)) + 
+  geom_histogram(binwidth = 5) + 
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) 
+  # coord_cartesian(ylim = c(0, 10))
+```
+
+Sin embargo, el mismo @mincer1974 señala que la experiencia laboral se puede estimar como la edad actual menos la edad al finalizar la escolaridadDe forma desmenuzada $t = A - s - b$
+
+Donde\
+$A$: edad actual,\
+$s$: años de escolarización\
+$b$: edad al comenzar la escolarización
+
+En ese sentido, se deben eliminar los valores de `exp_lab` menores e iguales a cero.
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6,
+    exp_lab2 = if_else(exp_lab > 0, exp_lab, NA)
+  ) %>% 
+  ggplot(aes(exp_lab2)) + 
+  geom_histogram(binwidth = 5) + 
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) 
+  # coord_cartesian(ylim = c(0, 10))
+```
+
+Se eliminaron muchísimas observaciones, ¿cuántos valores menores e iguales a cero hay?
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6,
+    # exp_lab = if_else(exp_lab > 0, exp_lab, NA)
+  ) %>% 
+  filter(exp_lab <= 0) %>% 
+  count(exp_lab) %>% 
+  mutate(prop = n / sum(n))
+```
+
+El 85% se concentra cuando `exp_lab` es igual a cero. ¿Por grupos de edad?
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6,
+    # exp_lab = if_else(exp_lab > 0, exp_lab, NA)
+  ) %>% 
+  filter(exp_lab <= 0) %>% 
+  count(edad_7g, exp_lab) %>% 
+  mutate(prop = n / sum(n))
+```
+
+```{r}
+1 - 0.001914137
+```
+
+El 99.8% se concentra en el grupo de 15 a 24 años por lo que no afecta al grupo de edad de interés: jóvenes de 25 a 34 años (`edad_7g == 3`).
+
+## Valores superiores a 80
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6
+  ) %>% 
+  filter(exp_lab > 80) %>% 
+  count(edad_7g, exp_lab)
+```
+
+¿Qué corresponde `98` de `edad_7g` en `eda`?
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 98) %>% 
+  count(eda.x)
+```
+
+Corresponde al valor `98`, es decir, "Edad no especificada para mayores (12 años y más)" @inegienoebd2024 p. 16, en esos casos no se puede calcular la experiencia laboral potencial.
+
+## Resumen
+
+* Cuando `exp_lab` sea igual o menor a cero, el valor debe transformarse a `NA`, esta operación no afecta al grupo de interés
+* Cuando `eda.x` sea igual a `98`, no debe calcularse la experiencia laboral potencial por lo que en dichos casos el valor debe ser `NA`
+* Se debe seguir la fórmula de @mincer1974 para estimar la experiencia laboral potencial: `experiencia laboral = edad actual - años de escolarización - años al comenzar los estudios formales (6 para el caso de México)`
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6,
+    exp_lab = if_else(exp_lab > 0 & eda.x != 98, exp_lab, NA)
+  ) %>% 
+  filter(exp_lab <= 0) %>% 
+  count(exp_lab)
+```
+
+```{r}
+ocupada %>% 
+  mutate(
+    exp_lab = eda.x - anios_esc - 6,
+    exp_lab = if_else(exp_lab > 0 & eda.x != 98, exp_lab, NA)
+  ) %>% 
+  filter(eda.x == 98) %>% 
+  count(exp_lab)
+```
+
+Listo!
+
+# Experiencia laboral al cuadrado
+
+```{r}
+ocupada %>% 
+  transmute(
+    exp_lab = eda.x - anios_esc - 6,
+    exp_lab = if_else(exp_lab > 0 & eda.x != 98, exp_lab, NA),
+    exp_lab2 = exp_lab ** 2
+  )
+```
+
+# Género
+
+```{r}
+ocupada %>% 
+  mutate(
+    male = if_else(sex == 1, 1, 0)
+  ) %>% 
+  select(sex, male)
+```
+
+# Estado civil
+
+```{r}
+ocupada %>% 
+  mutate(
+    married = if_else(e_con == 5, 1, 0)
+  ) %>% 
+  select(e_con, married)
+```
+
+# Situación del hogar
+
+Según @inegi2020c p. 37, el valor `101` pertenece al jefe de hogar, mientras que `201` a "Esposa(o)" y `301` a "Hijo(a)".
+
+```{r}
+ocupada %>% 
+  count(par_c)
+```
+
+```{r}
+ocupada %>% 
+  mutate(
+    jefe_hog = if_else(par_c == 101, 1, 0)
+  ) %>% 
+  select(par_c, jefe_hog)
+```
+
+# Resumen
+
+* determiné los años requeridos mediante `ocupacion1` y `ocupacion2`
+* determiné la incidencia del desajuste educativo (sobre, requerido, infra) con los tres métodos: media, moda y mediana
+* cree variables binarias que señalan el tipo de desajuste educativo: sobre, requerido e infra 
+* cree las variables asociadas a los años de sobre, requerido e infra
+* comprobé las variables señaladas líneas arriba
+* validé las otras variables explicativas: horas trabajadas, experiencia laboral, género, estado civil, situación del hogar
+
+Es momento de realizar la estimación ¡Qué emoción! 
+
+Se realizará en el siguiente documento.
+
+[^1]: https://www.inegi.org.mx/rnm/index.php/catalog/1121/data-dictionary/F41?file_name=COE1T225 
+
+# Referencias
+

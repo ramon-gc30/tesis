@@ -1,0 +1,122 @@
+---
+date: today
+---
+
+En este documento se intentará calcular estadísticos descriptivos e incidencia con las funciones que tienen operador entre llaves `{{}}`
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v2.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v2.R")
+```
+
+Se crea la tabla correspondiente
+
+```{r}
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+# Crea la tabla de la población objetivo
+jovenes <- seleccionar_jov(general)
+
+# se pasan a factores
+jovenes <- convertir_a_factor(jovenes)
+
+# se define como encuesta compleja
+jovenes_svy <- definir_encuesta(jovenes)
+```
+
+Se valida el tamaño de la muestra
+
+```{r}
+obtener_tamanio_muestra(jovenes_svy)
+```
+
+Correcto!!
+
+Se valida incidencia
+
+```{r}
+calcular_incidencia_svy_tot(jovenes_svy, edu_mismatch_obj)
+```
+
+Listo!!! El resultado coincide con "C:/Prog/tesis/26_incidencia_con_funciones_v12.qmd"
+
+Se valida incidencia desagregada
+
+```{r}
+calcular_inc_svy_des(jovenes_svy, educacion, edu_mismatch_obj)
+```
+
+Listo!! Sí funciona
+
+Por último, quiero intentar la función de "C:/Prog/tesis/27_c3_v3_cuadros_est_descrip.qmd"
+
+```
+crear_tbl_est_des_ing <- function(datos){
+  datos_procesados <- datos |> 
+    mutate(variable = ingreso_mensual) |>
+    obtener_est_descriptivos() |> 
+    mutate(variable = "ingreso_mensual") |> 
+    relocate(variable, .before = minimo)
+  return(datos_procesados)
+}
+```
+
+Considero que se puede hacer directamente en 
+
+```
+# variables continuas
+obtener_est_descriptivos <- function(datos, variable){
+  datos |> 
+    filter(!is.na({{  variable  }})) |> 
+    summarise(
+      minimo = min({{  variable  }}),
+      promedio = survey_mean({{  variable  }}, vartype = NULL),
+      desv_est = survey_sd({{  variable  }}),
+      maximo = max({{  variable  }})
+    )
+}
+```
+
+Para lo cual se requiere enmascarar el nombre de la columna, como lo señala la IA
+
+```{r}
+funcion_vgr <- function(datos, variable){
+  # se enmascara nombre de columna
+  nombre_var <- as_label(enquo(variable))
+  
+  # se calculan estadísticos
+  datos |> 
+    filter(!is.na({{  variable  }})) |> 
+    summarise(
+      # se inserta nombre de la columna
+      variable = nombre_var, 
+      minimo = min({{  variable  }}),
+      promedio = survey_mean({{  variable  }}, vartype = NULL),
+      desv_est = survey_sd({{  variable  }}),
+      maximo = max({{  variable  }})
+    )
+}
+```
+
+Se valida
+
+```{r}
+funcion_vgr(jovenes_svy, ingreso_mensual)
+```
+
+Sí se pudo!!! 
+
+Se realiza cambio en "5_calcular_incidencia_v2.R" y se crea "5_calcular_incidencia_v3.R"
+

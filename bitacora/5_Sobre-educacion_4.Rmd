@@ -1,0 +1,868 @@
+---
+title: "Sobre-educación (4)"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+7.  C:/Prog/tesis/5_Sobre-educacion_2.Rmd
+8.  C:/Prog/tesis/5_Sobre-educacion_3.Rmd
+
+# Paquetes requeridos
+
+```{r setup}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# calcular la moda
+library(DescTools)
+# coeficiente de asimetría
+library(moments)
+library(EnvStats)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  anios_esc = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_esc = if_else(anios_esc != 99, anios_esc, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+
+# grupos de edad
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitarias
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# población total
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+```
+
+# Años de educación requeridos con los tres métodos
+
+## Con `ocupacion1`
+
+```{r}
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu1 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg_ocu1 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu1 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu1 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_ocu1 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu1" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu1, by = "ocupacion1") %>% 
+  left_join(edu_req2_ocu1, by = "ocupacion1") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_ocu1 = as.double(moda_ocu1),
+    # verdugo y verdugo
+    edu_mis_vv_ocu1 = case_when(
+      anios_esc > vv_pos_ocu1 ~ 1,
+      anios_esc < vv_neg_ocu1 ~ 2,
+      TRUE ~ 0
+    ),
+    # mediana
+    edu_mis_med_ocu1 = case_when(
+      anios_esc > mediana_ocu1 ~ 1,
+      anios_esc < mediana_ocu1 ~ 2,
+      TRUE ~ 0
+    ),
+    # moda
+    edu_mis_mod_ocu1 = case_when(
+      anios_esc > moda_ocu1 ~ 1,
+      anios_esc < moda_ocu1 ~ 2,
+      TRUE ~ 0
+    )
+  )
+```
+
+## con `ocupacion2`
+
+```{r}
+# métodos: verdugo y verdugo, y mediana
+edu_req1_ocu2 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion2) %>%
+  summarise(
+    vv_neg_ocu2 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_ocu2 = mean(anios_esc) + sd(anios_esc),
+    mediana_ocu2 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_ocu2 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(ocupacion2, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_ocu2" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_ocu2, by = "ocupacion2") %>% 
+  left_join(edu_req2_ocu2, by = "ocupacion2") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_ocu2 = as.double(moda_ocu2),
+    # verdugo y verdugo
+    edu_mis_vv_ocu2 = case_when(
+      anios_esc > vv_pos_ocu2 ~ 1,
+      anios_esc < vv_neg_ocu2 ~ 2,
+      TRUE ~ 0
+    ),
+    # mediana
+    edu_mis_med_ocu2 = case_when(
+      anios_esc > mediana_ocu2 ~ 1,
+      anios_esc < mediana_ocu2 ~ 2,
+      TRUE ~ 0
+    ),
+    # moda
+    edu_mis_mod_ocu2 = case_when(
+      anios_esc > moda_ocu2 ~ 1,
+      anios_esc < moda_ocu2 ~ 2,
+      TRUE ~ 0
+    )
+  )
+```
+
+## con `p3`
+
+```{r}
+# métodos: verdugo y verdugo, y mediana
+edu_req1_p3 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(p3) %>%
+  summarise(
+    vv_neg_p3 = mean(anios_esc) - sd(anios_esc),
+    vv_pos_p3 = mean(anios_esc) + sd(anios_esc),
+    mediana_p3 = median(anios_esc)
+  )
+
+# método: moda
+edu_req2_p3 <- ocupada %>%
+  filter(!is.na(anios_esc)) %>% 
+  group_by(p3, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda_p3" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste educativo
+ocupada <- ocupada %>% left_join(edu_req1_p3, by = "p3") %>% 
+  left_join(edu_req2_p3, by = "p3") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda_p3 = as.double(moda_p3),
+    # verdugo y verdugo
+    edu_mis_vv_p3 = case_when(
+      anios_esc > vv_pos_p3 ~ 1,
+      anios_esc < vv_neg_p3 ~ 2,
+      TRUE ~ 0
+    ),
+    # mediana
+    edu_mis_med_p3 = case_when(
+      anios_esc > mediana_p3 ~ 1,
+      anios_esc < mediana_p3 ~ 2,
+      TRUE ~ 0
+    ),
+    # moda
+    edu_mis_mod_p3 = case_when(
+      anios_esc > moda_p3 ~ 1,
+      anios_esc < moda_p3 ~ 2,
+      TRUE ~ 0
+    )
+  )
+```
+
+# Incidencia
+
+## `ocupacion1`
+
+### Verdugo y Verdugo
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+### Mediana
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+### Moda
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+## `ocupacion2`
+
+### Verdugo y Verdugo
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_ocu2) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+### Mediana
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_med_ocu2) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+### Moda
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_mod_ocu2) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+## `p3`
+
+### Verdugo y Verdugo
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_vv_p3) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+### Mediana
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_med_p3) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+### Moda
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis_mod_p3) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Listo! Se tienen los tres métodos estadísticos: media, moda y mediana construidos con los tres grupos ocupacionales: división, principal y unitario.
+
+# Ingreso mensual promedio
+
+## `ocupacion1`
+
+### Media
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_vv_ocu1 = factor(edu_mis_vv_ocu1)) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+### Moda
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_mod_ocu1 = factor(edu_mis_mod_ocu1)) %>% 
+  group_by(edu_mis_mod_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+### Mediana
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_med_ocu1 = factor(edu_mis_med_ocu1)) %>% 
+  group_by(edu_mis_med_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+## `ocupacion2`
+
+### Media
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_vv_ocu2 = factor(edu_mis_vv_ocu2)) %>% 
+  group_by(edu_mis_vv_ocu2) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+## `P3` 
+
+### Media
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_vv_p3 = factor(edu_mis_vv_p3)) %>% 
+  group_by(edu_mis_vv_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+# Diagrama de caja
+
+## `ocupacion1`
+
+### Media
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_vv_ocu1 = factor(edu_mis_vv_ocu1)) %>%
+  ggplot(aes(edu_mis_vv_ocu1, ingocup)) + 
+  geom_lv()
+```
+
+### Moda
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_mod_ocu1 = factor(edu_mis_mod_ocu1)) %>%
+  ggplot(aes(edu_mis_mod_ocu1, ingocup)) + 
+  geom_lv()
+```
+
+### Mediana
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_med_ocu1 = factor(edu_mis_med_ocu1)) %>%
+  ggplot(aes(edu_mis_med_ocu1, ingocup)) + 
+  geom_lv()
+```
+
+## `ocupacion2`
+
+### Media
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis_vv_ocu2 = factor(edu_mis_vv_ocu2)) %>%
+  ggplot(aes(edu_mis_vv_ocu2, ingocup)) + 
+  geom_lv()
+```
+
+# Promedio de ingreso por hora trabajada
+
+## `ocupacion1`
+
+### Media
+
+```{r}
+ocupada %>% 
+  filter(ing_x_hrs != 0) %>% 
+  mutate(edu_mis_vv_ocu1 = factor(edu_mis_vv_ocu1)) %>% 
+  group_by(edu_mis_vv_ocu1) %>% 
+  summarise(
+    media = mean(ing_x_hrs),
+    mediana = median(ing_x_hrs)
+  )
+```
+
+# Relación de ingreso mensual promedio con
+
+## años de escolaridad
+
+### `ocupacion1`
+
+#### media
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_vv_ocu1 = factor(edu_mis_vv_ocu1),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_vv_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_vv_ocu1, group = edu_mis_vv_ocu1)) +
+  geom_point() +
+  geom_line()
+```
+
+#### moda
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_mod_ocu1 = factor(edu_mis_mod_ocu1),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_mod_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_mod_ocu1, group = edu_mis_mod_ocu1)) +
+  geom_point() +
+  geom_line()
+```
+
+#### mediana
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_med_ocu1 = factor(edu_mis_med_ocu1),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_med_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_med_ocu1, group = edu_mis_med_ocu1)) +
+  geom_point() +
+  geom_line()
+```
+
+### `ocupacion2`
+
+#### media
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_vv_ocu2 = factor(edu_mis_vv_ocu2),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_vv_ocu2) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_vv_ocu2, group = edu_mis_vv_ocu2)) +
+  geom_point() +
+  geom_line()
+```
+
+### `p3`
+
+#### media
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_vv_p3 = factor(edu_mis_vv_p3),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_vv_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_vv_p3, group = edu_mis_vv_p3)) +
+  geom_point() +
+  geom_line()
+```
+
+#### moda
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_mod_p3 = factor(edu_mis_mod_p3),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_mod_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_mod_p3, group = edu_mis_mod_p3)) +
+  geom_point() +
+  geom_line()
+```
+
+#### mediana
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_med_p3 = factor(edu_mis_med_p3),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(anios_esc, edu_mis_med_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis_med_p3, group = edu_mis_med_p3)) +
+  geom_point() +
+  geom_line()
+```
+
+## Por edad
+
+### `ocupacion1`
+
+#### media
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_vv_ocu1 = factor(edu_mis_vv_ocu1)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(eda.x, edu_mis_vv_ocu1) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(eda.x, media, color = edu_mis_vv_ocu1, group = edu_mis_vv_ocu1)) +
+  geom_line()
+```
+
+### `ocupacion2`
+
+#### media
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_vv_ocu2 = factor(edu_mis_vv_ocu2)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(eda.x, edu_mis_vv_ocu2) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(eda.x, media, color = edu_mis_vv_ocu2, group = edu_mis_vv_ocu2)) +
+  geom_line()
+```
+
+### `p3`
+
+#### media
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_vv_p3 = factor(edu_mis_vv_p3)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(eda.x, edu_mis_vv_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(eda.x, media, color = edu_mis_vv_p3, group = edu_mis_vv_p3)) +
+  geom_line()
+```
+
+#### moda
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_mod_p3 = factor(edu_mis_mod_p3)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(eda.x, edu_mis_mod_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(eda.x, media, color = edu_mis_mod_p3, group = edu_mis_mod_p3)) +
+  geom_line()
+```
+
+#### mediana
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis_med_p3 = factor(edu_mis_med_p3)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  group_by(eda.x, edu_mis_med_p3) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(eda.x, media, color = edu_mis_med_p3, group = edu_mis_med_p3)) +
+  geom_line()
+```
+
+# Relación de sobre-educación con
+
+## Grupos de edad
+
+### `ocupacion1`
+
+#### media
+
+```{r}
+ocupada %>% 
+  # filter(edad_7g != 98) %>% 
+  mutate(
+    edad_7g = factor(edad_7g),
+    edu_mis_vv_ocu1 = factor(edu_mis_vv_ocu1)
+  ) %>% 
+  group_by(edad_7g, edu_mis_vv_ocu1) %>%
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>%
+  ggplot(aes(edad_7g, prop, color = edu_mis_vv_ocu1, group = edu_mis_vv_ocu1)) +
+  geom_point() +
+  geom_line()
+```
+
+#### moda
+
+```{r}
+ocupada %>% 
+  # filter(edad_7g != 98) %>% 
+  mutate(
+    edad_7g = factor(edad_7g),
+    edu_mis_mod_ocu1 = factor(edu_mis_mod_ocu1)
+  ) %>% 
+  group_by(edad_7g, edu_mis_mod_ocu1) %>%
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>%
+  ggplot(aes(edad_7g, prop, color = edu_mis_mod_ocu1, group = edu_mis_mod_ocu1)) +
+  geom_point() +
+  geom_line()
+```
+
+#### mediana
+
+```{r}
+ocupada %>% 
+  # filter(edad_7g != 98) %>% 
+  mutate(
+    edad_7g = factor(edad_7g),
+    edu_mis_med_ocu1 = factor(edu_mis_med_ocu1)
+  ) %>% 
+  group_by(edad_7g, edu_mis_med_ocu1) %>%
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>%
+  ggplot(aes(edad_7g, prop, color = edu_mis_med_ocu1, group = edu_mis_med_ocu1)) +
+  geom_point() +
+  geom_line()
+```
+
+Con los tres métodos, y utilizando los distintos grupos ocupacionales (`ocupacion1`, `ocupacion2` y `p3`), se observa que el ingreso mensual promedio de individuos con sobre-educación es superior al ingreso de individuos con educación ajustada al puesto. 
+
+# Referencias
+
+

@@ -1,0 +1,148 @@
+---
+date: today
+format: html
+---
+
+Este documento tiene como objetivo servir de apoyo para la elaboración de la version 3 del capítulo 3 Resultados
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v4.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v4.R")
+```
+
+Se define población objetivo
+
+```{r}
+# Selección de población objetivo ----------------------------------- 
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+# Crea la tabla de la población objetivo
+jovenes <- seleccionar_jov(general)
+
+# se pasan a factores
+jovenes <- convertir_a_factor(jovenes)
+
+# se define como encuesta compleja
+datos_svy <- definir_encuesta(jovenes)
+```
+
+Se calcula la incidencia de la sobrecalificación por años de escolaridad
+
+```{r}
+inc_anios_est <- calcular_inc_svy_des(datos_svy, anios_estudios, edu_mismatch_obj) |> 
+  ungroup()
+
+inc_anios_est
+```
+
+Se realiza gráfica
+
+```{r}
+inc_anios_est |> 
+  filter(edu_mismatch_obj == 1 & !is.na(anios_estudios)) |> 
+  # mutate(edu_mismatch_obj = factor(edu_mismatch_obj)) |> 
+  ggplot(aes(anios_estudios, prop)) +
+  geom_point(color = "#314763", size = 3) +
+  geom_line(color = "#314763") + 
+  scale_x_continuous(breaks = breaks_width(1)) + 
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) + 
+  labs(x = NULL,y = NULL) +
+  theme_classic(base_size = 16, base_family = "Trebuchet MS")
+```
+
+Se crea función para guardar figuras
+
+```{r}
+# función para guardar gráfica
+guardar_figura <- function(grafica, nombre_archivo){
+  ggsave(
+    filename = nombre_archivo,
+    plot = grafica,
+    width = 17,
+    height = 10,
+    units = "cm",
+    dpi = 300 # asegura alta calidad
+  )
+  
+  # mensaje de confirmación
+  message(paste("Gráfica guardada exitosamente como:", nombre_archivo))
+}
+```
+
+Se guarda la gráfica creada
+
+```{r}
+fig_inc_anios_est <- inc_anios_est |> 
+  filter(edu_mismatch_obj == 1 & !is.na(anios_estudios)) |> 
+  # mutate(edu_mismatch_obj = factor(edu_mismatch_obj)) |> 
+  ggplot(aes(anios_estudios, prop)) +
+  geom_point(color = "#314763", size = 3) +
+  geom_line(color = "#314763") + 
+  scale_x_continuous(breaks = breaks_width(1)) + 
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.1)
+  ) + 
+  labs(x = NULL,y = NULL) +
+  theme_classic(base_size = 16, base_family = "Trebuchet MS")
+
+guardar_figura(fig_inc_anios_est, "figuras/fig_inc_anios_est.png")
+```
+
+Se consiguen datos
+
+```{r}
+inc_anios_est
+```
+
+
+SITUACIÓN DE EGRESO
+
+```{r}
+calcular_inc_svy_des(datos_svy, cs_p16, edu_mismatch_obj)
+```
+
+```{r}
+datos_svy |> 
+  group_by(cs_p16, anios_estudios) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+
+datos_svy |> 
+  group_by(cs_p16, educacion) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+```{r}
+datos_svy |> 
+  group_by(educacion, anios_estudios) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+

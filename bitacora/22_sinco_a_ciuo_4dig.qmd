@@ -1,0 +1,953 @@
+---
+title: "Untitled"
+format: html
+---
+
+## Introducción
+
+A partir de los comentarios realizados por mi director de tesis, se realizará la conversión CIUO-08 a SINCO-19.
+
+En primer lugar, se convertirá CIUO-08 a SINCO-11 a 4 dígitos y después a SINCO-19, también a 4 dígitos. Para tal fin, nos apoyaremos del archivo Excel que compara las ocupaciones SINCO-11 a CIUO-08 a 4 dígitos.
+
+## Actividades previas
+
+En Excel, se rellenaron las celdas en blanco para que cada ocupación de SINCO se relacionara con una ocupación CIUO. En este espacio, se tratará de asignar el nivel de conocimientos (skill level) y el nivel educativo acorde (level of education) con base en el enfoque normativo de OIT.
+
+## Paquetes requeridos
+
+Se realiza la importación del archivo creado en formato CSV.
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(readxl)
+
+ciuo08_a_sinco11 <- read_csv(
+  "sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+ciuo08_a_sinco11
+```
+
+Al parecer todo bien, se valida los casos en que hay valores cero al inicio de la celda
+
+```{r}
+ciuo08_a_sinco11 |> 
+  mutate(
+    tamanio_ciuo = str_length(ciuo08)
+  ) |> 
+  count(tamanio_ciuo) 
+```
+
+Se observa que realizó la importación de forma exitosa
+
+Se valida tamaño de la tabla importada
+
+```{r}
+glimpse(ciuo08_a_sinco11)
+```
+
+Ahora se añade una columna que separará los dígitos de CIUO-08 para obtener las ocupaciones a 1 dígito
+
+```{r}
+ciuo08_a_sinco11 |> 
+  separate(
+    ciuo08,
+    "ciuo08_1dig",
+    sep = 1,
+    remove = FALSE # no elimina columna original
+  ) |> 
+  count(ciuo08_1dig)
+```
+
+Se observa que se obtuvo el resultado deseado
+
+```{r}
+ciuo08_a_sinco11 <- ciuo08_a_sinco11 |> 
+  separate(
+    ciuo08,
+    "ciuo08_1dig",
+    sep = 1,
+    remove = FALSE
+  ) 
+
+glimpse(ciuo08_a_sinco11)
+```
+
+Ahora se asigna el nivel de conocimientos acorde a cada ocupación, véase por ejemplo nota del día 26-03-01 en Obsidian.
+
+¿Qué pasa si convierto `ciuo08_1dig` a tipo numérico?
+
+```{r}
+ciuo08_a_sinco11 |> 
+  mutate(
+    ciuo08_1dig = as.integer(ciuo08_1dig)
+  ) |> 
+  count(ciuo08_1dig)
+```
+
+Se observa que respeta el valor `0` y los valores en blanco los convierte a `NA`, esto nos ayudará para facilitar el código
+
+```{r}
+# ciuo08_a_sinco11 |> 
+#   mutate(
+#     # para utilizar between
+#     ciuo08_1dig = as.integer(ciuo08_1dig),
+#     skill_level_inf = case_when(
+#       ciuo08_1dig == 1 ~ "3",
+#       ciuo08_1dig == 2 ~ "4",
+#       ciuo08_1dig == 3 ~ "3",
+#       between(ciuo08_1dig, 4, 8) ~ "2",
+#       ciuo08_1dig == 9 ~ "1",
+#       TRUE ~ NA
+#     ),
+#     skill_level_sup = case_when(
+#       between(ciuo08_1dig, 1, 3) ~ "3",
+#       between(ciuo08_1dig, 4, 8) ~ "2",
+#       ciuo08_1dig == 9 ~ "1",
+#       TRUE ~ NA
+#     )
+#   ) 
+```
+
+Estaba por realizar el código para asignar el nivel de conocimientos acordes, pero recordé que se determina a 2 dígitos de CIUO-08, como lo señala OIT (2023) p. 47, véase nota "notas de indicador de desajuste educativo de ilo" de Obsidian
+
+Entonces, debe crearse otra columna que muestre las ocupaciones a 2 dígitos de CIUO-08
+
+```{r}
+ciuo08_a_sinco11 |> 
+  separate(
+    ciuo08, 
+    "ciuo08_2dig",
+    sep = 2,
+    remove = FALSE
+  ) |> 
+  count(ciuo08_2dig)
+```
+
+```{r}
+ciuo08_a_sinco11 <- ciuo08_a_sinco11 |> 
+  separate(
+    ciuo08, 
+    "ciuo08_2dig",
+    sep = 2,
+    remove = FALSE
+  )
+
+glimpse(ciuo08_a_sinco11)
+```
+
+Ahora se determina el nivel de conocimientos acordes, en el grupo 1 y 0 se hace a 2 dígitos, en los demás a 1 dígito
+
+```{r}
+ciuo08_a_sinco11 |> 
+  rename("ciuo08_4dig" = "ciuo08") |> 
+  mutate(
+    # para utilizar between
+    ciuo08_4dig = as.integer(ciuo08_4dig), 
+    ciuo08_2dig = as.integer(ciuo08_2dig),
+    ciuo08_1dig = as.integer(ciuo08_1dig),
+    skill_level = case_when(
+      # en grupo 1 se hace a 2 dígitos
+      between(ciuo08_2dig, 11, 13) | ciuo08_1dig == 2 ~ "4",
+      ciuo08_2dig == 14 | ciuo08_1dig == 3 ~ "3",
+      # en los demás grupos a 1 dígito
+      between(ciuo08_1dig, 4, 8) ~ "2",
+      ciuo08_1dig == 9 ~ "1",
+      TRUE ~ NA
+    )
+  ) |> 
+  count(skill_level)
+```
+
+No se está considerando el grupo ocupacional `0`
+
+¿Qué pasa en los valores `01` cuando paso de caracter a entero?
+
+```{r}
+ciuo08_a_sinco11 |> 
+  rename("ciuo08_4dig" = "ciuo08") |> 
+  mutate(
+    # para utilizar between
+    ciuo08_4dig = as.integer(ciuo08_4dig), 
+    ciuo08_2dig = as.integer(ciuo08_2dig),
+    ciuo08_1dig = as.integer(ciuo08_1dig)
+  ) |> 
+  count(ciuo08_2dig)
+```
+
+Se observa que se pierden, hay dos maneras de solucionarlo: i) no pasar a entero, 2) pasar a numérico y después a caracter añadiendo el cero al inicio. Se realiza opción 1.
+
+```{r}
+ciuo08_a_sinco11 |> 
+  rename("ciuo08_4dig" = "ciuo08") |> 
+  mutate(
+    # para utilizar between
+    # ciuo08_4dig = as.integer(ciuo08_4dig), 
+    # ciuo08_2dig = as.integer(ciuo08_2dig),
+    ciuo08_1dig = as.integer(ciuo08_1dig),
+    skill_level = case_when(
+      # en grupo 1 se hace a 2 dígitos
+      ciuo08_2dig == "11" | ciuo08_2dig == "13" | 
+        ciuo08_1dig == 2 |
+        ciuo08_2dig == "01" ~ "4",
+      ciuo08_2dig == "14" | ciuo08_1dig == 3 ~ "3",
+      # en los demás grupos a 1 dígito
+      between(ciuo08_1dig, 4, 8) | ciuo08_2dig == "02" ~ "2",
+      ciuo08_1dig == 9 | ciuo08_2dig == "03" ~ "1",
+      TRUE ~ NA
+    )
+  ) |> 
+  count(skill_level)
+```
+
+Se valida asignación
+
+```{r}
+ciuo08_a_sinco11 |> 
+  rename("ciuo08_4dig" = "ciuo08") |> 
+  mutate(
+    # para utilizar between
+    # ciuo08_4dig = as.integer(ciuo08_4dig), 
+    # ciuo08_2dig = as.integer(ciuo08_2dig),
+    ciuo08_1dig = as.integer(ciuo08_1dig),
+    skill_level = case_when(
+      # en grupo 1 se hace a 2 dígitos
+      ciuo08_2dig == "11" | ciuo08_2dig == "13" | 
+        ciuo08_1dig == 2 |
+        ciuo08_2dig == "01" ~ "4",
+      ciuo08_2dig == "14" | ciuo08_1dig == 3 ~ "3",
+      # en los demás grupos a 1 dígito
+      between(ciuo08_1dig, 4, 8) | ciuo08_2dig == "02" ~ "2",
+      ciuo08_1dig == 9 | ciuo08_2dig == "03" ~ "1",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(contains("ciuo08"), skill_level)
+```
+
+Ya se encontró el error, no se consideró la ocupación `12`
+
+Se corrige
+
+```{r}
+ciuo08_a_sinco11 |> 
+  rename("ciuo08_4dig" = "ciuo08") |> 
+  mutate(
+    # para utilizar between
+    # ciuo08_4dig = as.integer(ciuo08_4dig), 
+    # ciuo08_2dig = as.integer(ciuo08_2dig),
+    ciuo08_1dig = as.integer(ciuo08_1dig),
+    skill_level = case_when(
+      # en grupo 1 se hace a 2 dígitos
+      ciuo08_2dig == "11" | ciuo08_2dig == "12" | ciuo08_2dig == "13" | 
+        ciuo08_1dig == 2 |
+        ciuo08_2dig == "01" ~ "4",
+      ciuo08_2dig == "14" | ciuo08_1dig == 3 ~ "3",
+      # en los demás grupos a 1 dígito
+      between(ciuo08_1dig, 4, 8) | ciuo08_2dig == "02" ~ "2",
+      ciuo08_1dig == 9 | ciuo08_2dig == "03" ~ "1",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(contains("ciuo08"), skill_level)
+```
+
+Ahora sí ya está correctamente asignado
+
+```{r}
+ciuo08_a_sinco11 <- ciuo08_a_sinco11 |> 
+  rename("ciuo08_4dig" = "ciuo08") |> 
+  mutate(
+    # para utilizar between
+    ciuo08_1dig = as.integer(ciuo08_1dig),
+    skill_level = case_when(
+      # ILO (2023, p. 47)
+      # skill level 4 
+      # en ocupación 1 y 0 se hace a 2 dígitos
+      ciuo08_2dig == "11" | ciuo08_2dig == "12" | ciuo08_2dig == "13" | 
+        ciuo08_1dig == 2 |
+        ciuo08_2dig == "01" ~ "4",
+      # skill level 3
+      ciuo08_2dig == "14" | ciuo08_1dig == 3 ~ "3",
+      # skill level 2
+      # en los demás grupos a 1 dígito
+      between(ciuo08_1dig, 4, 8) | ciuo08_2dig == "02" ~ "2",
+      # skill level 1
+      ciuo08_1dig == 9 | ciuo08_2dig == "03" ~ "1",
+      TRUE ~ NA
+    )
+  ) 
+```
+
+Ahora se muestran los distintos niveles de conocimientos
+
+```{r}
+ciuo08_a_sinco11 |> 
+  distinct(skill_level)
+```
+
+Se crea una nueva tabla que contiene los niveles de conocimientos
+
+```{r}
+skill_level <- ciuo08_a_sinco11 |> 
+  distinct(skill_level)
+```
+
+Ahora se determinan los niveles educativos CINE-11
+
+```{r}
+skill_level |> 
+  mutate(
+    education_cine11_inf = case_when(
+      skill_level == "4" ~ "6",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "2",
+      skill_level == "1" ~ "0",
+      TRUE ~ NA
+    ),
+    education_cine11_sup = case_when(
+      skill_level == "4" ~ "8",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    )
+  )
+```
+
+Se asigna el nivel educativo de CINE-11 correspondiente 
+
+```{r}
+skill_level <- skill_level |> 
+  mutate(
+    education_cine11_inf = case_when(
+      skill_level == "4" ~ "6",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "2",
+      skill_level == "1" ~ "0",
+      TRUE ~ NA
+    ),
+    education_cine11_sup = case_when(
+      skill_level == "4" ~ "8",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    )
+  )
+```
+
+Ahora se hace la equivalencia del Sistema Educativo Nacional de México
+
+```{r}
+skill_level |> 
+  mutate(
+    education_mexico_inf = case_when(
+      skill_level == "4" ~ "7",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "3",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    education_mexico_sup = case_when(
+      skill_level == "4" ~ "9",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+Cabe señalar que en OIT (2023, p. 50), consideran que el nivel 1 de conocimientos equivale o corresponde a los niveles 0 y 1 educativo de CINE-11. 
+
+Aquí debe realizarse una pequeña modificación a los datos de la ENOE, en el caso de nivel 4 de conocimientos el nivel educativo inferior de México corresponde al valor `5` de `cs_p13_1`, de ahí omite el valor `6` (ya que corresponde al nivel 3 de conocimientos) y sigue el valor `7`, es decir, en dicho caso existe un truncamiento. 
+
+¿Cómo solucionarlo? Convertir los valores `5` de `cs_p13_1` a `7`, para que pueda considerarse un nivel inferior o superior.
+
+Ahora se define la nueva variable
+
+```{r}
+skill_level <- skill_level |> 
+  mutate(
+    education_mexico_inf = case_when(
+      skill_level == "4" ~ "7",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "3",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    education_mexico_sup = case_when(
+      skill_level == "4" ~ "9",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+Paso intermedio, creamos una nueva tabla que contiene las ocupaciones de CIUO-08
+
+```{r}
+# ciuo08 <- 
+  ciuo08_a_sinco11 |> 
+  select(ciuo08_1dig, ciuo08_2dig, ciuo08_4dig, 
+         descripcion_ciuo) |> 
+  rename("descripcion_ciuo08_4dig" = "descripcion_ciuo")
+
+ciuo08 <- ciuo08_a_sinco11 |> 
+  select(ciuo08_1dig, ciuo08_2dig, ciuo08_4dig, 
+         descripcion_ciuo) |> 
+  rename("descripcion_ciuo08_4dig" = "descripcion_ciuo")
+```
+
+Continuamos. Al trabajar en el archivo Excel, observamos que la relación no es 1 a 1, es decir, una ocupación SINCO-11 puede corresponder a más de una ocupación CIUO-08. Esto se valida al obtener el conteo de ocupaciones
+
+```{r}
+ciuo08_a_sinco11 |> 
+  count(sinco11) |> 
+  filter(n > 1) |> 
+  arrange(desc(n))
+```
+
+Por ejemplo, la ocupación `2821` de SINCO-11 se asocia a 7 ocupaciones CIUO-08. 
+
+Pero, ¿cuántas ocupaciones aparecen en dicho archivo?
+
+```{r}
+ciuo08_a_sinco11 |> 
+  distinct(sinco11) |> 
+  mutate(sinco11 = as.integer(sinco11)) |> 
+  filter(sinco11 > 1000)
+```
+
+De acuerdo a INEGI(2011, p. 15) en SINCO-11 existen 468 grupos ocupacionales unitarios y en la tabla también aparecen 468 grupos por lo que sí aparecen todas las ocupaciones.
+
+Ahora lo que se requiere es mostrar una tabla que no repita los valores de `sinco11` ¿cómo? se me ocurre pivotar a lo ancho con los valores de `skill_level`. 
+
+Primero creamos una tabla que contiene las ocupaciones de SINCO-11 y los niveles de conocimientos acordes aquello a 4 dígitos 
+
+```{r}
+ciuo08_a_sinco11 |> 
+  select(sinco11, skill_level)
+
+sinco11_con_skill <- ciuo08_a_sinco11 |> 
+  select(sinco11, skill_level)
+  # mutate(sinco11 = as.integer(sinco11)) |> 
+  # filter(sinco11 > 1000)
+```
+
+El pivote se hace entre grupos de `sinco11`, es decir, valores que no se repitan de dicha variable
+
+```{r}
+# sinco11_con_skill |>
+#   group_by(sinco11) |>
+#   pivot_wider(
+#     names_from = "name",
+#     values_from = skill_level
+#   )
+# 
+# Error in `pivot_wider()`:
+# ! Can't select columns that don't exist.
+# ✖ Column `name` doesn't exist.
+# Run `rlang::last_trace()` to see where the error occurred.
+```
+
+Forzosamente requiere una columna para `names_from`. Vamos a crear una
+
+```{r}
+# sinco11_con_skill |>
+#   mutate(nombre = "skill_level") |> 
+#   group_by(sinco11) |>
+#   pivot_wider(
+#     names_from = skill_level,
+#     values_from = nombre
+#   )
+# 
+# Warning:
+# Values from `nombre` are not uniquely identified; output will contain
+# list-cols.
+# • Use `values_fn = list` to suppress this warning.
+# • Use `values_fn = {summary_fun}` to summarise duplicates.
+# • Use the following dplyr code to identify duplicates.
+#   {data} |>
+#   dplyr::summarise(n = dplyr::n(), .by = c(sinco11, skill_level)) |>
+#   dplyr::filter(n > 1L)
+```
+
+Arroja el error mostrado en el bloque de arriba
+
+```{r}
+# sinco11_con_skill |>
+#   mutate(skill_level2 = skill_level) |> 
+#   # group_by(sinco11) |>
+#   pivot_wider(
+#     id_cols = sinco11, 
+#     names_from = skill_level,
+#     values_from = skill_level2,
+#     names_prefix = "skill_level",
+#     values_fill = NA
+#   )
+```
+
+No queda
+
+Otra solución es a través de `group by` y `summarise`
+
+Primero nos quedamos con las ocupaciones a 4 dígitos
+
+```{r}
+sinco11_con_skill |> 
+  filter(str_length(sinco11) == 4)
+
+sinco11_con_skill_4dig <- sinco11_con_skill |> 
+  filter(str_length(sinco11) == 4)
+```
+
+Ahora agrupamos
+
+```{r}
+sinco11_con_skill_4dig |> 
+  count(sinco11)
+```
+
+Volvemos a observar que están el total de ocupaciones a 4 dígitos de SINCO-11: 468, ahora se agrupa por ocupaciones a 4 dígitos y se crean dos variables que muestra el nivel mínimo y máximo de conocimientos, también se añade una variable que muestra la diferencia entre ellas, es decir, el rango.
+
+```{r}
+sinco11_con_skill_4dig |>
+  mutate(skill_level = as.integer(skill_level)) |> 
+  group_by(sinco11) |> 
+  summarise(
+    n = n(),
+    inf = min(skill_level),
+    sup = max(skill_level),
+    rango = sup - inf
+  )
+```
+
+Se validan los casos en que `rango` > 1`
+
+```{r}
+sinco11_con_skill_4dig |>
+  mutate(skill_level = as.integer(skill_level)) |> 
+  group_by(sinco11) |> 
+  summarise(
+    n = n(),
+    inf = min(skill_level),
+    sup = max(skill_level),
+    rango = sup - inf
+  ) |> 
+  arrange(desc(rango))
+```
+
+Se validan casos en que `rango > 1`
+
+```{r}
+sinco11_con_skill_4dig |> 
+  filter(sinco11 == "2715" | sinco11 == "2821")
+```
+
+Se observa que la ocupación `2821` tiene 3 niveles de habilidad: `2, 3 y 4`.
+
+¿Cómo solucionarlo? Añadiendo el valor que está en medio
+
+```{r}
+sinco11_con_skill_4dig |>
+  mutate(skill_level = as.integer(skill_level)) |> 
+  group_by(sinco11) |> 
+  summarise(
+    n = n(),
+    inf = min(skill_level),
+    mediano = median(skill_level),
+    sup = max(skill_level),
+    rango = sup - inf
+  ) |> 
+  arrange(desc(rango))
+```
+
+Se observa que pone valores que no están en la tabla, por ejemplo `2715` tiene como valor mediano: `3` pero éste no está en la tabla. Entonces, no es una solución a nuestro problema
+
+Se me ocurrió esta idea, realizar un conteo por ocupaciones y nivel de conocimientos, después pivotar a lo ancho especificando como nombre el nivel de conocimientos y como valor el conteo de cada nivel de conocimientos, así:
+
+```{r}
+sinco11_con_skill_4dig |> 
+  count(sinco11, skill_level) |> 
+  pivot_wider(
+    id_cols = sinco11,
+    # id_expand = TRUE, # no sé que hace
+    names_from = skill_level,
+    names_prefix = "skill_level",
+    names_sort = TRUE,
+    values_from = n
+  )
+
+sinco11_con_skill_4dig_ancho <- sinco11_con_skill_4dig |> 
+  count(sinco11, skill_level) |> 
+  pivot_wider(
+    id_cols = sinco11,
+    # id_expand = TRUE, # no sé que hace
+    names_from = skill_level,
+    names_prefix = "skill_level",
+    names_sort = TRUE,
+    values_from = n
+  )
+```
+
+Ahora se valida los valores de cada nueva columna creada
+
+```{r}
+sinco11_con_skill_4dig_ancho |> 
+  distinct(skill_level1)
+
+sinco11_con_skill_4dig_ancho |> 
+  distinct(skill_level2)
+
+sinco11_con_skill_4dig_ancho |> 
+  distinct(skill_level3)
+
+sinco11_con_skill_4dig_ancho |> 
+  distinct(skill_level4)
+
+sinco11_con_skill_4dig_ancho |> 
+  distinct(skill_levelNA)
+```
+
+Lo que se podría hacer es asignarle nuevos valores acordes al nivel especificado
+
+```{r}
+sinco11_con_skill_4dig_ancho |> 
+  mutate(
+    skill_level1 = if_else(!is.na(skill_level1), 1, NA),
+    skill_level2 = if_else(!is.na(skill_level2), 2, NA),
+    skill_level3 = if_else(!is.na(skill_level3), 3, NA),
+    skill_level4 = if_else(!is.na(skill_level4), 4, NA),
+    skill_levelNA = NA
+  )
+
+sinco11_con_skill_4dig_ancho2 <- sinco11_con_skill_4dig_ancho |> 
+  mutate(
+    skill_level1 = if_else(!is.na(skill_level1), 1, NA),
+    skill_level2 = if_else(!is.na(skill_level2), 2, NA),
+    skill_level3 = if_else(!is.na(skill_level3), 3, NA),
+    skill_level4 = if_else(!is.na(skill_level4), 4, NA),
+    skill_levelNA = NA
+  )
+```
+
+Ahora se valida tabla `skill_level`
+
+```{r}
+skill_level
+```
+
+La forma de unir las ocupaciones SINCO-11 con la tabla `skill_level` es a través de una unión a la izquierda
+
+```{r}
+sinco11_con_skill_4dig_ancho2 |> 
+  mutate(skill_level1 = as.character(skill_level1)) |> 
+  left_join(skill_level, by = c("skill_level1" = "skill_level"))
+```
+
+Carece algo de sentido
+
+Lo que podría hacer es fijarme en las ocupaciones SINCO-11 y CIUO-08 donde las equivalencia o relación sea 1 a 1 y después abordar los casos en que no lo sean.
+
+Ahora se valida la conversión SINCO-11 a SINCO-19, se valida con `separate`.
+
+Primero se crea la tabla con una fila.
+
+```{r}
+sinco11_a_sinco19 <- tribble(
+  ~x,
+  "1 Funcionarios, directores y jefes 1 Funcionarios, directores y jefes"
+)
+
+sinco11_a_sinco19
+```
+
+Ahora se intenta separar
+
+```{r}
+# sinco11_a_sinco19 |> 
+#   separate(
+#     x, 
+#     "y",
+#     sep = -2,
+#     remove = FALSE,
+#     extra = "drop"
+#   )
+```
+
+```{r}
+# sinco11_a_sinco19 |> 
+#   separate_wider_regex(
+#     x, 
+#     patterns = c(y = "[^[:alnum:]]+", " ", "[[:alnum:]]+")
+#   )
+```
+
+No sé cómo hacerle, al validar con Gemini propone esto
+
+```{r}
+sinco11_a_sinco19 %>%
+  extract(
+    col = x,
+    into = c("grupo_1", "grupo_2"),
+    regex = "(^\\d.*?)\\s+(?=\\d)(.*$)"
+  )
+```
+
+¿Qué carajo es `"(^\\d.*?)\\s+(?=\\d)(.*$)"`?
+
+
+Por otro lado, Gemini sugiere añadir identificador de filas para pivotar a lo ancho
+
+```{r}
+sinco11_con_skill_4dig |> 
+  mutate(id_fila = row_number()) |> 
+  pivot_wider(
+    names_from = skill_level,
+    values_from = skill_level,
+    names_prefix = "skill_level",
+    names_sort = TRUE
+  )
+```
+
+Sin embargo, sigue aparenciendo `665` ocupaciones ya que hay repetidas
+
+```{r}
+sinco11_con_skill_4dig |> 
+  mutate(id_fila = row_number()) |> 
+  pivot_wider(
+    names_from = skill_level,
+    values_from = skill_level,
+    names_prefix = "skill_level",
+    names_sort = TRUE
+  ) |> 
+  count(sinco11) |> 
+  arrange(desc(n))
+```
+
+Se corrige añadiendo `id_cols`
+
+```{r}
+# sinco11_con_skill_4dig |> 
+#   mutate(id_fila = row_number()) |> 
+#   pivot_wider(
+#     names_from = skill_level,
+#     values_from = skill_level,
+#     id_cols = sinco11,
+#     names_prefix = "skill_level",
+#     names_sort = TRUE
+#   ) 
+# 
+# Warning:
+# Values from `skill_level` are not uniquely identified; output will contain
+# list-cols.
+# • Use `values_fn = list` to suppress this warning.
+# • Use `values_fn = {summary_fun}` to summarise duplicates.
+# • Use the following dplyr code to identify duplicates.
+#   {data} |>
+#   dplyr::summarise(n = dplyr::n(), .by = c(sinco11, skill_level)) |>
+#   dplyr::filter(n > 1L)
+```
+
+Sigue apareciendo mensajes de advertenica, se complementa con la opción 2 de Gemini
+
+```
+df_conteos <- df |> 
+  pivot_wider(
+    id_cols = ocupacion,
+    names_from = skill_level,
+    names_prefix = "skill_level",
+    names_sort = TRUE,
+    values_from = skill_level,
+    values_fn = length,    # Cuenta cuántos elementos hay
+    values_fill = 0        # Rellena con 0 en lugar de NA (opcional pero recomendado en conteos)
+  )
+
+df_conteos
+```
+
+
+```{r}
+sinco11_con_skill_4dig |> 
+  pivot_wider(
+    id_cols = sinco11,
+    names_from = skill_level,
+    values_from = skill_level,
+    names_prefix = "skill_level",
+    names_sort = TRUE,
+    values_fn = length, # realiza conteo por id_col
+    values_fill = 0 # rellena con ceros y no con NA
+  ) 
+```
+
+Listo! Ahora se regresa al tema de SINCO-11 a SINCO-19
+
+```{r}
+sinco11_a_sinco19 <- tribble(
+  ~x, 
+  "1 Funcionarios, directores y jefes 1 Funcionarios, directores y jefes",
+  "11 Funcionarios y altas autoridades de los sectores público, privado y social  11 Funcionarios y altas autoridades de los sectores público, privado y social",
+  "111 Funcionarios, legisladores y autoridades gubernamentales 111 Funcionarios, legisladores y autoridades",
+  "1111 Altas autoridades gubernamentales y jurisdiccionales  1111 Altas autoridades gubernamentales y jurisdiccionales"
+)
+
+sinco11_a_sinco19
+```
+
+Se hace el intento con la propuesta de Gemini:
+
+```{r}
+sinco11_a_sinco19 %>%
+  extract(
+    col = x,
+    into = c("sinco19", "sinco11"),
+    regex = "(^\\d.*?)\\s+(?=\\d)(.*$)"
+  )
+```
+
+Se observa que sí queda. También sugiere la siguiente opción
+
+```{r}
+sinco11_a_sinco19 %>%
+  separate(
+    col = x,
+    into = c("sinco19", "sinco11"),
+    sep = "(?<=[[:alpha:]])\\s+(?=\\d)"
+  )
+```
+
+Se observa que también queda
+
+```{r}
+sinco11_a_sinco19 %>%
+  separate(
+    col = x,
+    into = c("sinco19", "sinco11"),
+    sep = "(?<=[[:alpha:]])\\s+(?=\\d)"
+  ) |> 
+  separate(
+    col = sinco19,
+    into = c("dig", "descr")
+  )
+```
+
+Ya casi queda, nos falta una expresión regular que separe solamente los números de los caracteres alfabéticos, al "googlear" aparece la expresión `\d+`
+
+```{r}
+# sinco11_a_sinco19 %>%
+#   separate(
+#     col = x,
+#     into = c("sinco19", "sinco11"),
+#     sep = "(?<=[[:alpha:]])\\s+(?=\\d)"
+#   ) |> 
+#   separate(
+#     col = sinco19,
+#     into = c("dig", "descr"),
+#     sep = "\\d+"
+#   )
+```
+
+No dio el resultado esperado, al googlear "expresion regular para separar numeros de caracteres en r" apareció esta expresión: `(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)`
+
+Se intenta
+
+```{r}
+sinco11_a_sinco19 %>%
+  separate(
+    col = x,
+    into = c("sinco19", "sinco11"),
+    sep = "(?<=[[:alpha:]])\\s+(?=\\d)"
+  ) |>
+  separate(
+    col = sinco19,
+    into = c("sinco19", "desc_sinco19"),
+    sep = "(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)"
+  )
+```
+
+Listo!
+
+Que complicado con las expresiones regulares!!!
+
+Ahora se crea un archivo que contiene la conversión de SINCO-19 a SINCO-11
+
+Por fortuna, se pudo pasar la tabla de PDF a Excel de manera no tan laboriosa mediante I love PDF, se realiza la importación
+
+```{r}
+# read_csv(
+#   "sinco19_a_sinco11.csv",
+#   col_types = cols(.default = col_character()),
+#   na = "NA"
+# )
+
+sinco_19_a_11 <- read_csv(
+  "sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+glimpse(sinco_19_a_11)
+```
+
+En primer lugar, ¿cuántas ocupaciones aparecen en `sinco_19` y en `sinco_11`?
+
+```{r}
+sinco_19_a_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  count(sinco_19)
+```
+
+En SINCO-19, aparecen 490 ocupaciones igual al reportado en INEGI(2020, p. 22)
+
+```{r}
+sinco_19_a_11 |> 
+  filter(str_length(sinco_11) == 4) |> 
+  count(sinco_11)
+```
+
+En SINCO-11, aparecen 468 ocupaciones igual al reportado en INEGI (2011)
+
+Ya tengo las tablas necesarias para realizar la unión, la cuestión es ¿cómo?
+
+Primero, pongamos las tablas que ocuparemos
+
+```{r}
+# conversión sinco11 con ciuo08 a 4 dígitos
+glimpse(ciuo08_a_sinco11) 
+# sinco 11 con skill level
+glimpse(sinco11_con_skill)
+# skill level con nivel educativo de CINE-11 y de México
+glimpse(skill_level)
+# conversión sinco19 con sinco11 a 4 dígitos
+glimpse(sinco_19_a_11)
+```
+
+La relación no es 1 a 1, sino de muchos a muchos.
+
+Duda ¿cuántas ocupaciones aparecen de CIUO-08?
+
+```{r}
+ciuo08_a_sinco11 |> 
+  filter(str_length(ciuo08_4dig) == 4) |> 
+  count(ciuo08_4dig) 
+```
+
+En la tabla de SINCO-11 a CIUO-08, aparecen 420 ocupaciones cuando en OIT(2012, p. 22) son 436 grupos unitarios.
+
+Esto no es ningún inconveniente.
+
+```{r}
+ciuo08_a_sinco11 |> 
+  count(ciuo08_4dig)
+```
+

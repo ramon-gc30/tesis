@@ -1,0 +1,413 @@
+Fecha: 15 de abril de 2026
+
+Estoy realizando la versión final del capítulo 2 Metodología, versión 3. A partir de las dudas planteadas en `C:/Prog/tesis/bitacora/24_valores_NA.qmd`, y en 
+`C:\Obsidian\Aprende escribiendo\Considerar valores NA de variables de ocupación.md`, también véase `C:\Obsidian\Proyectos\Tesis\Revisión de 2 Metodología V3.md`
+
+Se decide lo siguiente
+
+* Modificar la estructura del código completo
+* Considerar valores NA
+* Trabajar con los datos del 3T 2025 de la ENOE
+
+No se carga el código, sino que se realiza cada paso para validar su correcta ejecución 
+
+Paquetes requeridos
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+# Librerías requeridas ========================================================
+
+# manejo de datos
+library(tidyverse)
+# importación de Excel
+library(readxl)
+# definir como encuesta de diseño complejo
+library(srvyr)
+# paleta de colores
+library(RColorBrewer)
+# regresión a encuesta compleja
+library(survey)
+# convertir a porcentaje dentro de mutate
+library(scales) 
+library(gt)
+# mapas geográficos
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rnaturalearthhires)
+```
+
+Importación
+
+Ya se cargan datos del 3er trimestre. Los demás se mantienen igual
+
+```{r}
+# Fuente de datos =============================================================
+
+# PIB vs egresados
+pib_vs_egres <- read_csv(
+  "datos/PIBvsEgresados.csv",
+  col_types = cols(
+    .default = col_double()
+  )
+)
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "datos/ENOE_SDEMT325.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "datos/ENOE_COE1T325.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "datos/ENOE_COE2T325.csv",
+  col_types = cols(.default = col_character())
+)
+
+# tabla comparativa entre SINCO-11 y CIUO-08 (INEGI, 2012)
+sinco11_ciuo08 <- read_csv(
+  "datos/sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+# tabla equivalencia entre v11 y v19 de SINCO (INEGI, 2020: 359-394)
+sinco19_11 <- read_csv(
+  "datos/sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character()),
+  na = "NA"
+)
+
+# CIUO-08 (ILO, s/f)
+ciuo08 <- read_xlsx(
+  "datos/ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+Construcción
+
+Aquí cambio el orden
+
+ANTES
+
+1. Variables
+2. Tablas
+
+AHORA
+
+1. Tablas
+2. Variables
+
+Incluyo las tablas de `ciuo08_sinco11` y `sinco11_19`, NO `ciuo08` ya que utilizo los niveles de agrupación: grupo principal y subprincipal para asignar el nivel de competencia (skill level) 
+
+```{r}
+# # Construcción ================================================================
+# 
+# ## Tablas ---------------------------------------------------------------------
+# 
+# # población de 12 y más para unir sdem y coe INEGI(2023:9)
+# pob_12ymas <- sdem %>% 
+#   filter(
+#     r_def == "0",
+#     c_res != "2",
+#     between(edad, 12, 98)
+#   )
+# 
+# # unión de sdem y coe INEGI(2023:9)
+# completo <- pob_12ymas %>%
+#   full_join(coe1, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+#   full_join(coe2, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+# 
+# # población de 15 años y más para 
+# # seleccionar población ocupada INEGI(2023:21)
+# pob_15ymas <- completo %>% 
+#   filter(
+#     r_def.x == "0",
+#     c_res != "2",
+#     between(edad, 15, 98)
+#   )
+# 
+# # población ocupada INEGI(2023: 21)
+# ocupada <- pob_15ymas %>% 
+#   filter(clase2 == 1)
+# 
+# # se limpia tabla comparativa de CIUO-08 con SINCO-11
+# sinco11_ciuo08 <- sinco11_ciuo08 |>
+#   select(sinco11, ciuo08) |> 
+#   # nos quedamos con grupo unitario
+#   filter(str_length(sinco11) == 4) |>
+#   # se renombran variables para unión
+#   rename(
+#     "s11_unit" = "sinco11",
+#     "c08_unit" = "ciuo08"
+#   )
+# 
+# # se limpia tabla de equivalencia entre v11 y v19 de SINCO
+# sinco19_11 <- sinco19_11 |> 
+#   select(sinco_19, sinco_11) |> 
+#   # nos quedamos con grupo unitario
+#   filter(str_length(sinco_19) == 4) |>
+#   # se renombran variables para unión
+#   rename(
+#     "s19_unit" = "sinco_19",
+#     "s11_unit" = "sinco_11"
+#   ) 
+```
+
+Me arroja problemas ya que no está la variable `edad`. Asimismo, en la sección de criterio utilizo la variable `educacion` que se debe construir previamente. Por lo tanto, debe estar antes de construir el método objetivo de OIT.
+
+Se me ocurrió una idea
+
+Pasar sección Limpieza dentro de construcción > variables
+
+Primero, se corrige error
+
+```{r}
+# Construcción ================================================================
+
+## Tablas ---------------------------------------------------------------------
+
+# población de 12 y más para unir sdem y coe INEGI(2023:9)
+pob_12ymas <- sdem %>% 
+  mutate(eda = as.integer(eda)) |> 
+  filter(
+    r_def == "0",
+    c_res != "2",
+    between(eda, 12, 98)
+  )
+
+# unión de sdem y coe INEGI(2023:9)
+# completo <- pob_12ymas %>%
+#   full_join(coe1, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+#   full_join(coe2, by = c("tipo", "mes_cal", "cd_a", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+# 
+# # población de 15 años y más para 
+# # seleccionar población ocupada INEGI(2023:21)
+# pob_15ymas <- completo %>% 
+#   filter(
+#     r_def.x == "0",
+#     c_res != "2",
+#     between(eda, 15, 98)
+#   )
+# 
+# # población ocupada INEGI(2023: 21)
+# ocupada <- pob_15ymas %>% 
+#   filter(clase2 == 1)
+# 
+# # se limpia tabla comparativa de CIUO-08 con SINCO-11
+# sinco11_ciuo08 <- sinco11_ciuo08 |>
+#   select(sinco11, ciuo08) |> 
+#   # nos quedamos con grupo unitario
+#   filter(str_length(sinco11) == 4) |>
+#   # se renombran variables para unión
+#   rename(
+#     "s11_unit" = "sinco11",
+#     "c08_unit" = "ciuo08"
+#   )
+# 
+# # se limpia tabla de equivalencia entre v11 y v19 de SINCO
+# sinco19_11 <- sinco19_11 |> 
+#   select(sinco_19, sinco_11) |> 
+#   # nos quedamos con grupo unitario
+#   filter(str_length(sinco_19) == 4) |>
+#   # se renombran variables para unión
+#   rename(
+#     "s19_unit" = "sinco_19",
+#     "s11_unit" = "sinco_11"
+#   ) 
+```
+
+Me arroja el siguiente error
+
+```
+Error in `full_join()`:
+! Join columns in `x` must be present in the data.
+✖ Problem with `ent`.
+Run `rlang::last_trace()` to see where the error occurred.
+```
+
+Indica que no exista variable `ent`, se valida
+
+```{r}
+colnames(pob_12ymas)
+```
+
+Aparece `n_ent`
+
+Se valida el número de columnas
+
+```{r}
+ncol(pob_12ymas)
+```
+
+Son 115 cuando deben ser 114, véase C:/Users/Ramon GC/Documents/UNAM_Economia/Tesis/Temas/sobrecalificacion/Redaccion/2_metodologia/2-metodologia_version2.docx
+
+Se vuelve a validar
+
+```{r}
+glimpse(pob_12ymas)
+```
+
+En efecto, ahora se llama `n_ent`
+
+Se valida
+
+```{r}
+pob_12ymas |> 
+  select(contains("ent"))
+```
+
+No había ninguna necesidad de cambiarle el nombre de `ent` como está especificado en (INEGI, 2024) a `n_ent`. Se validó los documentos de apoyo de la ENOE, está el documento de la estructura en https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/doc/enoe_123_fd_c_bas_amp.pdf que es el mismo que tengo en zotero (INEGI, 2024) no presenta ninguna modificación. Mal ahí por el INEGI.
+
+Bueno se realiza el cambio, pero antes se valida que indique la entidad federativa
+
+```{r}
+pob_12ymas |> 
+  count(n_ent)
+```
+
+Solamente arrojan 5 valores, ¿habré aplicado incorrectamente el filtro en `pob12_ymas`?
+
+Se valida con `sdem`
+
+```{r}
+colnames(sdem)
+```
+también aparece `n_ent`
+
+```{r}
+sdem |> 
+  select(contains("ent"))
+```
+
+Aparecen también dos
+
+Se hace un conteo de `n_ent`
+
+```{r}
+sdem |> 
+  count(n_ent)
+```
+
+También 5 valores
+
+Se busca en (INEGI, 2024)
+
+Sí está `n_ent` indica el número de entrevista, se busca `cve_ent`. Ese no está, debe ser la que refiere la entidad federativa, se valuda
+
+```{r}
+sdem |> 
+  distinct(cve_ent)
+```
+
+Sí, es esa
+
+```{r}
+pob_12ymas |> 
+  distinct(cve_ent)
+```
+
+Y como se observa, hay más variable que tienen el prefijo `cve_`, se valida
+
+```{r}
+sdem |> 
+  select(contains("cve"))
+```
+
+Son cinco valores, se valida
+
+* cve_loc es loc
+* cve_mun es mun
+* cve_ageb es ageb
+* cve_ent es ent
+* cvegeo quien sabe, no aparece en (INEGI, 2024) tabla sdem
+
+Esto me hace dudar: ¿descargue los datos correctamente?
+
+Se vuelve a descargar, importar y validar cuestión
+
+```{r}
+sdem2 <- read_csv(
+  "datos/enoet32025/ENOE_SDEMT325.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+Se valida
+
+```{r}
+sdem2 |> 
+  select(contains("cve"))
+```
+
+Arroja la misma situación, ¿por qué? la única explicación es un error cometido por el inegi
+
+Se validan el resto de variables, una por una, pero antes ocurre lo mismo en coe1 y coe2
+
+```{r}
+coe1 |> 
+  select(contains("cve"))
+```
+
+```{r}
+coe2 |> 
+  select(contains("cve"))
+```
+
+Solamente con `cve_ent` `cve_mun` y `cvegeo`, que para mí es el código postal
+
+
+Según (INEGI, 2024), `loc` está omitida, se valida
+
+```{r}
+sdem |> 
+  distinct(cve_loc)
+```
+
+Sí, pero ¿mun?
+
+```{r}
+sdem |> 
+  distinct(cve_mun)
+```
+
+Este sí aparece
+
+```{r}
+sdem |> 
+  distinct(cvegeo)
+```
+
+Este sí aparece, pero tampoco en (INEGI, 2024) tabla vivienda aparece dicha variable
+
+```{r}
+sdem |> 
+  filter(cvegeo == "04630")
+```
+
+No aparece info de santo domingo o de la ruiz jeje
+
+Existen dos maneras de solucionar esto
+
+* renombrando las variables para que coincida con (INEGI, 2024)
+* modificando cada variable
+
+Asimismo, se debe verificar el resto de variables
+
+De momento, se pospone dicha actividad se realiza el código con datos de 2t 2025 de la enoe.
+
+Sería interesante publicar esto en linkedin
+
+
+

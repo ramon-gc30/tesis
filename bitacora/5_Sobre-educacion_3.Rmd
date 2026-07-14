@@ -1,0 +1,335 @@
+---
+title: "Sobre-educación 3: moda y `p3`"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+7.  C:/Prog/tesis/5_Sobre-educacion_2.Rmd
+
+Se determinará la sobre-educación con el método de la moda y la variable `p3` que contiene el grupo ocupacional unitario (de menor agregación) para validar el ingreso mensual promedio por tipo de desajuste educativo.
+
+# Paquetes requeridos
+
+```{r setup}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# calcular la moda
+library(DescTools)
+# coeficiente de asimetría
+library(moments)
+library(EnvStats)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  anios_esc = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_esc = if_else(anios_esc != 99, anios_esc, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+
+# grupos de edad
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitarias
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# población total
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+```
+
+# Educación requerida con moda y `p3`
+
+Se determinan los años requeridos en cada ocupación mediante la variable `p3` con el método de la moda
+
+```{r}
+# escolaridad requerida con la moda
+edu_req <- ocupada %>%
+  group_by(p3, anios_esc) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  filter(tot == max(tot)) %>%
+  rename("moda" = "anios_esc") %>%
+  select(-tot)
+
+# variable de education mismatch
+ocupada <- left_join(ocupada, edu_req, by = "p3") %>%
+  mutate(
+    edu_mis = case_when(
+      # overeducation
+      anios_esc > moda ~ 1,
+      # undereducation
+      anios_esc < moda ~ 2,
+      # required
+      TRUE ~ 0
+    )
+  )
+```
+
+# Incidencia
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot))
+```
+
+## Por sexo
+
+```{r}
+ocupada %>% 
+  group_by(sex, edu_mis) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot)) 
+```
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis, sex) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot)) 
+```
+
+# Ingreso mensual promedio
+
+## Total
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+## Jóvenes profesionistas
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = as.integer(cs_p13_1)
+  ) %>% 
+  filter(between(cs_p13_1, 7, 9) & edad_7g == 3 & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+# Relación entre ingreso promedio y
+
+## grupos de edad
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = as.integer(cs_p13_1)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edad_7g, edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(edad_7g, media, color = edu_mis, group = edu_mis)) +
+  geom_point() +
+  geom_line()
+```
+
+## edad
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(eda.x, edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(eda.x, media, color = edu_mis, group = edu_mis)) +
+  geom_line() 
+```
+
+## años de escolaridad
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(anios_esc, edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis, group = edu_mis)) +
+  geom_point() +
+  geom_line()
+```
+
+# Resumen
+
+Al igual que con el método de la moda y la variable `ocupacion1`, cuando se utiliza `p3` también se observa que el ingreso mensual promedio es superior para el caso de sobre-educación que con respecto a ajustados al puesto, excepto cuando se grafica considerando los años de escolaridad. 
+
+# Referencias

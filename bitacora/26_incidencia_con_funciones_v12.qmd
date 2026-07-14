@@ -1,0 +1,106 @@
+---
+date: today
+---
+
+Se validan los nuevos archivos creados:
+
+* C:/Prog/tesis/scripts/26_importacion_v11.R
+* C:/Prog/tesis/scripts/26_construccion_tablas_v12.R
+* C:/Prog/tesis/scripts/26_construccion_variables_v1.R
+* C:/Prog/tesis/scripts/26_metodologia_v1.R
+* C:/Prog/tesis/scripts/26_cuadros_v1.R
+* C:/Prog/tesis/scripts/26_figuras_v1.R
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/26_importacion_v11.R")
+source("scripts/26_construccion_tablas_v12.R")
+source("scripts/26_construccion_variables_v1.R")
+source("scripts/26_metodologia_v1.R")
+source("scripts/26_cuadros_v1.R")
+source("scripts/26_figuras_v1.R")
+```
+
+Primero se construye la tabla general
+
+```{r}
+general <- construir_variables(ocupada)
+```
+
+Después se establece el desajuste educativo individual
+
+```{r}
+general <- asignar_edu_mismatch(general, ciuo08)
+```
+
+Ahora se calcula la incidencia
+
+```{r}
+calcular_incidencia(general)
+```
+
+Se validan los resultados con "C:/Prog/tesis/25_incidencia_con_funciones_v11.qmd"
+
+No se observan cambios, la incidencia de la sobrecalificación sigue siendo la misma: 20.24%
+
+Se valida para el caso de jóvenes
+
+Se crea la tabla jóvenes
+
+```{r}
+jovenes <- seleccionar_jov(general)
+```
+
+Ahora se calcula incidencia
+
+```{r}
+calcular_incidencia(jovenes)
+```
+
+Se validan los resultados con "C:/Prog/tesis/25_apoyo_c2_v3-3_muestra2.qmd"
+
+Tampoco se observan cambios, en el caso de la población objetivo.
+
+Quedan pendientes códigos de algunas cuestiones, solamente se hace la más importante: muestra para la regresión
+
+```{r}
+calc_total <- function(datos){
+  datos_proc <- datos |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+  return(datos_proc)
+}
+
+jovenes |> 
+  mutate(reportan = if_else(!is.na(ingreso_mensual), 1, 0)) |>
+  filter(reportan == 1 & !is.na(horas_lab) & !is.na(exper) & !is.na(over_obj)) |>
+  calc_total()
+```
+
+El tamaño de la muestra resultante coincide con "C:/Prog/tesis/25_apoyo_c2_v3-3_muestra2.qmd"
+
+Se crea la función
+
+```{r}
+seleccionar_obs_ing_reportado <- function(datos){
+  datos_procesados <- datos |>
+    filter(!is.na(ingreso_mensual) & !is.na(horas_lab) & !is.na(exper) & !is.na(over_obj))
+  return(datos_procesados)
+}
+```
+
+Se valida
+
+```{r}
+seleccionar_obs_ing_reportado(jovenes) |>
+  calc_total()
+```
+
+Está correcto, se añade a "C:/Prog/tesis/scripts/26_construccion_tablas_v12.R"
+
+

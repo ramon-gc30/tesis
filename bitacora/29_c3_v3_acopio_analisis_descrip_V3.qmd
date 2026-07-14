@@ -1,0 +1,417 @@
+---
+date: today
+format: html
+---
+
+Este documento pretende ayudar en el acopio de ideas para la sección 3.1 Análisis descriptivo V3
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+# archivos requeridos ----------------------------------------------- 
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v4.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v4.R")
+
+# Selección de población objetivo ----------------------------------- 
+# Limpieza y construcción de variables
+general <- construir_variables(ocupada)
+
+# Aproximación empírica del enfoque normativo de la OIT 
+# basado en correspondencias
+general <- asignar_edu_mismatch(general, ciuo08)
+
+# Crea la tabla de la población objetivo
+jovenes <- seleccionar_jov(general)
+
+# se pasan a factores
+jovenes <- convertir_a_factor(jovenes)
+
+# se define como encuesta compleja
+datos_svy <- definir_encuesta(jovenes)
+```
+
+Se valida la educación requerida
+
+```{r}
+sinco19 <- determinar_edu_obj(ciuo08)
+sinco19
+```
+
+Puedo hacerlo concatenando
+
+```{r}
+sinco19 |> 
+  mutate(
+    objetivo_min = as.character(objetivo_min),
+    objetivo_max = as.character(objetivo_max),
+    tot_edu = str_c(objetivo_min, objetivo_max)
+  ) |> 
+  count(tot_edu) |> 
+  mutate(prop = n / sum(n))
+```
+
+Se hace a 1 dígito del SINCO-19
+
+```{r}
+sinco19 <- sinco19 |> 
+  separate(
+    s19_unit,
+    into = "s19_div",
+    sep = 1,
+    remove = FALSE
+  )
+
+sinco19
+```
+
+
+Se vuelve a hacer el procedimiento anterior, pero a 1 dígito del SINCO-19
+
+```{r}
+sinco19 <- sinco19 |> 
+  mutate(
+    objetivo_min = as.character(objetivo_min),
+    objetivo_max = as.character(objetivo_max),
+    tot_edu = str_c(objetivo_min, objetivo_max)
+  )
+
+sinco19 |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup()
+```
+
+Al revés
+
+```{r}
+sinco19 |> 
+  group_by(tot_edu, s19_div) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup()
+```
+
+Con esta información se podría decir que la mayoría de los grupos unitarios de ocupación que requieren educación superior pertenecen a la división 1 y 2
+
+De forma gráfica se podría hacer mediante una gráfica de barra apilada, se intenta
+
+```{r}
+sinco19 |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup() |> 
+  ggplot(aes(s19_div, prop, fill = tot_edu)) + 
+  geom_col()
+```
+
+En la división 1, hay ocupaciones que requieren secundaria o preparatoria?
+
+```{r}
+sinco19 |> 
+  filter(s19_div == 1 & tot_edu == 34)
+```
+
+Sí está correcto!!!
+
+Se intenta darle estilo
+
+```{r}
+sinco19 |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup() |> 
+  ggplot(aes(s19_div, prop, fill = tot_edu)) + 
+  geom_col() + 
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic()
+```
+
+El relleno de `NA` lo pone en blanco ¿por qué? quizá por ser valor faltante, se convierte a caracter 
+
+```{r}
+sinco19 |> 
+  mutate(tot_edu = if_else(is.na(tot_edu), "NA", tot_edu)) |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup() |> 
+  ggplot(aes(s19_div, prop, fill = tot_edu)) + 
+  geom_col() + 
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic()
+```
+
+Listo! 
+
+Tendría dudas en:
+
+* las etiquetas en las leyendas
+* poner valor dentro de la gráfica: ¿`geom_text`?
+
+
+```{r}
+sinco19 |> 
+  mutate(tot_edu = if_else(is.na(tot_edu), "NA", tot_edu)) |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(
+    prop = n / sum(n),
+    prop_label = scales::percent(prop, accuracy = 1)
+    # prop_label = round(prop * 100)
+  ) |>
+  ungroup() |>
+  ggplot(aes(s19_div, prop, fill = tot_edu)) +
+  geom_col() +
+  geom_text(aes(label = prop_label)) +
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic()
+```
+
+Se deja para después
+
+El propósito de crear esta figura es para mostrar el ingreso por ocupación 
+
+Se realiza inicialmente con `geom_histogram`, pero como los están están definidos como encuesta compleja deben utilizarse las funciones del paquete `survey` especificados en (Lumley, 2010), entre otros:
+
+* `svyboxplot`: diagrama de caja
+* `svyhist`: histograma
+* `svyby`: gráfica de barras
+
+Véase   (Lumley, 2010) capítulo 6 pp. 76-100
+
+¿Existirán muchas diferencias entre las realizadas por `ggplot` y las del paquete `survey`?
+
+Mientras nos quedamos con las aproximaciones con `ggplot`
+
+La documentación "srvyr compared to the survey package" me dio la respuesta: `group` junto con `position_stack`
+
+```{r}
+s19_div_edu <- sinco19 |> 
+  mutate(tot_edu = if_else(is.na(tot_edu), "NA", tot_edu)) |> 
+  group_by(s19_div, tot_edu) |>
+  summarise(n = n()) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup()
+
+s19_div_edu |> 
+  mutate(prop_label = scales::percent(prop, accuracy = 1)) |> 
+  ggplot(aes(s19_div, prop, group = tot_edu, fill = tot_edu)) + 
+  geom_col() + 
+  geom_text(aes(label = prop_label), position = position_stack(vjust = 0.5))
+```
+
+Listo!!! Sí quedó. Queda pendiente el tamaño de la letra, pero ya es un aspecto mínimo
+
+```{r}
+s19_div_edu |> 
+  mutate(prop_label = scales::percent(prop, accuracy = 1)) |> 
+  ggplot(aes(s19_div, prop, group = tot_edu, fill = tot_edu)) + 
+  geom_col() + 
+  geom_text(aes(label = prop_label), position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "Set1") +
+  scale_y_continuous(labels = NULL, breaks = NULL) + 
+  theme_classic() +
+  labs(x = NULL, y = NULL)
+```
+
+Ahora se realiza el diagrama de caja
+
+```{r}
+jovenes |> 
+  ggplot(aes(division, ingreso_mensual)) +
+  geom_boxplot()
+```
+
+OVER
+
+```{r}
+jovenes |> 
+  mutate(edu_mismatch_obj = as.character(edu_mismatch_obj)) |> 
+  ggplot(aes(edu_mismatch_obj, ingreso_mensual)) + 
+  geom_boxplot()
+```
+
+```{r}
+jovenes |> 
+  ggplot(aes(division, ingreso_mensual)) +
+  geom_violin()
+```
+
+```{r}
+jovenes |> 
+  ggplot(aes(ingreso_mensual)) + 
+  geom_histogram()
+  # geom_density(aes(ingreso_mensual)) + 
+  # scale_y_continuous(labels = scales::label_percent())
+```
+
+```{r}
+jovenes |> 
+  ggplot(aes(ingreso_mensual)) + 
+  geom_freqpoly()
+```
+
+```{r}
+jovenes |> 
+  filter(ingreso_mensual <= 50000) |> 
+  ggplot(aes(division, ingreso_mensual)) +
+  geom_boxplot()
+```
+
+
+RELACIÓN 
+
+INGRESO MENSUAL CON EXPER
+
+```{r}
+library(hexbin)
+
+jovenes |>
+  ggplot(aes(exper, ingreso_mensual)) + 
+  geom_bin2d() + 
+  geom_smooth() + 
+  scale_x_continuous(breaks = breaks_width(1))
+```
+
+exper podría considerarse como variable discreta: polígono de frecuencia o de caja
+
+```{r}
+jovenes |> 
+  ggplot(aes(exper, ingreso_mensual)) + 
+  geom_count()
+```
+
+```{r}
+jovenes |> 
+  filter(!is.na(exper) & !is.na(ingreso_mensual)) |> 
+  summarise(corr = cor(exper, ingreso_mensual))
+```
+
+
+horas_lab
+
+```{r}
+jovenes |> 
+  ggplot(aes(horas_lab, ingreso_mensual)) + 
+  geom_count() + 
+  geom_smooth()
+```
+
+```{r}
+jovenes |> 
+  filter(!is.na(horas_lab) & !is.na(ingreso_mensual)) |> 
+  summarise(corr = cor(horas_lab, ingreso_mensual))
+```
+
+exper^2
+
+```{r}
+ggplot(jovenes, aes(edad, ingreso_mensual)) + 
+  geom_point()
+```
+
+```{r}
+jovenes |> 
+  ggplot(aes(educacion, ingreso_mensual)) + 
+  geom_boxplot()
+
+jovenes |> 
+  ggplot(aes(campo_amplio, ingreso_mensual)) + 
+  geom_boxplot()
+```
+
+```{r}
+jovenes |> 
+  filter(campo_amplio == "04") |> 
+  ggplot(aes(edad, ingreso_mensual)) + 
+  geom_point()
+```
+
+En resumen, puedo mostrar esto
+
+```{r}
+jovenes |> 
+  ggplot(aes(ingreso_mensual)) + 
+  geom_freqpoly()
+
+jovenes |> 
+  ggplot(aes(log(ingreso_mensual))) + 
+  geom_freqpoly()
+```
+
+Señalar el sesgo de la distribución del ingreso y ya
+
+Entonces,
+
+1. PEA
+2. Población ocupada
+3. Por edad
+4. Por nivel educativo
+5. Por género
+6. Por carrera educativa
+7. Por regiones
+8. Educación requerida por división
+9. Distribución del ingreso
+
+```{r}
+jovenes |> 
+  ggplot(aes(educacion, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(mujer, ingreso_mensual, group = mujer)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(casada, ingreso_mensual, group = casada)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(jefe_hogar, ingreso_mensual, group = jefe_hogar)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(regiones, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(campo_amplio, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(division, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(pos_ocu, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(sector_eco, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(tamanio, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(informal, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(jornada, ingreso_mensual)) + 
+  geom_violin()
+
+jovenes |> 
+  ggplot(aes(unidad_eco, ingreso_mensual)) + 
+  geom_violin()
+```
+

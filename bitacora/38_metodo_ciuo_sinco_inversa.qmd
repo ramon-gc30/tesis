@@ -1,0 +1,385 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(writexl)
+library(readxl)
+
+sinco11_ciuo08 <- read_csv(
+  "C:/Prog/tesis/datos/sinco11_a_ciuo08.csv",
+  col_types = "c"
+)
+
+sinco19_11 <- read_csv(
+  "C:/Prog/tesis/datos/sinco19_a_sinco11.csv",
+  col_types = "c"
+)
+
+ciuo08 <- read_xlsx(
+  "C:/Prog/tesis/datos/ISCO.xlsx",
+  sheet = 2
+  # col_types = c("numeric", "text", "numeric", "text", "numeric", "text", "numeric", "text")
+)
+```
+
+```{r}
+glimpse(ciuo08)
+glimpse(sinco19_11)
+glimpse(sinco11_ciuo08)
+```
+
+Primero se crea la tabla con valores únicos del SINCO-19
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  distinct(sinco_19, sinco_11)
+```
+
+Se añade valor para poder pivotar
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  select(sinco_11, sinco_19) |> 
+  group_by(sinco_11, sinco_19) |> 
+  mutate(id = row_number())
+
+df <- sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  select(sinco_11, sinco_19) |> 
+  group_by(sinco_11, sinco_19) |> 
+  mutate(id = row_number())
+```
+
+Se pivotea
+
+```{r}
+df |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    id_expand = TRUE,
+    names_from = id,
+    values_from = sinco_19,
+    values_fn = list
+  )
+```
+
+No arroja el resultado esperado
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |>
+  distinct(sinco_11, sinco_19) |> 
+  mutate(id = row_number())
+
+df <- sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |>
+  distinct(sinco_11, sinco_19) |> 
+  mutate(id = row_number())
+```
+
+Se intenta pivotear
+
+```{r}
+df |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    id_expand = TRUE,
+    names_from = sinco_19,
+    values_from = sinco_19
+  )
+```
+
+Sigue con error ¿por qué? ¿qué no estoy entendiendo de `pivot_wider`?
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  select(sinco_19, sinco_11)
+
+df <- sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  select(sinco_19, sinco_11)
+```
+
+```{r}
+df |> 
+  distinct(sinco_11, sinco_19) |> 
+  mutate(id = "1") |> 
+  pivot_wider(
+    id_cols = sinco_11,
+    id_expand = TRUE,
+    names_from = sinco_19,
+    values_from = id
+  )
+```
+
+Vamos con un ejemplo sencillo
+
+```{r}
+df <- tribble(
+  ~s19, ~s11,
+  # ---
+  11, 11,
+  12, 12,
+  13, 13
+)
+```
+
+```{r}
+df |> 
+  pivot_wider(
+    id_cols = s19,
+    names_from = s11,
+    values_from = s11
+  )
+```
+
+Si añado conteo
+
+```{r}
+df |> 
+  mutate(id = "1") |> 
+  pivot_wider(
+    id_cols = s19,
+    names_from = id,
+    values_from = s11
+  )
+```
+
+Pero si agrego una relación de uno a muchos:
+
+```{r}
+df <- tribble(
+  ~s19, ~s11,
+  # ---
+  11, 11,
+  12, 12,
+  13, 13,
+  13, 14
+)
+```
+
+```{r}
+df |> 
+  mutate(id = "1") |> 
+  pivot_wider(
+    id_cols = s19,
+    names_from = id,
+    values_from = s11
+  )
+```
+
+Arroja error, incluso al revés
+
+```{r}
+df |> 
+  mutate(id = "1") |> 
+  pivot_wider(
+    id_cols = s11,
+    names_from = id,
+    values_from = s19
+  )
+```
+
+Para que se pueda aplicar el pivoteo, la columna especificada en `id_cols` debe tener valores únicos, y puede realizarse a pesar de existir valores duplicados en `values_from`
+
+La pregunta es ¿cómo crear valores únicos de `s19`? Opciones
+
+* `distinct`
+* `count`
+
+Validemos
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_11) == 4)
+```
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_11) == 4) |> 
+  distinct(sinco_11)
+```
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_11) == 4) |> 
+  count(sinco_11)
+```
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4)
+```
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  distinct(sinco_19, sinco_11)
+```
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  # distinct(sinco_19, sinco_11) |> 
+  mutate(sinco_19 = as.double(sinco_19)) |> 
+  group_by(sinco_19, sinco_11) |> 
+  summarise(
+    n = n(),
+    valid_11 = sinco_11 - lag(sinco_11),
+    valid_19 = sinco_19 - lag(sinco_19)
+  )
+```
+
+Se necesita la relación uno a muchos entre s11 y s19
+
+```{r}
+sinco19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  group_by(sinco_11, sinco_19) |> 
+  summarise(n = n())
+```
+
+```{r}
+df 
+
+df |> 
+  distinct(s19, s11) |> 
+  mutate(id = "1") |> 
+  pivot_wider(
+    id_cols = s19,
+    names_from = id,
+    values_from = s11,
+    values_fn = first
+  )
+```
+
+Se pierde una observación y yo quiero conservar las dos
+
+```{r}
+df2 <- df |> 
+  count(s19)
+
+df |> 
+  left_join(df2) |> 
+  pivot_wider(
+    id_cols = s19,
+    names_from = n,
+    values_from = s11,
+    values_fn = sum
+  )
+```
+
+
+```{r}
+df |> 
+  group_by(s19) |> 
+  mutate(id = row_number()) |> 
+  pivot_wider(
+    id_cols = s19, 
+    names_from = id,
+    values_from = s11
+  )
+```
+
+Ya me salió!!! Voy a llorar!!!
+
+Ahora a nuestro caso real
+
+```{r}
+sinco19_11 |>  
+  filter(str_length(sinco_11) == 4) |> 
+  select(sinco_11, sinco_19) |> 
+  group_by(sinco_11) |>
+  mutate(id = row_number()) 
+
+df <- sinco19_11 |>  
+  filter(str_length(sinco_11) == 4) |> 
+  select(sinco_11, sinco_19) |> 
+  group_by(sinco_11) |>
+  mutate(id = row_number())
+```
+
+Se pivotea
+
+```{r}
+df_pw <- df |>
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19
+  )
+
+df |>
+  pivot_wider(
+    id_cols = sinco_11,
+    names_from = id,
+    names_prefix = "s19_",
+    values_from = sinco_19
+  )
+```
+
+Para volver a pivotear?
+
+```{r}
+df_pw |> 
+  pivot_longer(
+    s19_1:s19_9
+  )
+```
+
+Se podría solucionar con `distinct`
+
+```{r}
+df_pw |> 
+  pivot_longer(
+    s19_1:s19_9
+  ) |> 
+  distinct(value, sinco_11) |> 
+  filter(!is.na(value))
+```
+
+En efecto!!
+
+Ahora vamos con `ciuo08`
+
+```{r}
+sinco11_ciuo08
+```
+
+```{r}
+sinco11_ciuo08 |> 
+  filter(str_length(ciuo08) == 4) |> 
+  select(ciuo08, sinco11) |> 
+  group_by(ciuo08) |> 
+  mutate(id = row_number())
+
+df2 <- sinco11_ciuo08 |> 
+  filter(str_length(ciuo08) == 4) |> 
+  select(ciuo08, sinco11) |> 
+  group_by(ciuo08) |> 
+  mutate(id = row_number())
+```
+
+```{r}
+df2 |> 
+  pivot_wider(
+    id_cols = ciuo08,
+    names_from = id,
+    values_from = sinco11
+  )
+```
+
+Listo!
+
+Se continua en un nuevo documento

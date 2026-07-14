@@ -1,0 +1,760 @@
+---
+title: 'ENOE T2 2025: análisis de datos (1)'
+bibliography: references.bib
+link-citations: true
+output:
+  html_document:
+    df_print: paged
+---
+
+# Introducción
+
+En este espacio se realizarán el análisis de datos correspondiente a la ENOE del trimestre II del 2025. 
+
+Considerar:
+
+* Los criterios establecidos en @inegiConociendoENOE2023 para realizar cálculos de las variables y agrupaciones principales, véase sección 6.
+* La descripción de los campos (variables) se encuentran en @inegiENOE2024
+
+Se realizará el procedimiento sugerido por @wickham2017 capítulo 5, es decir, en primer lugar se realizarán **preguntas de investigación** que nos darán la pauta para el análisis exploratorio de datos (EDA) y, posteriormente, el análisis descriptivo. 
+
+## ¿Qué grupos de edad se consideran como jóvenes?
+
+Por ejemplo, @oecd2019 considera jóvenes a personas de 25 a 34 años. Según @inegiENOE2024, el campo precodificado `eda12c` estos valores establecen los grupos de edad siguientes:
+
+* Valor `2`: de 20 a 24 años, 
+* Valor `3`: de 25 a 29 años, 
+* Valor `4`: de 30 a 34 años
+
+Se deja como actividad pendiente determinar el grupo de edad considerado como jóven así como su justificación. **DUDA RESUELTA**
+
+Véase nota en Obsidian del 22-10-25: ¿Qué grupos de edad considero como jóvenes?
+
+## Paquetes requeridos
+
+En esta sección se instala el paquete requerido así como la importación de las cinco tablas de la ENOE.
+
+```{r setup}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot
+library(lvplot)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+### Campos segmentados
+
+También se segmentan algunas columnas de interés tales como la ponderación trimestral `fac_tri` y el ingreso mensual.
+
+```{r segmentar}
+sdem <- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # grupos de edad
+  eda19c = factor(eda19c),
+  # estados
+  ent = factor(ent),
+  # grado escolar
+  cs_p13_1 = factor(cs_p13_1),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+```
+
+# Preguntas de investigación
+
+* ¿De qué tamaño es la muestra? **OK**
+* ¿De qué tamaño es la muestra por grupos de edad? **OK**
+* ¿De qué tamaño es la muestra por niveles de estudio? **OK**
+* ¿De qué tamaño es la muestra por estados? **OK**
+* ¿De qué tamaño es la muestra por nivel de salarios? **OK**
+* ¿Cuál es el tamaño de la población? **OK**
+* ¿Cuál es el tamaño de la PEA y de la PNEA? **OK**
+* ¿Cómo es el ingreso mensual por grado escolar? **OK**
+* Si sólo consideramos a las personas con grado escolar profesional, ¿en qué grupos de edad se identifican niveles de ingreso de hasta 1 salario mínimo? **OK**
+* Si la muestra se reduce a personas con grado escolar universitario, ¿a cuánto se reduce la muestra? **OK**
+* ¿Cuántas personas hay según el grado escolar? **ok**
+* ¿Por qué 
+
+# Análisis exploratorio de datos (EDA) 1era parte
+
+## 1. Tamaño de la muestra
+
+La muestra se compone de
+
+```{r}
+sdem %>% 
+  count()
+```
+
+
+De momento, sólo se utiliza la tabla sociodemográfica `sdem` debido a que tiene los campos precodificados y la ponderación que permiten calcular la población total. @inegiConociendoENOE2023 señala que el criterio para determinar la población total es:
+
+```
+r_def == 0 & c_res == 2
+```
+Entonces,
+
+```{r pob-total}
+poblacion_total <- sdem %>% filter(
+  # entrevista completa
+  r_def == "0", 
+  # NO ausente definitivo
+  c_res != "2"
+) 
+
+poblacion_total %>% summarise(
+  muestra = n(),
+  poblacion = sum(fac_tri)
+)
+```
+
+## 2. Por grupos de edad
+
+Se analiza la variación de forma desagregada y agregada. En el primer caso, se utiliza el campo `eda` y se mostrará en una tabla.
+
+```{r}
+poblacion_total %>% 
+  count(eda, sort = TRUE) %>% 
+  head(10)
+```
+
+En el segundo caso se emplea el campo `eda19c` que agrupa las edades de la población total. Cabe señalar que, en primera instancia, la variable agrupada se segmentó a tipo entero para poder crear un histograma de forma correcta, y después se segmentó a tipo factor (categórica) que reduce las líneas de código y mejora la visualización de la gráfica.  
+
+```{r}
+# primer intento
+# poblacion_total %>% 
+#   ggplot(aes(eda19c)) + 
+#   geom_histogram(binwidth = 1) + 
+#   scale_x_continuous(
+#     breaks = seq(0, 19, by = 1)
+#   ) + 
+#   scale_y_continuous(
+#     breaks = seq(0, 40000, by = 5000)
+#   )
+
+# segundo intento
+poblacion_total %>% 
+  mutate(
+    eda19c = fct_infreq(eda19c)
+  ) %>% 
+  ggplot(aes(eda19c)) + 
+  geom_bar()
+```
+
+Se observa que la mayor parte de la muestra se concentra en grupos de edad de 15 a 19 años (valor 6), seguido de 20 a 24 años (valor 7) y de 5 a 9 años.
+
+## 3. Por niveles de estudio
+
+En este caso, no es necesario segmentar el campo (variable) de interés debido a que sí permite mostrar correctamente los valores en la gráfica.
+
+```{r}
+poblacion_total %>% 
+  # mutate(
+  #   cs_p13_1 = as.integer(cs_p13_1)
+  # ) %>% 
+  ggplot(aes(cs_p13_1)) + 
+  geom_bar()
+```
+
+La mayor parte de la muestra se compone de individuos con estudios de primaria, secundaria, preparatoria y grado profesional.
+
+### 3.1 Año aprobado según grado aprobado
+
+Me interesa conocer los años aprobados del grado escolar *Profesional*. 
+
+```{r}
+poblacion_total %>% 
+  group_by(cs_p13_1, cs_p13_2) %>% 
+  count() %>% 
+  ggplot(aes(cs_p13_1, n)) +
+  geom_col(aes(fill = cs_p13_2)) + 
+  # se cambia paleta para diferenciar
+  scale_fill_brewer(palette = "Paired")
+```
+
+En el caso *Profesional*, la mayoría tiene 4 a 5 años aprobados. 
+
+### 3.2 Estudios concluidos según grado escolar
+
+```{r}
+poblacion_total %>% 
+  group_by(cs_p13_1, cs_p16) %>%  
+  count() %>% 
+  ggplot(aes(cs_p13_1, n)) + 
+  geom_col(aes(fill = cs_p16))
+```
+
+La mayor parte de los encuestados con grado escolar Profesional reporta que sí terminó sus estudios o materias.  
+
+### 3.3 Asistencia escolar según grado escolar
+
+```{r}
+poblacion_total %>% 
+  count(cs_p13_1, cs_p17) %>% 
+  ggplot(aes(cs_p13_1, n)) + 
+  geom_col(aes(fill = cs_p17)) 
+```
+
+Poco más de 3/4 partes de los encuestados con estudios profesionales señala que actualmente no asiste a la escuela.
+
+## 4. Por estados
+
+```{r}
+poblacion_total %>% 
+  mutate(
+    ent = fct_infreq(ent)
+  ) %>% 
+  ggplot(aes(ent)) + 
+  geom_bar()
+```
+
+La entidad donde existe la mayor cantidad de individuos encuestado es Chiapas, seguido de Veracruz y el Estado de México. ¿Qué sucede con la ponderación a nivel estatal? Vamos a averiguarlo.
+
+```{r}
+poblacion_total %>% 
+  group_by(ent) %>% 
+  summarise(
+    n = n(),
+    total = sum(fac_tri)
+  ) %>% 
+  mutate(
+    ent = fct_reorder(ent, -total)
+  ) %>% 
+  ggplot(aes(ent, total)) + 
+  geom_col()
+```
+
+Aunque, por ejemplo, Chiapas presenta la mayor cantidad de encuestados no representa la entidad federativa con la mayor ponderación trimestral, es decir, la entidad con mayor población que sí ocurre esto es con el Estado de México seguido de la Ciudad de México. Es importante señalar que al momento de filtrar o conservar a los individuos con estudios profesionales puede que la muestra ya no sea representativa a nivel estatal por lo que tiene sentido aplicar distintas técnicas de muestro como por conglomerados, etc.
+
+## 5. Por nivel de salarios
+
+```{r}
+poblacion_total %>% 
+  ggplot(aes(ing7c)) + 
+  geom_bar()
+```
+
+En el documento de @inegiENOE2024 no arroja información sobre el valor cero del campo precodificado `ing7c` (véase p. 20). Supongo que refiere a valor nulos (NA). Ahora, quiero quitar dicho valor para enfocarme en los niveles de ingresos por grado escolar.
+
+### 5.1 Niveles de ingreso por grado escolar
+
+```{r}
+poblacion_total %>% 
+  filter(ing7c != "0") %>% 
+  ggplot(aes(ing7c)) + 
+  geom_bar(aes(fill = cs_p13_1)) +
+  scale_fill_brewer(palette = "Paired")
+```
+
+Existen personas encuestadas que reportan un grado escolar universitario (valor 7) y que, al mismo tiempo, se encuentran en el nivel de ingresos de hasta 1 salario mínimo. Desde ya, este dato es bastante inquietante. 
+
+## 6. PEA y PNEA
+
+```{r}
+poblacion_total %>% 
+  ggplot(aes(clase1)) + 
+  geom_bar(aes(fill = cs_p13_1)) + 
+  scale_fill_brewer(palette = "Paired")
+```
+
+## Resumen
+
+* La ENOE del II trimestre de 2025 tiene una muestra de 423,744, pero aplicando los criterios definidos en (INEGI, 2023) la muestra se reduce a 413,004 individuos encuestados que representa al total de la población: 130,575,786.
+* Los grupos de edad con mayor representación son los de 15 a 19 años, de 20 a 24 años y de 5 a 9 años, respectivamente.
+* Existen más personas encuestadas con estudios de nivel primaria, secundaria, y profesional (universitaria), en ese orden.
+* La mayoría de personas que reportaron un grado escolar profesional señala tener 4 a 5 años aprobados.
+* Una 3/4 parte de los individuos con estudios universitarios reporta que sí concluyó sus estudios o materias correspondientes, y que en la actualidad no asiste a la escuela. 
+* Existen individuos con estudios universitarios ubicados en niveles de ingresos inferiores de hasta 1 salario mínimo.
+
+Entonces, el análisis empieza desde el tamaño de la muestra (nivel general) al caso de interés: personas con estudios universitarios (nivel particular), en especifico jóvenes. 
+
+# EDA (2da parte)
+
+## 1. Unir las tablas `sdem` y `coe`
+
+En este espacio, se enfoca en la población objetivo: profesionistas, pero se emparejará las tablas de sociodemográfico y COE I y II, como señala @inegiConociendoENOE2023. En primer lugar, se elimina del campo `r_def` el valor distinto a cero, es decir, aquellos que no pudo realizarse la entrevista de forma completa, también aquellos con condición de residencia de ausencia definitiva (`c_res == 2`), así como a personas con edad menor a 12 años o no especificada.
+
+También, se eliminan de las tablas COE I y II aquellas con valor distinto a cero en el campo `r_def` según lo señala @inegiConociendoENOE2023 p. 10. 
+
+```{r}
+sdem_criterio <- sdem %>%  
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+) 
+
+# coe1_criterio <- coe1 %>% 
+#   filter(r_def == "0")
+```
+
+Cabe señalar que, el tamaño de la tabla de `coe1` no se modifica con el criterio estipulado por lo que no se aplica dicho criterio. 
+
+Se verifica que las llaves principales indicadas en @inegiConociendoENOE2023 p. 7 lo sean en realidad:
+
+```{r}
+sdem_criterio %>% 
+  count(tipo, mes_cal, ent, con, v_sel, n_hog, h_mud, n_ren) %>% 
+  filter(n > 1)
+
+coe1 %>% 
+  count(tipo, mes_cal, ent, con, v_sel, n_hog, h_mud, n_ren) %>% 
+  filter(n > 1)
+
+coe2 %>% 
+  count(tipo, mes_cal, ent, con, v_sel, n_hog, h_mud, n_ren) %>% 
+  filter(n > 1)
+```
+
+Se observa que sí lo son en las tres tablas.
+
+Cabe destacar que con los criterios aplicados a la tabla sociodemográfica y COE I, el tamaño de ambas es el mismo.
+
+```{r}
+nrow(sdem_criterio)
+nrow(coe1)
+nrow(coe2)
+```
+
+Es decir, se puede aplicar cualquier tipo de unión debido a que no afectará el resultado. En este caso se decide utilizar la función `full_join` donde:
+
+* `tipo`: tipo de muestra
+* `mes_cal`: mes calendario, 
+* `ent`: entidad federativa, 
+* `con`: control, 
+* `v_sel`: vivienda seleccionada,
+* `n_hog`: número de hogar,
+* `h_mud`: hogar mudado, 
+* `n_ren`: número de renglón
+
+```{r}
+pob12_y_mas <- sdem_criterio %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+```
+
+Se observa que en la tabla resultante se duplicaron las llaves principales cuando, en teoría, no debió de hacerse ¿por qué? Por otra parte, se observa que el número de campos de dicha tabla (368) no coincide con la suma total de las tres tablas: `sdem` (114), `coe1` (172), `coe2` (82), es decir, $352 <> 368$ ¿por qué? Quizá porque al momento de unir se eliminan algunos campos que fungen como llaves principales. 
+
+Se corrobora tal información y se observa que no se duplican las llaves principales sino otros campos. Entonces, se eliminan en las dos tablas de la `coe` las 8 llaves principales por lo que: $352 + 8 + 8 = 368$, véase nota 22-10-25 de Obsidian.
+
+## 2. Tamaño de la muestra
+
+En primer lugar, queremos conocer la muestra después de aplicar cada filtro:
+
+1. `sdem` : 423,744 × 114
+2. `poblacion_total` : 413,004 × 114
+3. `pob12_y_mas` : 346,404 × 352
+4. `jovenes` de 25 a 34 años: 59,273 × 353
+5. `profesionistas` (en general): 75,617 × 352
+
+## 3. Muestra: Jóvenes
+
+Según lo investigado en la nota en Obsidian del 22-10-25: ¿Qué grupos de edad considero como jóvenes?, se validará los grupos de edad considerados jóvenes, en línea con @oecd2019, que tienen estudios universitarios, es decir, desde 20 a 34 años. 
+
+```{r}
+pob12_y_mas %>% 
+  mutate(
+    eda12c = as.integer(eda12c),
+    # eda12c = fct_infreq(eda12c)
+  ) %>% 
+  filter(
+    between(eda12c, 2, 4), 
+    cs_p13_1 == "7"
+  ) %>% 
+  ggplot(aes(eda12c)) + 
+  geom_bar(aes(fill = cs_p16))
+```
+
+Existe una mayor cantidad de individuos de 20 a 24 años con estudios universitarios con respecto a los demás grupos de edad (de 25 a 29 años y de 30 a 34 años), sin embargo, tales individuos todavía no terminan sus estudios o materias (`cs_p16`) o bien asiste actualmente a la escuela (`cs_p17`) por lo que se trabajará con los valores `3` y `4` del campo `eda12c`. 
+
+```{r}
+jovenes <- pob12_y_mas %>% 
+  mutate(
+    jovenes = if_else(eda12c == 3 | eda12c == 4, 1, 0)
+  ) %>% 
+  filter(
+    jovenes == 1
+  )
+```
+
+## 4. Muestra: Profesionistas
+
+Se analiza el tamaño de la población con estudios superiores. 
+
+```{r}
+pob12_y_mas %>% 
+  filter(cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9) %>% 
+  ggplot(aes(cs_p13_1)) +
+  geom_bar()
+```
+
+De las personas con estudios superiores, alrededor del 90% cuentan con estudios universitarios (profesionales) y el restante estudios de maestría y doctorado.
+
+Ahora, se crea una tabla que contenga únicamente a individuos encuestados con grado escolar profesional (`cs_p13_1 = 7`).
+
+```{r}
+profesionistas <- pob12_y_mas %>% 
+  filter(cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9)
+```
+
+
+## 5. Niveles de ingreso en profesionistas
+
+Se valida los niveles de ingreso de profesionistas por grupos de edad, para ello se utilizará el campo precodificado `eda7c`.
+
+```{r}
+profesionistas %>% 
+  filter(ing7c != 0 & ing7c != 7) %>% 
+  ggplot(aes(ing7c)) + 
+  geom_bar(aes(fill = eda7c)) + 
+  scale_fill_brewer(palette = "Paired")
+```
+
+Como lo señalan los estudios empíricos previos, los grupos de edad más jóvenes se ubican en niveles de ingresos inferiores, por otro lado se observan individuos con edad de 50 a 59 años ubicados en el nivel de ingreso de más de 1 hasta 2 salarios mínimos. Pero ¿de cuánto será la proporción relativa?
+
+### 5.1 Porcentaje de grupos de edad por nivel de ingreso
+
+```{r}
+profesionistas %>% 
+  filter(ing7c != 0 & ing7c != 7) %>% 
+  ggplot(aes(ing7c)) + 
+  geom_bar(aes(fill = eda7c), position = "fill") + 
+  scale_fill_brewer(palette = "Paired")
+```
+
+En cuanto a la proporción relativa, se observa una tendencia negativa en el grupo de edad de 20 a 29 años con respecto al nivel de ingreso, es decir, entre mayor es el nivel de ingreso menor será el porcentaje de jóvenes, situación contraria a los grupos de edad más longevos.
+
+Se procede a analizar el ingreso mensual de individuos con estudios superiores
+
+### 5.2 Ingreso mensual de profesionistas
+
+```{r}
+profesionistas %>% 
+  filter(ingocup != 0) %>% 
+  ggplot(aes(ingocup)) + 
+  geom_histogram(binwidth = 5000) + 
+  # coord_cartesian(ylim = c(0,100)) +
+  scale_x_continuous(
+    breaks = seq(0, 200000, by = 25000),
+    labels = scales::label_comma()
+  )
+```
+
+La mayoría de las observaciones se encuentran dentro del rango de 0 a 25,000 de ingreso mensual, en específico de 0 pesos, sin embargo existen valores atípicos en el límite superior de la variable `ingocup`.
+
+### 5.3 Valores atípicos de ingreso mensual de profesionistas
+
+```{r}
+profesionistas %>% 
+  filter(ingocup != 0) %>% 
+  ggplot(aes(ingocup)) + 
+  geom_histogram(binwidth = 5000) + 
+  coord_cartesian(ylim = c(0,50)) +
+  scale_x_continuous(
+    breaks = seq(0, 200000, by = 25000),
+    labels = scales::label_comma()
+  )
+```
+
+### 5.4 Ingreso mensual por grado escolar
+
+Ahora, conoceremos el ingreso mensual en los tres estudios superiores: universidad, maestría y doctorado. Nota: se eliminan el valor cero del campo ingreso mensual.
+
+```{r}
+profesionistas %>% 
+  filter(ingocup != 0) %>% 
+  ggplot(aes(cs_p13_1, ingocup)) + 
+  geom_boxplot() +
+  scale_y_continuous(
+    breaks = seq(0, 200000, by = 25000),
+    labels = scales::label_comma()
+  )
+```
+
+En primer lugar, el 50% de las observaciones se concentran en ingresos mensuales menores a 25,000 pesos (aproximadamente en 12,500 pesos) en los tres niveles de estudios superiores pero que incrementa conforme aumenta el grado escolar superior. Por su parte, se observan muchos valores atípicos en un rango amplio desde 50,000 pesos a $200,000$ en los tres niveles de estudios (principalmente en el caso de licenciatura), ¿se puede mejorar la visualización con un diagrama de letras?
+
+```{r}
+profesionistas %>% 
+  filter(ingocup != 0) %>% 
+  ggplot(aes(cs_p13_1, ingocup)) + 
+  geom_lv() + 
+  scale_y_continuous(
+    breaks = seq(0, 200000, by = 25000),
+    labels = scales::label_comma()
+  )
+```
+
+Se observa que existe una proporción no trivial de individuos con ingreso mensual cercano a los 100,000 pesos en el caso de licenciatura y de maestría, no para el caso de doctorado debido que este grupo se ubica alrededor de 50,000 pesos. Por su parte, los mayores valores extremos se presentan en el grado de estudios universitarios con una tendencia negativa al aumentar la educación terciaria, ¿por qué?
+
+### 5.5 Por grupos de edad
+
+```{r}
+profesionistas %>% 
+  filter(cs_p13_1 == 7, ingocup != 0) %>% 
+  ggplot(aes(eda7c, ingocup)) + 
+  geom_lv() +
+  scale_y_continuous(
+    breaks = seq(0, 200000, by = 25000),
+    labels = scales::label_comma()
+  )
+```
+
+El grupo de 15 a 19 años presenta un ingreso mensual máximo de 25,000 pesos, pero para los grupos de 20 a 29 y 30 a 39 años los ingresos pueden llegar hasta 100,000 pesos. No obstante, la mayoría de las observaciones (mediana) se concentran en ingresos inferiores a los 25,000. Por otra parte, el ingreso mensual superior se encuentra en el grupo de 40 a 49 años. Incluso aquí con los valores extremos y con los valores ubicados en la mediana se observa la relación cóncava del ingreso con respecto a la edad, como señala @mincer1974. 
+
+### 5.6 Por condición de ocupación 
+
+Nota: se realiza con el campo precodificado `C_OCU11C` de la tabla `sdem`, véase @inegienoebd2024 p. 19, sin embargo, las categorías mostradas no se asemejan a la división amplia del SINCO 2019, véase @inegisinco2019 p. 29 por lo que debe hacerse la división de caracteres en la columna (variable) `p3` de la tabla `coe1`, véase @inegienoebd2024 p. 73, como en el caso de la variable `cs_p14_c` de la tabla `sdem`, véase @inegienoebd2024 p. 16 y @wickhamygrolemund2017 capítulos 12 Factores y 9 Datos ordenados, y su respectiva nota.  
+
+```{r}
+profesionistas %>% 
+  filter(ingocup != 0) %>% 
+  ggplot(aes(c_ocu11c, ingocup)) + 
+  geom_lv() + 
+  scale_y_continuous(
+    breaks = seq(0, 200000, by = 25000),
+    labels = scales::label_comma()
+  )
+```
+
+El valor extremo o atípico superior a los 200,000 pesos de ingreso mensual corresponde a los siguientes grupos ocupacionales:
+
+* Profesionales (valor 1),
+* Funcionarios y directivos (3),
+* Oficinistas (4),
+* Operadores de transporte (7)
+
+Por otra parte, el 50% de las observaciones reportan un ingreso mensual menor a 25,000 pesos a excepción del grupo de Funcionarios y directivos. 
+
+## 6. Ingreso mensual de 2142 Psicólogos
+
+Por curiosidad y sugerencia de mi esposa, se valida el ingreso mensual del grupo unitario ocupacional `2142 Psicólogos`.
+
+### 6.1 Tamaño de la muestra
+
+```{r}
+pob12_y_mas %>% 
+  filter(p3 == 2142) %>% 
+  summarise(
+    n = n(),
+    pob = sum(fac_tri.x)
+  )
+```
+
+### 6.2 Ingreso mensual por grupos de edad
+
+Se calcula el ingreso mensual por grupos de edad.
+
+```{r}
+pob12_y_mas %>% 
+  filter(p3 == 2142, ingocup != 0) %>% 
+  ggplot(aes(eda7c, ingocup)) + 
+  geom_boxplot()
+```
+
+Se observa que la mayoría de las observaciones (Q1-Q3), reportan un ingreso mensual de hasta 10,000 pesos con valores atípicos cercanos a los 40,000 pesos. Por otra parte, a mayor edad la mediana del ingreso mensual incrementa, excepto de 50 a 59 años aunque los valores atípicos se presentan en los grupos más jóvenes. 
+
+### 6.3 Ingreso mensual por grado escolar
+
+Por nivel de estudios
+
+```{r}
+pob12_y_mas %>% 
+  filter(p3 == 2142, ingocup != 0) %>% 
+  ggplot(aes(cs_p13_1, ingocup)) + 
+  geom_boxplot()
+```
+
+Aumenta el número de personas que reportan un ingreso mensual más elevado a medida que incrementa la educación terciaria, aunque existen valores atípicos similares a nivel licenciatura y doctorado. La mediana se encuentra cercano a 0 debido a que está considerado dicho valor, se debe eliminar en el proceso de filtro para evitar este pequeño error. 
+
+### 6.4 Ingreso mensual promedio
+
+```{r}
+pob12_y_mas %>% 
+  filter(p3 == 2142, !is.na(ingocup), ingocup != 0) %>% 
+  group_by(cs_p13_1, eda7c) %>% 
+  summarise(
+    n = n(),
+    suma = sum(ingocup),
+    promedio = mean(ingocup),
+    maximo = max(ingocup),
+    minimo = min(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+### 6.5 Relación entre la edad y el ingreso
+
+```{r}
+pob12_y_mas %>% 
+  filter(p3 == 2142, ingocup != 0) %>% 
+  ggplot(aes(eda.x, ingocup)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE)
+```
+
+Se observa una relación cóncava de la edad con el ingreso, como señala @mincer1974.
+
+## 7. Pasos para construir los grupos ocupacionales
+
+En el caso de la ENOE, la ocupación a la que pertenece el individuo encuestado se encuentra ubicado en la variable `p3` de la tabla `coe1` a cuatro dígitos. Para poder dividir el código y así construir los grupos ocupacionales por división, grupo principal, subgrupo, y grupo unitario se debe realizar lo siguiente:
+
+1. Convertir la variable a tipo caracter:
+
+```{r}
+coe1 %>% 
+  mutate(p3 = as.character(p3))
+```
+
+2. Validar la longitud de los caracteres
+
+```{r}
+coe1 %>% 
+  transmute(
+    tamanio = if_else(str_length(p3) != 4, 1, 0)
+  ) %>% 
+  count(tamanio)
+```
+
+Se observa que todos los valores de la columna `p3` tiene una longitud de 4 caracteres.
+
+3. Dividir la columna en cuatro partes
+
+Vamos a nombrar las nuevas variables como sigue:
+
+* `division`: perteneciente al grupo ocupacional de mayor agregación, división
+
+Por ende, se verifica si no hay otras variables con nombres similar.
+
+```{r}
+coe1 %>% 
+  select(contains("div")) 
+
+coe1 %>% 
+  select(contains("sinco"))
+```
+
+No existen nombres similares.
+
+Ahora, realizamos la división:
+
+```{r}
+coe1 <- coe1 %>% 
+  # select(p3) %>% 
+  separate(
+    p3,
+    into = c("division", "resto"),
+    sep = 1
+  ) %>% 
+  separate(
+    resto, 
+    into = c("principal", "resto"),
+    sep = 1
+  ) %>% 
+  separate(
+    resto,
+    into = c("subgrupo", "unitario"),
+    sep = 1
+  )
+
+coe1 %>% 
+  ggplot(aes(division)) + 
+  geom_bar()
+```
+
+Como se observa, para conformar cada uno de los cuatro grupos ocupacionales se debe aplicar la función `separate` de forma separada, en caso de sólo construir el grupo "división" (el de mayor agregación) sólo se utiliza una vez. Por otra parte, al crear la gráfica de barras la mayor variación se observa en el valor nulo (NA) seguido del grupo "Profesionistas y técnicos" (valor 2) y Trabajadores en actividades elementales (9), es decir, si se elimina el valor nulo la muestra se reducirá aproximadamente a la mitad. 
+
+4. Convertir la variable a tipo categórica y renombrar los niveles
+
+Después de dividir la columna `p3` a cuatro grupos ocupacionales, se segmenta a tipo factor para poder renombrar los niveles de la variable `division`.
+
+```{r}
+coe1 %>% 
+  transmute(
+    division = factor(division),
+    division = fct_recode(
+      division,
+      "Funcionarios, directores y jefes" = "1",
+      "Profesionistas y técnicos" = "2",
+      "Trabajadores auxiliares en actividades administrativas" = "3",
+      "Comerciantes, empleados en ventas y agentes de ventas" = "4",
+      "Trabajadores en servicios personales y de vigilancia" = "5",
+      "Trabajadores en actividades agrícolas, ganaderas, forestales, caza y pesca" = "6",
+      "Trabajadores artesanales, en la construcción y otros oficios" = "7",
+      "Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte" = "8",
+      "Trabajadores en actividades elementales y de apoyo" = "9"
+    )
+  ) %>% 
+  ggplot(aes(division)) + 
+  geom_bar() + 
+  scale_x_discrete(
+    labels = scales::label_wrap(width = 40)
+  ) + 
+  coord_flip() 
+```
+
+Cabe señalar que renombre los niveles en Excel con la función `concat` (concatenar). Véase nota de 23-10-25 de Obsidian.
+
+# Ejemplo de letter value plot
+
+```{r}
+ggplot(diamonds, aes(x = cut, y = price, fill = cut)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  labs(
+    title = "Boxplot tradicional: Precio de diamantes por tipo de corte",
+    x = "Corte del diamante",
+    y = "Precio (USD)"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(diamonds, aes(x = cut, y = price, fill = cut)) +
+  geom_lv() +
+  labs(
+    title = "Letter Value Plot: Precio de diamantes por tipo de corte",
+    x = "Corte del diamante",
+    y = "Precio (USD)"
+  ) +
+  theme_minimal()
+```
+
+Más información, véase la nota del día 22-10-25 de Obsidian: # Letter value plot
+
+# Referencias
+
+

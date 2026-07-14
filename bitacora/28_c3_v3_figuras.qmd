@@ -1,0 +1,287 @@
+---
+date: today
+---
+
+El objetivo de este documento es ver qué tanto se puede automatizar el código para crear gráficas
+
+```{r}
+# source("scripts/6_cuadros_v3.R")
+```
+
+
+El código actual es el siguiente:
+
+```
+# Figuras =====================================================================
+
+## PIB vs Egresados -----------------------------------------------------------
+
+# pivotar para graficar
+datos_pivot <-  pib_vs_egres |> 
+  pivot_longer(
+    cols = c(variacion_egres, variacion_pib),
+    names_to = "variable",
+    values_to = "nivel"
+  )
+
+# leyendas para la gráfica
+labels_vars <- c(
+  "variacion_pib" = "PIB",
+  "variacion_egres" = "Egresados"
+)
+
+# gráfica
+fig_pib_vs_egres <- datos_pivot %>%
+  ggplot(aes(
+    x = periodo, y = nivel, 
+    # color, tipo de punto y de línea según variable
+    color = variable, shape = variable, linetype = variable)
+  ) + 
+  geom_point() + 
+  geom_line() + 
+  # eje x
+  scale_x_continuous(
+    # marcas (valores) permitidos
+    breaks = seq(2000, 2024, by = 1)
+  ) +
+  # eje y
+  scale_y_continuous(
+    # etiquetas
+    labels = scales::label_percent(),
+    # marcas (valores) 
+    breaks = seq(-0.1, 0.2, by = 0.05)
+  ) +
+  # leyenda y paleta de color
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars) + 
+  scale_shape_discrete(name = NULL, labels = labels_vars) + 
+  scale_linetype_discrete(name = NULL, labels = labels_vars) + 
+  # estilo de fuente
+  theme_classic(base_size = 16, base_family = "Trebuchet MS") + 
+  theme(
+    # orientación de las marcas del eje x
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    # mostrar la leyenda abajo de la gráfica
+    legend.position = "bottom",
+    # tamaño de letra de la leyenda
+    legend.text = element_text(size = 14)
+  ) +
+  labs(
+    # no muestra la variable asociada al eje
+    x = NULL,
+    y = NULL
+  )
+
+# guardar gráfica
+guardar_fig_pib_vs_egres <- ggsave(
+  "pib_vs_egres.png",
+  # tamaño completo en Word
+  width = 17,
+  height = 10,
+  units = "cm"
+)
+```
+
+De momento, lo que no cambia es el estilo de fuente. Según la IA, eso se puede añadir a una variable dentro de `list`
+
+```
+# 1. Defines tu lista de elementos comunes
+otros_elementos <- list(
+  scale_color_brewer(palette = "Set1", name = NULL, labels = labels_vars),
+  scale_shape_discrete(name = NULL, labels = labels_vars),
+  scale_linetype_discrete(name = NULL, labels = labels_vars),
+  theme_classic(base_size = 16, base_family = "Trebuchet MS"),
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 14)
+  ),
+  labs(x = NULL, y = NULL)
+)
+
+# 2. La aplicas a tu gráfica usando el símbolo de suma (+)
+fig_pib_vs_egres <- datos_pivot %>%
+  ggplot(aes(x = periodo, y = nivel, color = variable, shape = variable, linetype = variable)) + 
+  geom_point() + 
+  geom_line() + 
+  scale_x_continuous(breaks = seq(2000, 2024, by = 1)) +
+  otros_elementos # ¡Aquí agregas toda la configuración de un golpe!
+```
+
+Como se observa, no lleva el signo `+` sino que va por coma
+
+Se añade variable
+
+```{r}
+fig_tema <- list(
+  # estilo de fuente
+  theme_classic(base_size = 16, base_family = "Trebuchet MS"), 
+  theme(
+    # orientación de las marcas del eje x
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    # mostrar la leyenda abajo de la gráfica
+    legend.position = "bottom",
+    # tamaño de letra de la leyenda
+    legend.text = element_text(size = 14)
+  ),
+  labs(
+    # no muestra la variable asociada al eje
+    x = NULL,
+    y = NULL
+  )
+)
+```
+
+Por otra parte, menciona que `breaks` se puede reemplazar por una mini función o `breaks_width`. Se valida
+
+Dicha función establece ancho de mismo tamaño en los valores del eje x o y. Por tanto, el código cambiaría a
+
+ANTES
+
+```
+breaks = seq(2000, 2024, by = 1)
+```
+
+AHORA
+
+```
+breaks = breaks_width(width = 1)
+```
+
+Y entiendo que en automático ajusta los valores a mostrar, respetando el rango específicado
+
+También, menciona que se puede automatizar creando funciones algo así
+
+```
+crear_grafica_lineas <- function(datos, var_x, var_y, var_agrupacion) {
+  datos %>%
+    ggplot(aes(
+      x = {{ var_x }}, 
+      y = {{ var_y }}, 
+      color = {{ var_agrupacion }}, 
+      shape = {{ var_agrupacion }}, 
+      linetype = {{ var_agrupacion }}
+    )) + 
+    geom_point() + 
+    geom_line() + 
+    scale_y_continuous(
+      labels = scales::label_percent(),
+      breaks = function(x) seq(min(x), max(x), by = 0.05)
+    ) +
+    otros_elementos # Tu lista de formato guardada anteriormente
+}
+
+# Uso:
+# mi_grafica <- crear_grafica_lineas(datos_pivot, periodo, nivel, variable)
+```
+
+De momento, no sé cómo podría aplicarlo pero es interesante
+
+Por último, menciona que también se puede automatizar guardar las gráficas con `ggsave` a través de funciones junto con operador de llaves
+
+```
+guardar_figura <- function(grafica, nombre_archivo) {
+  ggsave(
+    filename = nombre_archivo,
+    plot = grafica,
+    width = 17,
+    height = 10,       # Corregido: antes decía 'heigth'
+    units = "cm",
+    dpi = 300          # Opcional pero recomendado: asegura alta calidad para impresión
+  )
+  
+  # Mensaje opcional para saber que se guardó correctamente
+  message(paste("Gráfica guardada exitosamente como:", nombre_archivo))
+}
+```
+
+Al momento de llamarla, se haría así
+
+```
+# Suponiendo que tu gráfica se llama fig_pib_vs_egres
+guardar_figura(grafica = fig_pib_vs_egres, nombre_archivo = "fig1.png")
+
+# Para la siguiente gráfica
+guardar_figura(grafica = fig_salario_vs_exper, nombre_archivo = "fig2.png")
+```
+
+Esto último, si lo puedo generar
+
+```{r}
+guardar_figura <- function(grafica, nombre_archivo){
+  ggsave(
+    filename = nombre_archivo,
+    plot = grafica,
+    width = 17,
+    height = 10,
+    units = "cm",
+    dpi = 300 # asegura alta calidad
+  )
+  
+  # mensaje de confirmación
+  message(paste("Gráfica guardada exitosamente como:", nombre_archivo))
+}
+```
+
+Cabe señalar que `message` genera un mensaje en la consola y `paste` concatena ambos provienen del paquete `base`
+
+Ahora vamos a juntar todas las gráficas generadas previamente
+
+Se encuentran en: "C:/Prog/tesis/bitacora/15-2_Incidencia.Rmd"
+
+
+POR EDAD
+
+ANTES
+
+```
+resultado_jov4 %>% 
+  filter(desajuste_educativo == 1 & edad_7g != "98") %>%
+  mutate(edad_7g = as.integer(edad_7g)) %>% 
+  ggplot(aes(edad_7g, prop)) + 
+  geom_point(color = "#314763", size = 3) +
+  geom_line(color = "#314763") + 
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  scale_x_continuous(
+    labels = labels_vars1
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = seq(0, 0.65, by = 0.05)
+  ) + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+```
+
+AHORA 
+
+```
+df %>% 
+  filter(desajuste_educativo == 1) %>%
+  ggplot(aes(edad, prop)) + 
+  geom_point(color = "#314763", size = 3) +
+  geom_line(color = "#314763") + 
+  theme_classic(base_size = 12, base_family = "Trebuchet MS") +
+  scale_x_continuous(
+    labels = labels_vars1
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = breaks_width(0.05)
+  ) + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  )
+```
+
+
+
+

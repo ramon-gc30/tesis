@@ -1,0 +1,194 @@
+---
+title: "Tesis"
+format: 
+  html: default
+  pdf: default
+---
+
+En este espacio se tratará de trabajar con la función `kable::kableExtra` y `modelsummary`. Primero se carga el código de la tesis
+
+```{r}
+#| label: setup
+#| echo: true
+#| warning: false
+#| message: false
+
+# source("20_codigo_completo_6.R")
+library(tidyverse)
+library(modelsummary)
+library(datos)
+library(knitr)
+```
+
+Después se valida si ya están instalados dichos paquetes
+
+```{r}
+# system.file(package = "modelsummary")
+# system.file(package = "kableExtra")
+```
+
+Se observa que no está el paquete `modelsummary`, se procede a instalar
+
+```{r}
+# install.packages("modelsummary", dependencies = TRUE)
+```
+
+```{r}
+# library(modelsummary)
+```
+
+Trabajaremos con el conjunto de datos `diamantes`
+
+```{r}
+# library(datos)
+glimpse(datos::diamantes)
+```
+
+Primero, construyamos una tabla que contiene el precio promedio de cada corte 
+
+```{r}
+precio_prom <- diamantes |> 
+  group_by(corte) |> 
+  summarise(
+    precio_prom = mean(precio)
+  )
+
+precio_prom
+```
+
+Según Gemini, la función es `kableExtra::kbl`, se valida la documentación
+
+```{r}
+# ?kableExtra::kbl
+```
+
+Hagamos un ejemplo, solamente llamando la función sin establecer ningún argumento
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl()
+```
+
+Ahora hagamos pruebas, pero antes creo también se requiere el paquete  `knitr`
+
+```{r}
+# system.file(package = "knitr")
+# library(knitr)
+```
+
+Hagamos otra prueba
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl()
+```
+
+Ahora hagamos pruebas 
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2
+  )
+```
+
+En formato de salida`latex` no arroja nada, pero sí cuando establecimos`html ` o`pipe ` Asimismo, si se modifica el número de dígitos a mostrar después del punto decimal
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2,
+    col.names =  c("Corte", "Precio promedio")
+  )
+```
+
+Sí se modifica el nombre de las columnas como se especifican, por ejemplo
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte")
+  )
+```
+
+Como se observa, como se indique en el argumento es como aparecerá 
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("c", "l")
+  )
+```
+
+En `align` por defecto las columnas que tienen datos numéricos se alinearán a la derecha y lo demás a la izquierda
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    caption = "Título de la tabla"
+  )
+```
+
+`caption` establece el título de la tabla
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    caption = "Título de la tabla",
+    format.args = list(big.mark = ",")
+  )
+```
+
+En `label` se establece una etiqueta de la tabla, ¿esto se contrapone a `#| label: `?
+
+En `format.args` se pone separador de coma a los números, pero debe ponerse la función `list()`, los argumentos provienen de `format`
+
+En `escape = TRUE` permite añadir escapes (insertar caracteres especiales)
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "html",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    caption = "Título de la tabla",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE
+  )
+```
+
+En `booktabs` con formato de salida HTML no se ve ningún cambio, quizá para la salida en PDF
+
+```{r}
+precio_prom |> 
+  kableExtra::kbl(
+    format = "latex",
+    digits = 2,
+    col.names =  c("Precio promedio", "Corte"),
+    align = c("l", "r"),
+    caption = "Título de la tabla",
+    format.args = list(big.mark = ","),
+    booktabs = TRUE
+  )
+```
+
+Cuando se especifica `format = HTML` arroja error al renderizar a PDF, se hace el intento en otro archivo 
+
+
+

@@ -1,0 +1,133 @@
+---
+date: today
+format: html
+---
+
+En este documento se analizará el borrador de 3-1 V3
+
+```{r}
+library(tidyverse)
+library(scales)
+library(srvyr)
+
+source("scripts/0_funciones_v9.R")
+
+descrip_prop <- read_rds("datos/descriptivo_prop.rds")
+descrip_prop_sub <- read_rds("datos/descriptivo_prop_sub.rds")
+sinco19 <- read_rds("datos/descriptivo_sinco19.rds")
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+total <- read_rds("datos/descriptivo_total.rds")
+```
+
+Se valida
+
+```{r}
+descrip_prop |> 
+  filter(grupo == "division") |> 
+  arrange(desc(prop))
+```
+
+En gráfica de columnas sería así
+
+```{r}
+descrip_prop |> 
+  filter(grupo == "division") |> 
+  mutate(valor = factor(valor)) |> 
+  ggplot(aes(fct_reorder(valor, -prop), prop)) + 
+  geom_col()
+```
+
+Se valida
+
+```{r}
+sinco19
+```
+
+```{r}
+establecer_edu_req_aprox(sinco19, edu_requerida) |> 
+  count(edu_req_aprox, s19_div) |> 
+  group_by(edu_req_aprox) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop), .by_group = TRUE)
+
+establecer_edu_req_aprox(sinco19, edu_requerida) |> 
+  count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+Voy a hacerla en gráfica 
+
+```{r}
+establecer_edu_req_aprox(sinco19, edu_requerida) |> 
+  filter(edu_req_aprox == "2") |> 
+  count(s19_div)
+```
+
+```{r}
+establecer_edu_req_aprox(sinco19, edu_requerida) |> 
+  count(s19_div, edu_req_aprox) |> 
+  group_by(s19_div) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop), .by_group = TRUE) |> 
+  ggplot(aes(s19_div, prop, fill = edu_req_aprox)) + 
+  geom_col() + 
+  coord_flip()
+```
+
+```{r}
+descrip_prop
+```
+
+```{r}
+descrip_prop_sub |> 
+  distinct(gpo_lab)
+```
+
+Otra forma de verlo
+
+```{r}
+# jovenes |> 
+#   select(contains("edu"))
+
+jovenes <- establecer_edu_req_aprox(jovenes, edu_requerida) 
+
+jovenes |> 
+  calcular_prop(edu_req_aprox)
+
+# jovenes |> 
+#   calcular_prop_sub(educacion, edu_req_aprox)
+# 
+# jovenes |> 
+#   calcular_prop_sub(campo_amplio, edu_req_aprox) |> 
+#   filter(edu_req_aprox == "2")
+```
+
+```{r}
+total
+```
+
+Vamos a modificar las entradas para calcular las proporciones únicamente de la población ocupada
+
+```{r}
+# argumentos <- tribble(
+#   ~datos, ~grupo,
+#   # ---
+#   "jovenes_ocu", "mujer",
+#   "jovenes_ocu", "educacion",
+#   "jovenes_ocu", "campo_amplio",
+#   "jovenes_ocu", "regiones",
+#   "jovenes_ocu", "ent",
+#   "jovenes_ocu", "sector_eco",
+#   "jovenes_ocu", "tamanio",
+#   "jovenes_ocu", "division",
+#   "jovenes_ocu", "division",
+#   "jovenes_ocu", "informal",
+#   "jovenes_ocu", "jornada",
+#   "jovenes_ocu", "ingreso_nivel"
+# )
+# 
+# pmap(argumentos, calcular_prop_map())
+```
+

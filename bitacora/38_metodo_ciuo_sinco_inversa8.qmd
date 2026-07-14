@@ -1,0 +1,130 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(writexl)
+library(readxl)
+
+source("scripts/0_funciones_v9.R")
+
+sinco11_ciuo08 <- read_csv(
+  "C:/Prog/tesis/datos/sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character())
+)
+
+sinco19_11 <- read_csv(
+  "C:/Prog/tesis/datos/sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character())
+)
+
+# ciuo08 <- read_xlsx(
+#   "C:/Prog/tesis/datos/ISCO.xlsx",
+#   sheet = 2,
+#   col_types = "text"
+# )
+```
+
+## Procedimiento para determinar educación requerida V4
+
+```{r}
+sinco11 <- sinco11_ciuo08 |> 
+  filter(str_length(sinco11) == 4) |>
+  mutate(
+    # crear grupo principal 
+    c08_major = str_sub(ciuo08, 1, 1),
+    # crear grupo subprincipal
+    c08_submajor = str_sub(ciuo08, 1, 2),
+    # asignar nivel de competencia
+    skill_level = case_when(
+        # skill level 4
+        c08_submajor == "11" | c08_submajor == "12" |
+          c08_submajor == "13" | c08_major == "2" |
+          c08_submajor == "01" ~ "4",
+        # skill level 3
+        c08_submajor == "14" | c08_major == "3" ~ "3",
+        # skill level 2
+        c08_major == "4" | c08_major == "5" |
+          c08_major == "6" | c08_major == "7" |
+          c08_major == "8" | c08_submajor == "02" ~ "2",
+        # skill level 1
+        c08_major == "9" | c08_submajor == "03" ~ "1",
+        TRUE ~ NA
+      ) 
+  ) |> 
+  # reordenar de menor a mayor para obtener mínimo y máximo
+  group_by(sinco11, skill_level) |> 
+  arrange(skill_level, .by_group = TRUE) |> 
+  ungroup() |> 
+  # crear valores únicos para pivotar
+  group_by(sinco11) |>
+  mutate(id = row_number()) |>
+  ungroup() |>
+  # pivotar para tener valores únicos de SINCO-11
+  pivot_wider(
+    id_cols = sinco11,
+    names_from = id,
+    names_prefix = "skill_",
+    values_from = skill_level,
+    values_fill = ""
+  )
+
+sinco19 <- sinco19_11 |> 
+  left_join(sinco11, by = c("sinco_11" = "sinco11")) |> 
+  filter(str_length(sinco_19) == 4) |> 
+  # crear valores únicos para pivotar
+  group_by(sinco_19) |> 
+  mutate(id = row_number()) |> 
+  ungroup() |> 
+  # para tener valores únicos del SINCO-19
+  pivot_wider(
+    id_cols = sinco_19,
+    names_from = id,
+    values_from = skill_1:skill_7,
+    values_fill = ""
+  ) |> 
+  # concatena distintas columnas 
+  # para tener educación mínima y máxima
+  unite("skill_level", skill_1_1:skill_7_2, sep = "") |> 
+  mutate(
+    # extrae el primer caracter para obtener mínimo
+    skill_min = str_sub(skill_level, 1, 1),
+    # extrae el último caracter para obtener máximo
+    skill_max = str_sub(skill_level, str_length(skill_level)), 
+    edu_req_min = case_when(
+      # licenciatura
+      skill_min == "4" ~ "7",
+      # técnico superior
+      skill_min == "3" ~ "6",
+      # secundaria
+      skill_min == "2" ~ "3",
+      # preescolar 
+      skill_min == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    edu_req_max = case_when(
+      # doctorado
+      skill_max == "4" ~ "9",
+      # técnico superior
+      skill_max == "3" ~ "6",
+      # secundaria
+      skill_max == "2" ~ "4",
+      # preescolar 
+      skill_max == "1" ~ "2",
+      TRUE ~ NA
+    )
+  ) |> 
+  # añadir descripción
+  left_join(sinco19_11, by = "sinco_19", multiple = "any") |>
+  mutate(
+    descripcion_sinco19 = str_remove(descripcion_sinco19, "- ")
+  ) |>
+  select(contains("19"), contains("edu"))
+```
+

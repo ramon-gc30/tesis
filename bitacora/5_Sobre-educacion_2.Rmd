@@ -1,0 +1,1053 @@
+---
+title: "Sobre-educación 2: moda y `ocupacion1`"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+
+Se determinará la sobre-educación mediante el método de la moda con `ocupacion1`, asimismo se tratará de responder algunas preguntas de investigación.
+
+# Paquetes requeridos
+
+```{r setup}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# calcular la moda
+library(DescTools)
+# coeficiente de asimetría
+library(moments)
+library(EnvStats)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # años de escolaridad
+  anios_esc = as.integer(anios_esc),
+  # 99 pasa a NA para evitar 99 - edu_req
+  anios_esc = if_else(anios_esc != 99, anios_esc, NA),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+
+# grupos de edad
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitarias
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# población total
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 y más para unir sdem y coe
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# unión de sdem y coe
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# población de 15 años y más
+pob_15ymas <- completo %>% 
+  filter(
+    r_def.x == "0",
+    c_res != "2",
+    between(eda.x, 15, 98)
+  )
+
+# INEGI(2023: 21)
+ocupada <- pob_15ymas %>% 
+  filter(clase2 == 1)
+
+# INEGI(2023: 25)
+desocupada <- pob_15ymas %>% 
+  filter(clase2 == 2)
+
+# INEGI(2023: 26)
+pnea <- pob_15ymas %>% 
+  filter(clase1 == 2)
+
+# escolaridad requerida con la moda
+edu_req <- ocupada %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  filter(tot == max(tot)) %>% 
+  rename("moda" = "anios_esc") %>% 
+  select(-tot)
+
+# variable de education mismatch
+ocupada <- left_join(ocupada, edu_req, by = "ocupacion1") %>% 
+  mutate(
+    edu_mis = case_when(
+      # overeducation
+      anios_esc > moda ~ 1,
+      # undereducation
+      anios_esc < moda ~ 2,
+      # required
+      TRUE ~ 0
+    )
+  )
+
+# # profesionistas
+# profesionistas <- pob_15ymas %>% 
+#   filter(
+#     cs_p13_1 == "7" | cs_p13_1 == "8" | cs_p13_1 == "9"
+#   )
+# 
+# # jovenes
+# jovenes <- pob_15ymas %>% 
+#   filter(edad_7g == "3")
+```
+
+# Construcción de años de educación requeridos
+
+## Con `ocupacion1`
+
+```{r}
+completo %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  filter(tot == max(tot)) %>% 
+  rename("edu_req" = "anios_esc") %>% 
+  select(-tot)
+```
+
+## Valores `NA`
+
+¿Cuántos valores `NA` existen en `ocupacion1`?
+
+```{r}
+completo %>% 
+  group_by(ocupacion1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+¡Los valores `NA` representan el 45% de la muestra! ¿De dónde vendrán? ¿Serán PEA o PNEA?
+
+```{r}
+completo %>% 
+  group_by(clase1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+El 56% de la muestra es PEA, mientras que el 44% son PNEA que representa una población de 48,045,377. Hagamos un cruce de `ocupacion1` y `clase1`.
+
+```{r}
+completo %>% 
+  group_by(ocupacion1, clase1) %>% 
+  summarise(tot = sum(fac_tri.x)) 
+```
+
+Se observa que del valor `NA` de `ocupacion1` proviene tanto de PEA como de PNEA, en el segundo caso coincide con el total de PNEA (48,045,377). Quizá en el caso de PEA sea la población desocupada, validemos con `clase2`.
+
+```{r}
+completo %>% 
+  group_by(ocupacion1, clase2) %>% 
+  summarise(tot = sum(fac_tri.x)) 
+```
+
+En efecto, la PEA que aparece en el valor `NA` de `ocupacion1` pertenece a la población desocupada. Entonces, para construir los años requeridos en cada grupo ocupacional puedo eliminar el valor `NA` de `ocupacion1`, ¿cómo? en línea con @inegiconociendoenoe2023 p. 21 debe aplicarse el criterio general más algunos criterios específicos, según la población de estudio. 
+
+# Construcción de tabla `pob_15ynas`
+
+Recordemos que el criterio general es:
+
+```
+R_DEF=’00’ AND (C_RES=’1’ OR C_RES=’3’) AND (EDA>=’15’ AND EDA<=’98’)
+```
+
+Dicho criterio lo tiene aplicado la tabla `pob_15ymas`, sin embargo no tiene las variables asociadas a los grupos ocupacionales aquellos recae en la tabla `completo` que se construyó a partir de `pob_12ymas` en la cual se utilizó el siguiente criterio:
+
+```
+R_DEF=’00’ AND (C_RES=’1’ OR C_RES=’3’) AND (EDA>=’12’ AND EDA<=’98’)
+```
+Entonces, ¿qué hacer? en primer lugar se valida las edades en la tabla `completo`
+
+```{r}
+completo %>% 
+  group_by(eda.x) %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+Se valida si en edades menos a 15 años, existan registros en `ocupacion1`
+
+```{r}
+completo %>% 
+  group_by(eda.x, ocupacion1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  group_by(eda.x) %>% 
+  mutate(prop = tot / sum(tot) * 100)
+```
+
+La proporción de valores `NA` en edades menores a 15 años se encuentra alrededor del 90%, es decir, SI existen observaciones en `ocupacion1` que tienen edades menores a 15 años. Se valida datos con @inegienoet22025r.
+
+```{r}
+# pob 15 y más
+completo %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+```{r}
+# pea y pnea
+completo %>% 
+  group_by(clase1) %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+En @inegienoet22025r p. 7 tienen los siguentes resultados:
+
+* Población de 15 años y más: 102.6 
+* PEA: 61.1
+* PNEA: 41.6
+
+Es decir, los resultados NO coinciden.
+
+¿Cómo solucionarlo? Crear la tabla `pob_15ymas` después de unir las tablas `sdem` y `coe`, se realiza modificación en el *chunk* (bloque) `setup`. Se vuelve a validar resultados.
+
+```{r}
+# pob 15 y más
+pob_15ymas %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+```{r}
+# pea y pnea
+pob_15ymas %>% 
+  group_by(clase1) %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+Los resultados ya coinciden con @inegienoet22025r p. 7
+
+# Construcción de años de educación requeridos (2)
+
+Entonces, construyo los años de educación requeridos eliminando el valor `NA` de `ocupacion1` con la tabla `pob_15ymas`.
+
+```{r}
+pob_15ymas %>% 
+  filter(!is.na(ocupacion1) & anios_esc != 99) %>% 
+  group_by(ocupacion1, anios_esc) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  filter(tot == max(tot)) %>% 
+  ungroup() %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  rename("edu_req" = "anios_esc") 
+```
+
+El 22% de la PEA se ubica en "9 Trabajadores en actividades elementales y de apoyo", seguido de 16% en "2 Profesionistas y técnicos".
+
+# Construcción de tabla `ocupada`
+
+Duda, ¿porcentaje del valor `99` en `anios_esc`?
+
+```{r}
+pob_15ymas %>% 
+  group_by(anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot) * 100)
+```
+
+
+El valor `99` representa apenas el 0.2% del total de observaciones en `anios_esc`, pero se decide eliminar valor debido a que una persona que contestó no saber sus años de escolaridad no se puede saber si está o no sobre-educado: ¿`99 > edu_req`? Entonces, se decide convertir el valor `99` a `NA` para simplificar las líneas de código; esto se realiza en el bloque `setup`.
+
+Total de población de 15 años y más
+
+```{r}
+pob_15ymas %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+```{r}
+pob_15ymas %>% 
+  filter(!is.na(ocupacion1)) %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+Se observa que el número es equivalente a la población ocupada, véase @inegienoet22025r p. 7. Entonces, se debe crear una tabla que contenga `ocupados`. Se realiza en el bloque `setup`.
+
+```{r}
+ocupada %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+Entonces, ya no existe valores `NA` en `ocupacion1`.
+
+# Construcción de educación requerida (3) con la moda
+
+```{r}
+ocupada %>% 
+  group_by(ocupacion1) %>% 
+  summarise(tot = sum(fac_tri.x))
+```
+
+Se determinan los años de escolaridad requeridos por ocupación mediante el método de la moda, se realiza en el bloque de configuración (`setup`)
+
+# Incidencia
+
+```{r}
+# incidencia
+ocupada %>% 
+  group_by(edu_mis) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot))
+```
+
+Se observa que la población ocupada de 15 años y más, el 35% está sobre-educada, mientras que el 32% está infra-educada y con una educación acorde al puesto.
+
+## Por sexo
+
+```{r}
+ocupada %>% 
+  group_by(sex, edu_mis) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot)) 
+```
+
+Del total de mujeres y hombres, el 35% y el 36% está sobre-educado, respectivamente.  (valor 1).
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis, sex) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot)) 
+```
+
+Del total de sobre-educados, el 60% son hombres. 
+
+Comprobación
+
+```{r}
+comprob <- ocupada %>% 
+  group_by(sex) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot)) %>% 
+  rename("prop_tot" = "prop")
+
+ocupada %>% 
+  group_by(edu_mis, sex) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot)) %>% 
+  filter(edu_mis == 0) %>% 
+  rename(
+    "over" = "tot",
+    "prop_over" = "prop"
+  ) %>% 
+  left_join(comprob, by = "sex") 
+```
+
+## Por grupos de edad
+
+```{r}
+ocupada %>% 
+  group_by(edad_7g, edu_mis) %>%
+  summarise(tot = sum(fac_tri.x)) %>%
+  mutate(prop = tot / sum(tot))
+```
+
+En el grupo de 25 a 34 años (valor 3) el 46% está sobre-educado.
+
+De forma gráfica
+
+```{r}
+ocupada %>% 
+  filter(edad_7g != 98) %>% 
+  mutate(
+    edad_7g = as.integer(edad_7g),
+    edu_mis = factor(edu_mis)
+  ) %>% 
+  group_by(edad_7g, edu_mis) %>%
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>%
+  ggplot(aes(edad_7g, prop, color = edu_mis)) +
+  geom_point() +
+  geom_line()
+```
+
+En el grupo más joven (15 a 24 años), existe una mayor proporción de sobre-educados e incluso aumenta en el grupo de 25 a 34 años para luego disminuir paulatinamente, por su parte, conforme aumenta la edad también aumenta el porcentaje de infra-educados, y en el caso de educación requerida presenta una curva convexa (mira hacia dentro) con un techo cercano al 35% de 45 a 54 años.
+
+## Por edad
+
+```{r}
+ocupada %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(eda.x, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(eda.x, prop, color = edu_mis)) +
+  geom_line()
+```
+
+Con respecto a la sobre-educación, se observa que alcanza un techo del 50% alrededor de los 25 años para disminuir paulatinamente, excepto después de los 75 años donde vuelve a incrementarse hasta un 25%. Por otra parte, la infra-educación tiene una proporción elevada a incios de la edad laboral pero también a finales de la misma, esto último como señala la evidencia empírica.
+
+## Por nivel de estudios
+
+```{r}
+ocupada %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(cs_p13_1, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(cs_p13_1, prop, fill = edu_mis)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1))
+```
+
+En los grados escolares básicos, el 100% se encuentra infra-educado, en cuanto a licenciatura alrededor del 70% está sobre-educado y para el caso de maestría y doctorado el 100% se encuentra sobre-educado.
+
+Con `anios_esc`
+
+```{r}
+ocupada %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(anios_esc, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(anios_esc, prop, fill = edu_mis)) +
+  geom_col()
+```
+
+¿Por qué existen un 100% de individuos con 16 años de escolaridad o superiores? Porque los años de educación requeridos se construyó a partir del grupo ocupacional de mayor agregación (división), se construirá en el siguiente documento con el grupo de menor agregación (unitario) para contrastar los resultados.
+
+## Por carreras
+
+```{r}
+ocupada %>% 
+  group_by(carrera1, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot / sum(tot),
+    edu_mis = factor(edu_mis)
+  ) %>% 
+  ggplot(aes(carrera1, prop, fill = edu_mis)) +
+  geom_col()
+```
+
+Se observa que la mayoría de las carreras tiene alrededor del 50% de sobre-educados.
+
+## Por ocupaciones
+
+```{r}
+ocupada %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(ocupacion1, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(ocupacion1, prop, fill = edu_mis)) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1))
+```
+
+En el grupo "3 Trabajadores auxiliares en actividades administrativas", "5 Trabajadores en servicios personales y de vigilancia" y "8 Operadores de maquinaria industrial, ensambladores, choferes y conductores de transporte" alrededor del 50% está sobre-educado.
+
+## Por entidad federativa
+
+```{r}
+ocupada %>% 
+  group_by(ent, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot/ sum(tot)
+    ) %>% 
+  filter(edu_mis == 1) %>% 
+  ungroup() %>%
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, -prop)
+  ) %>% 
+  ggplot(aes(ent, prop)) +
+  geom_col()
+```
+
+En Sinaloa (25), Sonora (26) y Tabasco (27) existe la mayor cantidad de sobre-educados, alrededor del 40%. 
+
+### Profesionistas
+
+```{r}
+ocupada %>% 
+  filter(cs_p13_1 == 7 | cs_p13_1 == 8 | cs_p13_1 == 9) %>% 
+  group_by(ent, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot/ sum(tot)
+    ) %>% 
+  filter(edu_mis == 1) %>% 
+  ungroup() %>%
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, -prop)
+  ) %>% 
+  ggplot(aes(ent, prop)) +
+  geom_col()
+```
+En el caso de profesionistas, Zacatecas (32), Guerrero (12), y Tabasco (27) son los estados con el mayor número de profesionistas sobre-educados (por encima del 75%), mientras que Guanajuato (11), Ciudad de México (9), y Querétaro (22) son los que tienen la menor proporción, no obstante aún en esos casos el porcentaje es superior al 50%.
+
+# Años de escolaridad por estados
+
+¿Cuáles son los estados con el mayor número de años de escolaridad?
+
+## Media
+
+```{r}
+ocupada %>%
+  filter(cs_p13_1 != 99 & !is.na(anios_esc)) %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ent) %>% 
+  summarise(
+    media1 = mean(cs_p13_1),
+    media2 = mean(anios_esc)
+  ) %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, -media2)
+  ) %>% 
+  ggplot(aes(ent, media2)) +
+  geom_point()
+```
+
+Ciudad de México, Sonora y Sinaloa son los estados con el mayor número de años escolares.
+
+## Mediana
+
+¿Cuál es la mediana de años de estudio?
+
+```{r}
+ocupada %>%
+  filter(cs_p13_1 != 99 & !is.na(anios_esc)) %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ent) %>% 
+  summarise(
+    mediana1 = median(cs_p13_1),
+    mediana2 = median(anios_esc)
+  ) %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, -mediana2)
+  ) %>% 
+  ggplot(aes(ent, mediana2)) +
+  geom_point()
+```
+
+## Moda
+
+¿Cuál es la moda de años de estudio?
+
+```{r}
+ocupada %>%
+  filter(cs_p13_1 != 99 & !is.na(anios_esc)) %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ent, cs_p13_1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  filter(tot == max(tot)) %>% 
+  ungroup() %>% 
+  rename("moda" = "cs_p13_1") %>% 
+  mutate(
+    ent = factor(ent),
+    ent = fct_reorder(ent, -moda)
+  ) %>% 
+  ggplot(aes(ent, moda)) +
+  geom_point()
+```
+
+Parece que existe una relación positiva entre mayores años de estudio y mayor proporción de sobre-educados por entidad federativa, ¿cómo validarlo?
+
+# Relación entre años de estudio y sobre-educación
+
+Con la media
+
+```{r}
+comprob1 <- ocupada %>%
+  filter(cs_p13_1 != 99 & !is.na(anios_esc)) %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ent) %>% 
+  summarise(
+    media1 = mean(cs_p13_1),
+    media2 = mean(anios_esc)
+  ) 
+
+comprob2 <- ocupada %>% 
+  group_by(ent, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot/ sum(tot)
+    ) %>% 
+  filter(edu_mis == 1)
+
+full_join(comprob1, comprob2, by = "ent") %>% 
+  ggplot(aes(media1, prop)) +
+  geom_point() + 
+  geom_smooth()
+```
+
+Se observa una relación positiva entre los años escolares y la proporción de sobre-educados, es decir, a mayor año escolar aumenta la proporción de personas sobre-educadas.
+
+Con la moda
+
+```{r}
+comprob1 <- ocupada %>%
+  filter(cs_p13_1 != 99 & !is.na(anios_esc)) %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ent, cs_p13_1) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  filter(tot == max(tot)) %>% 
+  rename("moda" = "cs_p13_1")
+
+comprob2 <- ocupada %>% 
+  group_by(ent, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot/ sum(tot)
+    ) %>% 
+  filter(edu_mis == 1)
+
+full_join(comprob1, comprob2, by = "ent") %>% 
+  mutate(moda = as.character(moda)) %>% 
+  ggplot(aes(moda, prop)) +
+  geom_boxplot()
+```
+
+Con la moda se confirma resultado, a mayor grado escolar mayor porcentaje de sobre-educados.
+
+# Incidencia (2)
+
+## Condición de informalidad
+
+```{r}
+ocupada %>% 
+  group_by(emp_ppal, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Existe una mayor proporción de sobre-educados en condición de informalidad (44%) que en condición de formalidad (29%).
+
+## Ámbito y tamaño de unidad económica
+
+```{r}
+ocupada %>% 
+  group_by(ambito2, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+## Tipo de unidad económica
+
+```{r}
+ocupada %>% 
+  group_by(tue1, tue2, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+## Migración
+
+```{r}
+library(ggrepel)
+
+ocupada %>% 
+  group_by(cs_p20a_1, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(
+    prop = tot / sum(tot) * 100,
+    edu_mis = factor(edu_mis),
+    prop = as.integer(prop)
+  ) %>% 
+  ggplot(aes(cs_p20a_1, prop, fill = edu_mis)) + 
+  geom_col() + 
+  ggrepel::geom_label_repel(aes(label = prop))
+```
+
+No me gusta como se ve la etiqueta dentro de la gráfica asimismo debo convertir la variable `prop` a entero (`integer`); por ende sólo lo pondré para temas de análisis. 
+
+Las personas que migraron desde otro estado (2) y de otro país (4) tienen mayor proporción de sobre-educación: 43 y 48%, respectivamente. Entonces, migrar supone una desventaja para conseguir un puesto acorde a la formación.
+
+## Causas de migración
+
+```{r}
+ocupada %>% 
+  group_by(cs_p20c_1, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  filter(edu_mis == 1) %>%
+  arrange(desc(prop))
+```
+
+De las personas que reportaron migrar por motivos de estudio (5), el 70% se encuentra sobre-educado mientras que los que migraron para buscar trabajo el 43% está sobre-educado,  y por cambio u oferta de trabajo el 47% (2) lo está.
+
+## Total de trabajos
+
+```{r}
+ocupada %>% 
+  group_by(t_tra, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+No existen diferencias en la proporción de sobre-educados cuando se tiene 1 o 2 trabajos. ¿Por qué? Acaso, será la jornada laboral.
+
+```{r}
+ocupada %>% 
+  group_by(dur_est, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot), 
+         edu_mis = factor(edu_mis)) %>% 
+  filter(edu_mis == 0)
+  # ggplot(aes(dur_est, prop, fill = edu_mis)) + 
+  # geom_col() +
+  # scale_y_continuous(breaks = seq(0, 1, by = 0.1))
+```
+
+No existen diferencias significativas en cuanto a la duración de la jornada laboral. ¿Al revés?
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis, t_tra) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+De los que están sobre-educados, sólo el 5% tiene 2 trabajos. ¿Qué dicen acerca de la búsqueda de trabajo?
+
+## Búsqueda de otro empleo
+
+```{r}
+ocupada %>% 
+  group_by(edu_mis, buscar5c) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+De los que están sobre-educados, sólo el 5% y el 2% reporta buscar trabajo para tener otro empleo o para cambiarse de trabajo. Es decir, a pesar de que estén sobre-educados la mayoría no tiene intención de cambiar de trabajo ¿por qué? La literatura señala que la sobre-educación tiene una tasa de retorno positiva, aunque menor a que si estuviera emparejado al puesto.
+
+## Nivel de ingreso
+
+```{r}
+ocupada %>% 
+  group_by(ing7c, edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot),
+    edu_mis = factor(edu_mis)) %>% 
+  ggplot(aes(ing7c, prop, fill = edu_mis)) + 
+    geom_col()
+```
+
+Se presenta mayor porcentaje de sobre-educados en el nivel de ingreso de más de 5 salarios mínimos, es decir, a medida que incrementa el nivel de ingreso también aumenta la proporción de sobre-educados. Esto pone en duda la metodología empleada para determinar la sobre-educación.
+
+## Ingreso mensual
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  ggplot(aes(edu_mis, ingocup)) + 
+  geom_lv()
+```
+
+No se observan cambios significativos de ajustados a sobre-educados, incluso se observa que la mediana de sobre-educación es superior que ajustados. ¿Cómo es en el caso de jóvenes?
+
+```{r}
+ocupada %>% 
+  filter(edad_7g == 3 & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  ggplot(aes(edu_mis, ingocup)) + 
+  geom_lv()
+```
+
+Los valores extremos se presentan en el caso de ajustados, pero de nuevo la mediana de sobre-educación es superior al de ajustados.
+
+### Profesionistas
+
+```{r}
+ocupada %>% 
+  filter(cs_p13_1 == 7 & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  ggplot(aes(edu_mis, ingocup)) + 
+  geom_lv()
+```
+
+La mediana de requeridos es mayor al de sobre-educación, pero éste último presenta mayores valores extremos
+
+### Jóvenes profesionistas
+
+```{r}
+ocupada %>% 
+  filter(cs_p13_1 == 7 & edad_7g == 3 & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  ggplot(aes(edu_mis, ingocup)) + 
+  geom_lv()
+```
+
+La mediana de ajustados es superior al de sobre-educación, pero de nuevo éste último presenta valores extremos mayores. Calculemos el ingreso promedio.
+
+### Promedio de Total
+
+```{r}
+ocupada %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+El ingreso mensual promedio es superior en el caso de sobre-educados que ajustados.
+
+### Promedio de Profesionistas
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = as.integer(cs_p13_1)
+  ) %>% 
+  filter(between(cs_p13_1, 7, 9) & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+En el caso de profesionistas, el ingreso mensual de ajustados es superior al de sobre-educados considerando licenciatura, maestría y doctorado.
+
+### Promedio de Jóvenes
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = as.integer(cs_p13_1)
+  ) %>% 
+  filter(edad_7g == 3 & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+En el caso de jóvenes, el ingreso mensual promedio de sobre-educados es superior al de ajustados.
+
+### Promedio de Jóvenes profesionistas
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = as.integer(cs_p13_1)
+  ) %>% 
+  filter(between(cs_p13_1, 7, 9) & edad_7g == 3 & ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  )
+```
+
+Para el caso de jóvenes profesionistas (licenciatura, maestría y doctorado) de 25 a 34 años, el ingreso mensual promedio con sobre-educación es menor al de ajustados. 
+
+# Relación entre ingreso promedio y 
+
+## grupos de edad
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = as.integer(cs_p13_1)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(edad_7g, edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(edad_7g, media, color = edu_mis, group = edu_mis)) +
+  geom_point() +
+  geom_line()
+```
+
+De forma agregada, el ingreso mensual promedio de sobre-educación es superior al de ajustados en todos los grupos de edad.
+
+## grado escolar
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    cs_p13_1 = factor(cs_p13_1)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(cs_p13_1, edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(cs_p13_1, media, color = edu_mis, group = edu_mis)) +
+  geom_point() +
+  geom_line()
+```
+
+Por grado escolar, se observa que el ingreso mensual promedio de sobre-educación es menor al ajustado desde el grado profesional.
+
+## años escolares
+
+```{r}
+ocupada %>% 
+  mutate(
+    edu_mis = factor(edu_mis),
+    anios_esc = factor(anios_esc)
+  ) %>% 
+  filter(ingocup != 0) %>% 
+  mutate(edu_mis = factor(edu_mis)) %>% 
+  group_by(anios_esc, edu_mis) %>% 
+  summarise(
+    media = mean(ingocup),
+    mediana = median(ingocup)
+  ) %>% 
+  ggplot(aes(anios_esc, media, color = edu_mis, group = edu_mis)) +
+  geom_point() +
+  geom_line()
+```
+
+Por años de escolaridad, se observa que desde el año 18 el ingreso mensual promedio de sobre-educación es superior al de ajustados. 
+
+## Explicación
+
+Esta situación puede presentarse por determinar de forma errónea los años de educación requeridos en cada ocupación. Se puede solucionar de dos maneras:
+
+1. Construir los años requeridos con la variable `p3`.
+2. Elegir otro método, por ejemplo el de @verdugoyverdugo1989. 
+
+
+# Resumen
+
+En conclusión, puedo decir que con el método de la moda el ingreso mensual promedio de sobre-educación es superior al de ajustados; puede deberse a errores metodológicos, es decir, las personas consideradas como sobre-educadas en realidad no lo están por ende no se ve afectado su ingreso.
+
+# Referencias

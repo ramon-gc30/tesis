@@ -1,0 +1,548 @@
+---
+title: "CIUO a SINCO"
+format: html
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(readxl)
+```
+
+Primero, se importa la tabla que contiene las ocupaciones de CIUO-08
+
+```{r}
+read_xlsx(
+  "ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+
+ciuo08 <- read_xlsx(
+  "ISCO.xlsx",
+  sheet = 2,
+  col_types = "text"
+)
+```
+
+Se renombra la columna que describe los grupos unitarios
+
+```{r}
+ciuo08 <- ciuo08 |> 
+  rename("unit_label" = "description")
+```
+
+Ahora se crea la tabla que contiene los niveles de conocimiento acordes según OIT(2023, p. 47)
+
+```{r}
+# skill_level 
+tribble(
+  ~skill_level, ~ciuo08,
+  "4", "11",
+  "4", "12",
+  "4", "13",
+  "4", "2",
+  "4", "01",
+  "3", "14",
+  "3", "3",
+  "2", "4",
+  "2", "5",
+  "2", "6",
+  "2", "7",
+  "2", "8",
+  "2", "02",
+  "1", "9",
+  "1", "03"
+)
+
+skill_level <- tribble(
+  ~skill_level, ~ciuo08,
+  "4", "11",
+  "4", "12",
+  "4", "13",
+  "4", "2",
+  "4", "01",
+  "3", "14",
+  "3", "3",
+  "2", "4",
+  "2", "5",
+  "2", "6",
+  "2", "7",
+  "2", "8",
+  "2", "02",
+  "1", "9",
+  "1", "03"
+)
+```
+
+Se hace un pivoteo a `skill_level`
+
+```{r}
+skill_level |>
+  mutate(
+    c08_major = if_else(str_length(ciuo08) == 1, ciuo08, NA),
+    c08_sub = if_else(str_length(ciuo08) == 2, ciuo08, NA)
+  ) |>
+  select(-ciuo08)
+
+skill_level2 <- skill_level |>
+  mutate(
+    c08_major = if_else(str_length(ciuo08) == 1, ciuo08, NA),
+    c08_sub = if_else(str_length(ciuo08) == 2, ciuo08, NA)
+  ) |>
+  select(-ciuo08)
+```
+
+¿Cómo realizar la unión? 
+
+```{r}
+# opción 1
+ciuo08 |> 
+  left_join(skill_level2, by = c("major" = "c08_major")) |> 
+  left_join(skill_level2, by = c("sub_major" = "c08_sub")) |> 
+  select(major, sub_major, contains("skill_level"))
+
+# opción 2
+ciuo08 |> 
+  left_join(skill_level, by = c("major" = "ciuo08")) |> 
+  left_join(skill_level, by = c("sub_major" = "ciuo08")) |> 
+  select(major, sub_major, contains("skill_level"))
+```
+
+Creo que se puede evitar ese "relajo" si se añade el código que asigna el nivel correspondiente
+
+```{r}
+ciuo08 |> 
+  mutate(
+    skill_level = case_when(
+      # skill level 4
+      sub_major == "11" | sub_major == "12" |
+        sub_major == "13" | major == "2" |
+        sub_major == "01" ~ "4",
+      # skill level 3
+      sub_major == "14" | major == "3" ~ "3",
+      # skill level 2
+      major == "4" | major == "5" |
+        major == "6" | major == "7" |
+        major == "8" | sub_major == "02" ~ "2",
+      # skill level 1
+      major == "9" | sub_major == "03" ~ "1",
+      TRUE ~ NA,
+    )
+  ) |> 
+  select(major, sub_major, skill_level)
+
+ciuo08_c_skill <- ciuo08 |> 
+  mutate(
+    skill_level = case_when(
+      # skill level 4
+      sub_major == "11" | sub_major == "12" |
+        sub_major == "13" | major == "2" |
+        sub_major == "01" ~ "4",
+      # skill level 3
+      sub_major == "14" | major == "3" ~ "3",
+      # skill level 2
+      major == "4" | major == "5" |
+        major == "6" | major == "7" |
+        major == "8" | sub_major == "02" ~ "2",
+      # skill level 1
+      major == "9" | sub_major == "03" ~ "1",
+      TRUE ~ NA,
+    )
+  )
+```
+
+Ahora se asigna el nivel educativo de CINE-11 y de México
+
+```{r}
+skill_level |> 
+  distinct(skill_level) |> 
+  mutate(
+    cine11_inf = case_when(
+      skill_level == "4" ~ "6",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "2",
+      skill_level == "1" ~ "0",
+      TRUE ~ NA
+    ),
+    cine11_sup = case_when(
+      skill_level == "4" ~ "8",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    education_mex_inf = case_when(
+      skill_level == "4" ~ "7",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "3",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    education_mex_sup = case_when(
+      skill_level == "4" ~ "9",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "2",
+      TRUE ~ NA
+    )
+  )
+
+skill_level <- skill_level |> 
+  distinct(skill_level) |> 
+  mutate(
+    cine11_inf = case_when(
+      skill_level == "4" ~ "6",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "2",
+      skill_level == "1" ~ "0",
+      TRUE ~ NA
+    ),
+    cine11_sup = case_when(
+      skill_level == "4" ~ "8",
+      skill_level == "3" ~ "5",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    education_mex_inf = case_when(
+      skill_level == "4" ~ "7",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "3",
+      skill_level == "1" ~ "1",
+      TRUE ~ NA
+    ),
+    education_mex_sup = case_when(
+      skill_level == "4" ~ "9",
+      skill_level == "3" ~ "6",
+      skill_level == "2" ~ "4",
+      skill_level == "1" ~ "2",
+      TRUE ~ NA
+    )
+  )
+```
+
+Recuerda que el valor `5` de `cs_p13_1` tiene que pasarse a `7`
+
+Ahora se realiza la unión
+
+```{r}
+ciuo08_c_skill |> 
+  left_join(skill_level, by = "skill_level")
+
+ciuo08_c_skill <- ciuo08_c_skill |> 
+  left_join(skill_level, by = "skill_level")
+```
+
+Ahora importamos la tabla de conversión SINCO-11 con CIUO-08
+
+```{r}
+# sinco11_ciuo08
+read_csv(
+  "sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character())
+)
+
+sinco11_ciuo08 <- read_csv(
+  "sinco11_a_ciuo08.csv",
+  col_types = cols(.default = col_character())
+) 
+```
+
+Vamos a quedarnos con las ocupaciones a 4 dígitos
+
+```{r}
+sinco11_ciuo08 |> 
+  filter(str_length(sinco11) == 4)
+
+sinco11_ciuo08 <- sinco11_ciuo08 |> 
+  filter(str_length(sinco11) == 4)
+```
+
+Se renombran las variables
+
+```{r}
+sinco11_ciuo08 |> 
+  rename(
+    "s11_div" = "sinco11",
+    "s11_div_label" = "descripcion_sinco",
+    "c08_unit" = "ciuo08",
+    "c08_unit_label" = "descripcion_ciuo"
+  )
+
+sinco11_ciuo08 <- sinco11_ciuo08 |> 
+  rename(
+    "s11_div" = "sinco11",
+    "s11_div_label" = "descripcion_sinco",
+    "c08_unit" = "ciuo08",
+    "c08_unit_label" = "descripcion_ciuo"
+  )
+```
+
+Ahora se realiza la unión 
+
+```{r}
+sinco11_ciuo08 |> 
+  left_join(ciuo08_c_skill, by = c("c08_unit" = "unit"))
+
+sinco11_c_skill <- sinco11_ciuo08 |> 
+  left_join(ciuo08_c_skill, by = c("c08_unit" = "unit"))
+```
+
+Listo! Ya tenemos la conversión de CIUO-08 a SINCO-11
+
+Nos falta SINCO-11 a SINCO-19
+
+Realizamos la importación
+
+```{r}
+read_csv(
+  "sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character())
+)
+
+sinco_19_11 <- read_csv(
+  "sinco19_a_sinco11.csv",
+  col_types = cols(.default = col_character())
+)
+```
+
+Se validan valores distintos o únicos de sinco 19 y sinco 11
+
+```{r}
+sinco_19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  distinct(sinco_19)
+
+sinco_19_11 |> 
+  filter(str_length(sinco_11) == 4) |> 
+  distinct(sinco_11)
+```
+
+Se pivotan los datos 
+
+```{r}
+sinco11_c_skill |> 
+  distinct(s11_div, skill_level) |> 
+  mutate(dummy = 1) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = skill_level,
+    names_prefix = "skill",
+    names_sort = TRUE,
+    values_from = dummy,
+    values_fill = 0
+  )
+
+sinco11_skill_pivot <- sinco11_c_skill |> 
+  distinct(s11_div, skill_level) |> 
+  mutate(dummy = 1) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = skill_level,
+    names_prefix = "skill",
+    names_sort = TRUE,
+    values_from = dummy,
+    values_fill = 0
+  )
+```
+
+Ahora unimos sinco 19 con sinco 11. Primero filtramos grupos unitarios
+
+```{r}
+sinco_19_112 <- sinco_19_11 |> 
+  filter(str_length(sinco_19) == 4) |> 
+  rename(
+    "s19_unit" = "sinco_19",
+    "s19_unit_label" = "descripcion_sinco19",
+    "s11_unit" = "sinco_11",
+    "s11_unit_label" = "descripcion_sinco11"
+  )
+```
+
+Se realiza unión
+
+```{r}
+sinco_19_112 |> 
+  left_join(sinco11_skill_pivot, by = c("s11_unit" = "s11_div")) |> 
+  select(-contains("label"))
+
+sinco19_11_skill <- sinco_19_112 |> 
+  left_join(sinco11_skill_pivot, by = c("s11_unit" = "s11_div")) |> 
+  select(-contains("label"))
+```
+
+Ahora falta anexar nivel educativo
+
+```{r}
+sinco19_11_skill |> 
+  mutate(
+    valid = skill1 + skill2 + skill3 + skill4 + skillNA 
+  ) |> 
+  count(valid)
+```
+
+Se observan que existen 26 ocupaciones con más de un nivel especificado 
+
+
+La solución sería volver a pivotar los datos, pero primero debe modificarse la tabla pivotada de sinco 11
+
+```{r}
+sinco11_c_skill |> 
+  select(s11_div, skill_level) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = skill_level,
+    values_from = skill_level,
+    names_prefix = "skill_",
+    names_sort = TRUE,
+    values_fn = length, # realiza conteo por id_col
+    values_fill = NA # rellena con NA
+  ) 
+```
+
+¿Cómo sería con educación de México?
+
+En el caso del nivel educativo inferior
+
+```{r}
+sinco11_c_skill |> 
+  distinct(s11_div, education_mex_inf) |> 
+  mutate(dummy = 1) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = education_mex_inf,
+    names_prefix = "edu_inf_",
+    names_sort = TRUE,
+    values_from = dummy
+  )
+```
+
+Para el caso del nivel educativo superior
+
+```{r}
+sinco11_c_skill |> 
+  distinct(s11_div, education_mex_sup) |> 
+  mutate(dummy = 1) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = education_mex_sup,
+    names_prefix = "edu_sup_",
+    names_sort = TRUE,
+    values_from = dummy
+  )
+```
+
+Se unen
+
+```{r}
+sinco11_edu_mex_inf <- sinco11_c_skill |> 
+  distinct(s11_div, education_mex_inf) |> 
+  mutate(dummy = 1) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = education_mex_inf,
+    names_prefix = "edu_inf_",
+    names_sort = TRUE,
+    values_from = dummy
+  )
+
+sinco11_edu_mex_sup <- sinco11_c_skill |> 
+  distinct(s11_div, education_mex_sup) |> 
+  mutate(dummy = 1) |> 
+  pivot_wider(
+    id_cols = s11_div,
+    names_from = education_mex_sup,
+    names_prefix = "edu_sup_",
+    names_sort = TRUE,
+    values_from = dummy
+  )
+
+sinco11_edu_mex_tot <- sinco11_edu_mex_inf |> 
+  full_join(sinco11_edu_mex_sup, by = "s11_div")
+
+sinco11_edu_mex_tot
+```
+
+Ahora se determina la educación requerida 
+
+El caso inferior
+
+```{r}
+sinco11_edu_mex_tot |> 
+  select(-edu_inf_NA) |> 
+  mutate(
+    inf = case_when(
+      !is.na(edu_inf_1) & is.na(edu_inf_3) & is.na(edu_inf_6) & is.na(edu_inf_7) ~ "1",
+      is.na(edu_inf_1) & !is.na(edu_inf_3) & is.na(edu_inf_6) & is.na(edu_inf_7) ~ "3",
+      is.na(edu_inf_1) & is.na(edu_inf_3) & !is.na(edu_inf_6) & is.na(edu_inf_7) ~ "6",
+      is.na(edu_inf_1) & is.na(edu_inf_3) & is.na(edu_inf_6) & !is.na(edu_inf_7) ~ "7",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(s11_div, inf)
+```
+
+El caso superior
+
+```{r}
+sinco11_edu_mex_tot |> 
+  select(-edu_sup_NA) |> 
+  mutate(
+    sup = case_when(
+      !is.na(edu_sup_2) & is.na(edu_sup_4) & is.na(edu_sup_6) & is.na(edu_sup_9) ~ "2",
+      is.na(edu_sup_2) & !is.na(edu_sup_4) & is.na(edu_sup_6) & is.na(edu_sup_9) ~ "4",
+      is.na(edu_sup_2) & is.na(edu_sup_4) & !is.na(edu_sup_6) & is.na(edu_sup_9) ~ "6",
+      is.na(edu_sup_2) & is.na(edu_sup_4) & is.na(edu_sup_6) & !is.na(edu_sup_9) ~ "9",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(s11_div, sup)
+```
+
+Se une
+
+```{r}
+df1 <- sinco11_edu_mex_tot |> 
+  select(-edu_inf_NA) |> 
+  mutate(
+    inf = case_when(
+      !is.na(edu_inf_1) & is.na(edu_inf_3) & is.na(edu_inf_6) & is.na(edu_inf_7) ~ "1",
+      is.na(edu_inf_1) & !is.na(edu_inf_3) & is.na(edu_inf_6) & is.na(edu_inf_7) ~ "3",
+      is.na(edu_inf_1) & is.na(edu_inf_3) & !is.na(edu_inf_6) & is.na(edu_inf_7) ~ "6",
+      is.na(edu_inf_1) & is.na(edu_inf_3) & is.na(edu_inf_6) & !is.na(edu_inf_7) ~ "7",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(s11_div, inf)
+
+df2 <- sinco11_edu_mex_tot |> 
+  select(-edu_sup_NA) |> 
+  mutate(
+    sup = case_when(
+      !is.na(edu_sup_2) & is.na(edu_sup_4) & is.na(edu_sup_6) & is.na(edu_sup_9) ~ "2",
+      is.na(edu_sup_2) & !is.na(edu_sup_4) & is.na(edu_sup_6) & is.na(edu_sup_9) ~ "4",
+      is.na(edu_sup_2) & is.na(edu_sup_4) & !is.na(edu_sup_6) & is.na(edu_sup_9) ~ "6",
+      is.na(edu_sup_2) & is.na(edu_sup_4) & is.na(edu_sup_6) & !is.na(edu_sup_9) ~ "9",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(s11_div, sup)
+
+df_tot <- df1 |> 
+  full_join(df2, by = "s11_div")
+```
+
+Al parecer sí está correcto, ahora puedo unir PENDIENTE VALIDAR
+
+```{r}
+sinco_19_112 |> 
+  left_join(df_tot, by = c("s11_unit" = "s11_div"))
+```
+
+Creo que ya
+
+HAY QUE VALIDAR 

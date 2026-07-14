@@ -1,0 +1,1286 @@
+---
+title: "Sobre-educación"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+# Paquetes requeridos
+
+```{r setup}
+library(tidyverse)
+# paleta de colores p. 422
+library(RColorBrewer)
+# letter value plot p. 99 (inglés)
+library(lvplot)
+# calcular la moda
+library(DescTools)
+# coeficiente de asimetría
+library(moments)
+library(EnvStats)
+
+# # 1. vivienda
+# viv <- read_csv(
+#   "enoet22025/ENOE_VIVT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# # 2. hogar
+# hog <- read_csv(
+#   "enoet22025/ENOE_HOGT225.csv",
+#   col_types = cols(.default = col_character())
+# )
+
+# 3. sociodemográfica
+sdem <- read_csv(
+  "enoet22025/ENOE_SDEMT225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 4. ocupación y empleo I
+coe1 <- read_csv(
+  "enoet22025/ENOE_COE1T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# 5. ocupación y empleo II
+coe2 <- read_csv(
+  "enoet22025/ENOE_COE2T225.csv",
+  col_types = cols(.default = col_character())
+)
+
+# segmentación
+sdem<- sdem %>% mutate(
+  # edad
+  eda = as.integer(eda),
+  # ponderador trimestral
+  fac_tri = as.double(fac_tri),
+  # ingreso mensual
+  ingocup = as.double(ingocup),
+  # promedio de ingreso por hora
+  ing_x_hrs = as.double(ing_x_hrs)
+)
+
+# grupos de edad
+sdem <- sdem %>%
+  mutate(
+    edad_7g = case_when(
+      between(eda, 0, 14) ~ "1",
+      between(eda, 15, 24) ~ "2",
+      between(eda, 25, 34) ~ "3",
+      between(eda, 35, 44) ~ "4",
+      between(eda, 45, 54) ~ "5",
+      between(eda, 55, 64) ~ "6",
+      between(eda, 65, 97) ~ "7",
+      # edad no especificada mayores a 12
+      eda == "98" ~ "98",
+      # edad no especificada menores a 12
+      eda == "99" ~ "99",
+      # NA sin comillas para valores faltantes
+      TRUE ~ NA
+    )
+  )
+
+# carreras universitarias
+sdem <- sdem %>% 
+  mutate(
+    carrera1 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera2 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    carrera3 = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+  ) %>% 
+  separate(
+    carrera1,
+    # campo amplio
+    into = c("carrera1", "res"),
+    sep = 2
+  ) %>% 
+  separate(
+    carrera2,
+    # campo específico
+    into = c("carrera2", "res"),
+    sep = 3
+  ) %>% 
+  separate(
+    carrera3,
+    # campo detallado
+    into = c("carrera3", "res"),
+    sep = 4
+  ) %>% 
+  select(-res)
+
+# grupos ocupacionales
+coe1 <- coe1 %>% 
+  mutate(
+    ocupacion1 = p3,
+    ocupacion2 = p3
+  ) %>% 
+  separate(
+    ocupacion1, 
+    into = c("ocupacion1", "res"),
+    sep = 1
+  ) %>% 
+  separate(
+    ocupacion2,
+    into = c("ocupacion2", "res"),
+    sep = 2
+  ) %>% 
+  select(-res)
+
+# población total
+pob_total <- sdem %>% 
+  filter(
+    r_def == "0",
+    # es igual a (c_res == "1" | c_res == "3")
+    c_res != "2"
+  )
+
+# población de 12 años y más
+pob_12ymas <- sdem %>% 
+  filter(
+  r_def == "0",
+  c_res != "2",
+  between(eda, 12, 98)
+  )
+
+# población de 15 años y más
+pob_15ymas <- sdem %>% 
+  filter(
+    r_def == "0",
+    c_res != "2",
+    between(eda, 15, 98)
+  )
+
+# unión de sdem y coe
+completo <- pob_12ymas %>%
+  full_join(coe1, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren")) %>%
+  full_join(coe2, by = c("tipo", "mes_cal", "ent", "con", "v_sel", "n_hog", "h_mud", "n_ren"))
+
+# profesionistas
+profesionistas <- completo %>% 
+  filter(
+    cs_p13_1 == "7" | cs_p13_1 == "8" | cs_p13_1 == "9"
+  )
+
+# jovenes
+jovenes <- completo %>% 
+  filter(edad_7g == "3")
+```
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+
+Se tratará de construir las variables asociadas a la sobre-educación.
+
+Recordemos que existen tres métodos para determinar la sobre-educación.
+
+1.  Objetivo:
+2.  Subjetivo: formal y real,
+3.  Estadístico:
+
+En primer lugar, el método objetivo se utilizó en los trabajos seminales del tema: @rumberger1981, @rumberger1987, @kikeretal1997, @zamudio1997, etc. En la actualidad, es el método que emplea la Organización Internacional del Trabajo (ILO, por sus siglas en inglés) para construir sus indicadores relacionados al desajuste educativo (*education mismatch*), por ejemplo véase @oecd2019, @ilo2021, @ilogetyouth2024 y la página web del indicador de desajuste educativo (EMI, por sus siglas en inglés): [Education and Mismatch Indicators (EMI database)](https://ilostat.ilo.org/methods/concepts-and-definitions/description-education-and-mismatch-indicators)
+
+En cuanto al subjetivo, las lecturas realizadas de @doltonysilles2001, @dipietroyurwin2006 y @capsada-munsech2017 permiten identificar dos tipos:
+
+-   Formal: se le pregunta al trabajador la educación formal requerida para *ingresar* al puesto de trabajo
+-   Real: se le pregunta al trabajador la educación formal requerida para *realizar* las actividades del puesto de trabajo
+
+Consideramos que el método subjetivo formal identifica la sobre-educación (*over-education*) mientras que el real permite identificar el problema de la sobre-habilidad (*overskilled*) que padecen ciertos egresados de distintos países.
+
+Por su parte, existen tres tipos de método estadístico:
+
+-   Media +/- 1 desviación estándar: @verdugoyverdugo1989
+-   Moda: @kikeretal1997
+-   Mediana: @zamudioeislas1999
+
+Cabe la pena señalar que @garcia-montalvoypeiro2009, @mehtaetal2011 y @quinnyrubb2006 señala otros tipos de métodos para determinar la sobre-educación. Véase @hartog2000, @grootymaassenvandenbrink2000, @rubb2003, @mcguinness2006, @garcia-montalvoypeiro2009 y @capsada-munsech2017 para ver los alcances y limitantes de cada método así como la discusión que existe al respecto.
+
+# Incidencia
+
+En la presente investigación se utilizará el método estadístico, en específico, el método de la moda o mediana ¿por qué? además de las ventajas presentadas en @kikeretal1997, refleja el resultado de una asignación (@hartog2000) para ser más exactos una asignación no eficiente (@sattinger1993). Cabe señalar que la moda o mediana se construye mediante los grupos ocupacionales.
+
+## Moda
+
+### ¿Existe una función de la moda?
+
+No existe una función nativa que calcule la moda, como función proxy está `table`, por lo que hay que instalar el paquete `DescTools`.
+
+```{r}
+# a <- system.file(package = "DescTools")
+# if (a == "") {
+#   install.packages("DescTools")
+# } else {
+#   library(DescTools)
+# }
+# system.file(package = "DescTools")
+# install.packages("DescTools")
+# library(DescTools)
+```
+
+Vamos a probar la función `Mode`.
+
+```{r}
+df <- tribble(
+  ~x, ~y, ~z,
+  #--|-----|---
+  "A", "5", "200",
+  "A", "5", "100",
+  "A", "5", "300",
+  "B", "7", "150",
+  "B", "8", "250",
+  "C", "1", "100"
+)
+
+DescTools::Mode(df$x)
+```
+
+La función `Mode` muestra tres valores: el valor que más se repite (la moda), un atributo y el número de veces que se repite.
+
+```{r}
+base::table(df$x)
+```
+
+Por su parte, la función `table` muestra los valores y el número de veces que se repite. 
+
+Cabe señalar que puede calcularse la moda con las funciones de `tidyverse`.
+
+```{r}
+df %>% 
+  count(x, sort = TRUE)
+```
+
+La cuestión es: ¿cómo asignarle la moda a una variable (columna) dentro de mutate? Quizá con la función `max`
+
+```{r}
+df %>% 
+  count(x, sort = TRUE) %>% 
+  mutate(mode = max(n))
+```
+
+Como se observa, se creo una variable que contiene la moda de las observaciones. Veamos un ejemplo práctico.
+
+```{r}
+library(datos)
+
+datos::millas
+```
+
+¿Existen valores distintos de `fabricante`?
+
+```{r}
+datos::millas %>% 
+  count(fabricante)
+```
+
+Calculemos la moda con las tres funciones:
+
+1) `Mode`
+
+```{r}
+DescTools::Mode(millas$fabricante)
+```
+2) `table`
+
+```{r}
+base::table(millas$fabricante)
+```
+3) `count` + `mutate`
+
+```{r}
+datos::millas %>% 
+  count(fabricante) %>% 
+  mutate(mode = max(n))
+```
+
+¿Si quiero conocer la observación que más se repite?
+
+```{r}
+datos::millas %>% 
+  count(fabricante) %>% 
+  filter(n == max(n))
+```
+
+Ahora, utilicemos una de las tablas creadas con datos de la ENOE: `jovenes`
+
+1) `DescTools`
+
+```{r}
+DescTools::Mode(jovenes$cs_p13_1)
+```
+
+2) `table`
+
+```{r}
+base::table(jovenes$cs_p13_1)
+```
+
+3) `count` + `mutate`
+
+```{r}
+jovenes %>% 
+  count(cs_p13_1) %>% 
+  filter(n == max(n))
+```
+
+Para seguir con el "universo" de `tidyverse` trabajaremos con la tercera opción.
+
+### Años requeridos
+
+La incidencia se debe construir dentro de cada grupo ocupacional, para fines de ejemplo se trabajará con la tabla `jovenes`.
+
+```{r}
+jovenes %>% 
+  count(ocupacion1, cs_p13_1) %>% 
+  group_by(ocupacion1) %>% 
+  filter(n == max(n))
+```
+
+Pero, debe trabajarse las ponderaciones trimestrales.
+
+```{r}
+jovenes %>% 
+  group_by(ocupacion1, cs_p13_1) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot))
+```
+
+De forma gráfica,
+
+```{r}
+jovenes %>% 
+  group_by(ocupacion1, cs_p13_1) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot)) %>% 
+  ggplot(aes(ocupacion1, cs_p13_1)) + 
+  geom_col()
+```
+
+En las ocupaciones de funcionarios, profesionistas y auxiliares en actividades administrativas la educación requerida es a nivel universitario, mientras que en los demás la educación requerida es menor hasta nivel secundaria.
+
+Otra manera
+
+```{r}
+jovenes %>% 
+  group_by(ocupacion1, cs_p13_1) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(
+    mode = cs_p13_1[tot == max(tot)]
+  ) %>% 
+  count(ocupacion1, mode) %>% 
+  select(-n)
+```
+
+Es decir, se puede añadir tanto el conteo como la observación de la moda. Ahora bien, ¿cómo añadir los años requeridos a cada observación de la muestra? Veamos un ejemplo.
+
+```{r}
+df <- tribble(
+  ~x, ~y, ~z,
+  #--|-----|---
+  "A", "5", "200",
+  "A", "5", "100",
+  "A", "5", "300",
+  "B", "7", "150",
+  "B", "8", "250",
+  "C", "1", "100"
+)
+
+df %>% 
+  group_by(x, y) %>% 
+  summarise(
+    n = n()
+  ) %>% 
+  mutate(mode = y[n == max(n)])
+```
+
+¿Qué ocurre cuando `n == 1`? Se dice que no hay moda ¿cómo señalarlo en el código?
+
+```{r}
+df %>% 
+  group_by(x, y) %>% 
+  summarise(
+    n = n()
+  ) %>% 
+  mutate(
+    mode = if_else(n > 1 & n == max(n), y, "NA")
+  )
+```
+
+Intentaremos añadir la variable a la tabla original. Lo único que se me ocurre es unir tablas.
+
+```{r}
+df_mode <- df %>%
+  group_by(x, y) %>% 
+  summarise(n = n()) %>% 
+  mutate(
+    y_mode = if_else(n > 1 & n == max(n), y, "NA")
+  ) %>% 
+  select(-(y:n))
+
+left_join(df, df_mode, by = "x")
+```
+
+Veamos otro ejemplo con `millas`.
+
+```{r}
+millas_mode <- millas %>% 
+  group_by(fabricante, traccion) %>% 
+  summarise(
+    n = n()
+  ) %>% 
+  filter(n == max(n)) %>%
+  mutate(traccion_mode = traccion) %>% 
+  select(-(traccion:n))
+
+left_join(millas, millas_mode, by = "fabricante")
+```
+
+De acuerdo a la nota de @wickham2017esp cap 3, Transformaciones agrupadas y filtros se recomienda filtrar después de agrupar si y sólo si se ha aplicado una función de resumir: "deberías usar filter() después de resumir, o usar group_by() + filter() directamente sin perder el contexto de grupo", véase las notas de Notion para más información. Entonces, se podría decir que estamos aplicando correctamente el filtro ya que se realiza después de resumir.
+
+Sigamos con la tabla `jovenes`
+
+```{r}
+jovenes_sr <- jovenes %>% 
+  group_by(ocupacion1, cs_p13_1) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot)) %>% 
+  mutate(s_r = cs_p13_1) %>% 
+  select(-(cs_p13_1:tot))
+
+# definamos nueva tabla
+jovenes2 <- left_join(jovenes, jovenes_sr, by = "ocupacion1")
+```
+
+### Incidencia
+
+Intentemos determinar la incidencia de la sobre-educación
+
+```{r}
+jov_edu_mismatch <- jovenes2 %>% 
+  mutate(
+    cs_p13_1 = as.integer(cs_p13_1),
+    s_r = as.integer(s_r),
+    edu_mismatch = case_when(
+      cs_p13_1 > s_r ~ "over",
+      cs_p13_1 < s_r ~ "under",
+      TRUE ~ "required"
+    ),
+    s_o = if_else(cs_p13_1 > s_r, cs_p13_1 - s_r, 0),
+    s_u = if_else(s_r > cs_p13_1, s_r - cs_p13_1, 0),
+  ) 
+
+jov_edu_mismatch %>% 
+  count(edu_mismatch) %>% 
+  mutate(prop = n / sum(n))
+```
+
+El 32% de los jóvenes están sobre-educados, mientras que el 45% está en una ocupación que requiere la educación que posee y el 23% está infra-educado, es decir, el puesto de trabajo requiere una mayor educación a la que tiene el individuo. 
+
+Lo que todavía no sé es si crear una variable (columna) que englobe los tres tipos de desajuste, como en el ejemplo anterior, o crear una variable para cada tipo de desajuste. De inicio, es una variable categórica en ese sentido debe estar en una sola variable.
+
+#### Por grupos ocupacionales
+
+```{r}
+jov_edu_mismatch %>% 
+  group_by(ocupacion1, edu_mismatch) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(ocupacion1, prop, fill = edu_mismatch)) + 
+  geom_col() + 
+  scale_y_continuous(
+    breaks = seq(0, 1, by = 0.1)
+  ) 
+```
+
+En los grupos ocupacionales "Trabajadores artesanales, en la construcción y otros oficios" (valor 7) y "Trabajadores en actividades elementales y de apoyo" (valor 9), se observa que alrededor del 40% de jóvenes de 25 a 34 años están sobre-educados.
+
+#### Por carreras universitarias
+
+```{r}
+jov_edu_mismatch %>% 
+  group_by(carrera1, edu_mismatch) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(carrera1, prop, fill = edu_mismatch)) + 
+  geom_col() + 
+  scale_y_continuous(
+    breaks = seq(0, 1, by = 0.1)
+  ) 
+```
+
+8 de 10 carreras universitarias tienen alrededor del 50% de jóvenes de 25 a 34 años sobre-educados, en específico la carrera de servicios (valor 10) tiene el 70% de sobre-educación.
+
+### Con `anios_esc`
+
+No obstante, también está el campo precodificado `anios_esc` que contiene los años de escolaridad. 
+
+```{r}
+jovenes %>% 
+  count(anios_esc)
+```
+
+¿Cambiarán sustancialmente los datos del desajuste educativo cuando se considere `anios_esc` y no `cs_p13_1`?
+
+```{r}
+jovenes_sr <- jovenes %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot)) %>% 
+  mutate(s_r = anios_esc) %>% 
+  select(-(anios_esc:tot))
+
+# definimos nueva tabla
+jovenes2 <- left_join(jovenes, jovenes_sr, by = "ocupacion1")
+
+jovenes_sr
+```
+
+#### Incidencia 
+
+Incidencia de la sobre-educación
+
+```{r}
+jov_edu_mismatch <- jovenes2 %>% 
+  mutate(
+    anios_esc = as.integer(anios_esc),
+    s_r = as.integer(s_r),
+    edu_mismatch = case_when(
+      anios_esc > s_r ~ "over",
+      anios_esc < s_r ~ "under",
+      TRUE ~ "required"
+    ),
+    s_o = if_else(anios_esc > s_r, anios_esc - s_r, 0),
+    s_u = if_else(s_r > anios_esc, s_r - anios_esc, 0),
+  ) 
+
+jov_edu_mismatch %>% 
+  count(edu_mismatch) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Con el campo precodificado `anios_esc` se observa una mayor proporción de jóvenes de 25 a 34 años sobre-educados (43%) con respecto a la variable `cs_p13_1` (32%).
+
+#### Por grupos ocupacionales
+
+```{r}
+jov_edu_mismatch %>% 
+  group_by(ocupacion1, edu_mismatch) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  ggplot(aes(ocupacion1, prop, fill = edu_mismatch)) + 
+  geom_col() + 
+  scale_y_continuous(
+    breaks = seq(0, 1, by = 0.1)
+  ) 
+```
+
+Por grupos ocupacionales también se observa una mayor proporción de sobre-educados, incluso en el caso de "Funcionarios, directores y jefes" (valor 1) que se encuentra alrededor del 40% con respecto al 10% con la variable `cs_p13_1`. Entonces, ¿qué variable utilizar? 
+
+## Mediana
+
+Considero que utilizar la mediana facilita el código a realizar debido a que tiene su función en `R`.
+
+### Con `cs_p13_1`
+
+```{r}
+jovenes %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(
+    s_r = median(cs_p13_1)
+  )
+```
+
+No se observa ningún cambio de los años requeridos cuando se utiliza la mediana con respecto a la moda. 
+
+#### Incidencia
+
+```{r}
+# anios requeridos
+jovenes_sr <- jovenes %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(
+    s_r = median(cs_p13_1)
+  )
+
+jovenes2 <- left_join(jovenes, jovenes_sr, by = "ocupacion1")
+
+# variable de sobre educación
+jov_edu_mismatch <- jovenes2 %>% 
+  mutate(
+    cs_p13_1 = as.integer(cs_p13_1),
+    edu_mismatch = case_when(
+      cs_p13_1 > s_r ~ "over",
+      cs_p13_1 < s_r ~ "under",
+      TRUE ~ "required"
+    ),
+    s_o = if_else(cs_p13_1 > s_r, cs_p13_1 - s_r, 0),
+    s_u = if_else(s_r > cs_p13_1, s_r - cs_p13_1, 0),
+  )
+
+# incidencia
+jov_edu_mismatch %>% 
+  count(edu_mismatch) %>% 
+  mutate(prop = n / sum(n))
+```
+
+En el caso de la moda, el porcentaje de sobre-educados jóvenes de 25 a 34 años es de 32% mientras que aquí del 25%. 
+
+### Con `anios_esc`
+
+```{r}
+jovenes %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(
+    mediana = median(anios_esc)
+  )
+```
+
+Sólo cambian los años requeridos para la ocupación "Trabajadores auxiliares en actividades administrativas" (valor 3), en el caso de la moda son `12` años requeridos mientras que aquí son `15`.
+
+#### Incidencia 
+
+```{r}
+# años requeridos
+jovenes_sr <- jovenes %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(
+    s_r = median(anios_esc)
+  )
+
+jovenes2 <- left_join(jovenes, jovenes_sr, by = "ocupacion1")
+
+# variable 
+jov_edu_mismatch <- jovenes2 %>% 
+  mutate(
+    anios_esc = as.integer(anios_esc),
+    edu_mismatch = case_when(
+      anios_esc > s_r ~ "over",
+      anios_esc < s_r ~ "under",
+      TRUE ~ "required"
+    ),
+    s_o = if_else(anios_esc > s_r, anios_esc - s_r, 0),
+    s_u = if_else(s_r > anios_esc, s_r - anios_esc, 0),
+  )
+
+# incidencia
+jov_edu_mismatch %>% 
+  count(edu_mismatch) %>% 
+  mutate(prop = n / sum(n))
+```
+
+Con `anios_esc` también disminuye la proporción de sobre-educados, aquí es del 35% mientras que con la moda es del 43%.
+
+## Media +/- desv est
+
+Por último, intentaremos determinar la incidencia con el método de @verdugoyverdugo1989. 
+
+### Años requeridos
+
+```{r}
+jovenes %>% 
+  mutate(anios_esc = as.double(anios_esc)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(
+    media = mean(anios_esc),
+    desv_std = sd(anios_esc),
+    s_r_pos = media + desv_std,
+    s_r_neg = media - desv_std
+  ) %>% 
+  select(ocupacion1, s_r_neg, media, s_r_pos)
+```
+
+Creo que para determinar la incidencia no es necesaria la variable `media` ya que: "Verdugo y Verdugo (1989) proponen considerar sobrecualificados a los trabajadores cuyos años de educación formal superan en una desviación típica a los años medios de su ocupación, e infracualificados a aquellos que se sitúan por debajo de una desviación típica de la media." (Aguilar Ramos y García Crespo, 2008, p. 397). Es decir, con que esté por encima o por debajo de una desviación estándar se considerará sobre-educado o infra-educado, respectivamente.
+
+```{r}
+# años requeridos
+jovenes_sr_vv <- jovenes %>% 
+  mutate(anios_esc = as.double(anios_esc)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(
+    media = mean(anios_esc),
+    desv_std = sd(anios_esc),
+    s_r_pos = media + desv_std,
+    s_r_neg = media - desv_std
+  ) %>% 
+  select(ocupacion1, s_r_neg, s_r_pos)
+
+jovenes2_vv <- left_join(jovenes, jovenes_sr_vv, by = "ocupacion1")
+
+# variable
+jov_edu_mis_vv <- jovenes2_vv %>% 
+  mutate(
+    anios_esc = as.integer(anios_esc),
+    edu_mismatch = case_when(
+      anios_esc > s_r_pos ~ "over",
+      anios_esc < s_r_neg ~ "under",
+      TRUE ~ "required"
+    )
+  )
+
+# incidencia
+jov_edu_mis_vv %>%
+  group_by(edu_mismatch) %>%
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Se evidencia una reducción sustancial del porcentaje de sobre-educados con el método de Verdugo y Verdugo (6%) con respecto a los demás métodos (moda 32% y mediana 25%)
+
+# Distribución de años de estudio
+
+La duda es ¿cómo es la distribución de los años de educación de los individuos? Primero se conocen los valores de la variable `cs_p13_1`.
+
+```{r}
+unique(jovenes$cs_p13_1)
+```
+
+## De `cs_p13_1`
+
+Después se grafica la distribución
+
+```{r}
+jovenes %>%
+  filter(cs_p13_1 != "99") %>% 
+  mutate(cs_p13_1 = as.integer(cs_p13_1)) %>% 
+  ggplot(aes(cs_p13_1)) + 
+  geom_freqpoly(binwidth = 1) + 
+  scale_x_continuous(
+    breaks = seq(0, 10, by = 1)
+  )
+```
+
+## De `anios_esc`
+
+```{r}
+unique(jovenes$anios_esc)
+```
+
+```{r}
+jovenes %>%
+  filter(anios_esc != "99") %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  ggplot(aes(anios_esc)) + 
+  geom_freqpoly(binwidth = 1) + 
+  scale_x_continuous(
+    breaks = seq(0, 24, by = 1)
+  )
+```
+
+## Por grupos ocupacionales
+
+¿Cuál es el coeficiente de asimetría de la distribución de años de escolaridad que poseen los jóvenes?
+
+Por grupos ocupacionales
+
+```{r}
+jovenes %>%
+  filter(anios_esc != "99") %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  ggplot(aes(anios_esc)) + 
+  geom_freqpoly(binwidth = 1) +  
+  facet_wrap(~ ocupacion1, ncol = 3)
+```
+
+En ningún caso, la distribución tiene una sola campana. ¿Lo conveniente sería determinar los años de educación requerida mediante el grupo ocupacional principal? Véase @inegisinco2019 p. 31  Trabajemos directamente con la tabla `completo`.
+
+## De la población de 15 años y más
+
+Con `anios_esc`
+
+```{r}
+completo %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  filter(anios_esc != 99) %>% 
+  ggplot(aes(anios_esc)) +
+  geom_freqpoly(binwidth = 1 ) 
+```
+
+## De la PEA
+
+```{r}
+completo %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  filter(anios_esc != 99 & clase1 == 1) %>% 
+  ggplot(aes(anios_esc)) +
+  geom_freqpoly(binwidth = 1 ) 
+```
+
+No existe ninguna diferencia al aplicar el criterio de solo la PEA. ¿Cuáles son los estadísticos descriptivos de `anios_esc`?
+
+# Estadística descriptiva
+
+Años de escolaridad con `anios_esc` 
+
+```{r}
+completo %>% 
+  filter(anios_esc != 99 & clase1 == 1) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>%
+  summarise(
+    media = mean(anios_esc),
+    mediana = median(anios_esc),
+    desv_std = sd(anios_esc)
+  )
+```
+
+Moda
+
+```{r}
+completo %>% 
+  filter(anios_esc != 99 & clase1 == 1) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>%
+  group_by(anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  filter(tot == max(tot))
+```
+
+## Por grupos ocupacionales
+
+```{r}
+anios_edu_m1 <- completo %>% 
+  filter(anios_esc != 99 & clase1 == 1) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>%
+  group_by(ocupacion1) %>% 
+  summarise(
+    media = mean(anios_esc),
+    mediana = median(anios_esc),
+    desv_std = sd(anios_esc)
+  )
+
+anios_edu_m2 <- completo %>% 
+  filter(anios_esc != 99 & clase1 == 1) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>%
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  filter(tot == max(tot))
+
+(anios_edu_mtc <- left_join(anios_edu_m1, anios_edu_m2, by = "ocupacion1") %>% 
+  select(-tot))
+```
+
+# Coeficiente de asimetría
+
+```{r}
+# system.file(package = "moments")
+# system.file(package = "EnvStats")
+# 
+# install.packages("moments", dependencies = TRUE)
+# install.packages("EnvStats", dependencies = TRUE)
+
+# library(moments)
+# library(EnvStats)
+
+# variable de años de escolaridad
+anios_edu <- completo %>% 
+  filter(anios_esc != 99) %>% 
+  transmute(anios_esc = as.integer(anios_esc))
+
+# se corrobora asignación
+# anios_edu %>% 
+# ggplot(aes(anios_esc)) + 
+#   geom_freqpoly(binwidth = 1)
+
+moments::skewness(anios_edu$anios_esc)
+EnvStats::skewness(anios_edu$anios_esc)
+```
+
+Existe un pequeño sesgo a la izquierda en la distribución de años de escolaridad con `anios_esc`. ¿Puedo hacerlo por grupos ocupacionales? En primer lugar, se valida si se puede trabajar con los verbos de `tidyverse`.
+
+```{r}
+anios_edu %>% 
+  summarise(
+    sesgo = EnvStats::skewness(anios_esc)
+  )
+```
+
+Si se puede trabajar
+
+## Por grupos ocupacionales
+
+```{r}
+completo %>% 
+  filter(anios_esc != 99) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(ocupacion1) %>% 
+  summarise(sesgo = EnvStats::skewness(anios_esc))
+```
+
+Se observa mayor sesgo negativo, principalmente en los grupos 1 y 2.
+
+Veamos de forma gráfica
+
+```{r}
+completo %>% 
+  filter(anios_esc != 99 & (ocupacion1 == 1 | ocupacion1 == 2)) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  ggplot(aes(anios_esc)) + 
+  geom_freqpoly(binwidth = 1) + 
+  facet_grid(~ ocupacion1) + 
+  scale_x_continuous(breaks = seq(0, 24, by = 2))
+```
+
+Comparando con los años requeridos por media, moda y mediana, no se observan diferencias al utilizar la mediana y la moda, excepto en el grupo 5 "Trabajadores en servicios personales y de vigilancia" lo que sobre estimará el porcentaje de individuos sobre-educados. Por otra parte, se observa una elevada proporción de individuos con años de escolaridad menor a la requerida (ya sea con la media, moda o mediana) en el grupo 1 y 2; puede deberse a que los subgrupos ocupacionales son diversos, por ejemplo, en el grupo 2 existen la ocupación 21 "Profesionistas en ciencias económico-administrativas, ciencias sociales, humanistas y en artes" y a su vez la ocupación 25 "Auxiliares y técnicos en ciencias económico-administrativas, ciencias sociales, humanistas y en artes", desde nuestro punto de vista son ocupaciones que pueden requerir años de educación requeridas diferentes por lo que se obtendrá los años de escolaridad requeridos en el grupo ocupacional principal con el método de la moda. Hagámoslo con la tabla  `jovenes` para fines comparativos.
+
+# Años requeridos con grupo principal
+
+Grupo ocupacional: división
+
+```{r}
+jovenes %>% 
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot))
+```
+
+Grupo ocupacional: principal
+
+```{r}
+# años de escolaridad requerida
+edu_req_ocu2 <- jovenes %>% 
+  group_by(ocupacion2, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot)) %>% 
+  select(-tot) %>% 
+  rename("edu_req" = "anios_esc")
+
+# variable de desajuste educativo
+edu_mis_ocu2 <-  left_join(jovenes, edu_req_ocu2, by = "ocupacion2") %>% 
+  filter(anios_esc != 99) %>%
+  mutate(
+    anios_esc = as.integer(anios_esc),
+    edu_req = as.integer(edu_req),
+    edu_mis = case_when(
+      anios_esc > edu_req ~ "over",
+      anios_esc < edu_req ~ "under",
+      TRUE ~ "required"
+    )
+  )
+```
+
+## Incidencia
+
+```{r}
+# general
+edu_mis_ocu2 %>% 
+  group_by(edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Construyendo la variable que señala el desajuste educativo mediante el grupo ocupacional principal (`ocupacion2`), se observa que la proporción de jóvenes (25 a 34 años) sobre-educados es mayor aún con el mismo método utilizado (moda), en este caso es del 40% mientras que al utilizar la variable `ocupacion1` el porcentajes es del 32%. Interesante. 
+
+Duda, ¿y si lo construyo con el grupo ocupacional de menor desagregación?
+
+# Años requeridos con grupo unitario
+
+LA variable que contiene el grupo ocupacional de menor agregación (unitario) en la tabla `jovenes` es la que viene por defecto en la fuente de datos: `p3`
+
+```{r}
+jovenes %>% 
+  select(p3)
+```
+
+Primero, ¿cuáles son los primeros momentos de años de escolaridad en cada grupo ocupacional?
+
+```{r}
+jovenes %>% 
+  filter(anios_esc != 99) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(p3) %>% 
+  summarise(
+    n = n(),
+    media = mean(anios_esc),
+    mediana = median(anios_esc),
+    desv_std = sd(anios_esc),
+    sesgo = EnvStats::skewness(anios_esc)
+  ) 
+```
+
+Moda
+
+```{r}
+jovenes %>% 
+  filter(anios_esc != 99) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(p3, anios_esc) %>% 
+  summarise(tot = sum(fac_tri.x)) %>%  
+  filter(tot == max(tot))
+```
+
+Se observan diferencias significativas cuando se compara la mediana y la moda, por ejemplo el grupo `1113` la mediana es `16` mientras que la moda es `9`. Como señalé anteriormente, parece que la moda sobre estimará el porcentaje de sobre-educados. En dichos casos, lo recomendable es tener un cuadro comparativo de los tipos de métodos. Considerar.
+
+## Moda
+
+Entonces, determino los años de educación requerido para cada ocupación con el método de la moda.
+
+```{r}
+# años de escolaridad requerida
+edu_req_p3 <- jovenes %>% 
+  group_by(p3, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+  filter(tot == max(tot)) %>% 
+  select(-tot) %>% 
+  rename("edu_req" = "anios_esc")
+
+# variable de desajuste educativo
+edu_mis_p3 <-  left_join(jovenes, edu_req_p3, by = "p3") %>% 
+filter(anios_esc != 99) %>%
+mutate(
+  anios_esc = as.integer(anios_esc),
+  edu_req = as.integer(edu_req),
+  edu_mis = case_when(
+    anios_esc > edu_req ~ "over",
+    anios_esc < edu_req ~ "under",
+    TRUE ~ "required"
+  )
+)
+
+# incidencia
+edu_mis_p3 %>% 
+  group_by(edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+El porcentaje de sobre-educados es del 38%, mientras que con el grupo ocupacional "división" es de 32%, la diferencia es de 6%. 
+
+## Mediana 
+
+Con la mediana
+
+```{r}
+# años de escolaridad requerida
+edu_req_p3 <- jovenes %>%
+  filter(anios_esc != 99) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(p3) %>% 
+  summarise(
+    edu_req = median(anios_esc)
+  )
+  
+# variable de desajuste educativo
+edu_mis_p3 <-  left_join(jovenes, edu_req_p3, by = "p3") %>% 
+mutate(
+  anios_esc = as.integer(anios_esc),
+  edu_mis = case_when(
+    anios_esc > edu_req ~ "over",
+    anios_esc < edu_req ~ "under",
+    TRUE ~ "required"
+  )
+)
+
+# incidencia
+edu_mis_p3 %>% 
+  group_by(edu_mis) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Arroja un error al momento de unir, comprobemos nuestro resultado con la mediana
+
+```{r}
+# años de escolaridad requerida
+edu_req_p3 <- jovenes %>%
+  filter(anios_esc != 99) %>% 
+  mutate(anios_esc = as.integer(anios_esc)) %>% 
+  group_by(p3) %>% 
+  summarise(
+    edu_req = median(anios_esc)
+  )
+
+edu_req_p3 %>% filter(p3 == 4201)
+```
+
+Unión
+
+```{r}
+# variable de desajuste educativo
+left_join(jovenes, edu_req_p3, by = "p3") %>% 
+  select(p3, anios_esc, edu_req) %>% 
+  mutate(
+    anios_esc = as.double(anios_esc),
+    edu_mis = case_when(
+      anios_esc > edu_req ~ "over",
+      anios_esc < edu_req ~ "under",
+      TRUE ~ "required"
+    )
+  )
+```
+
+Por fortuna, nuestro resultado es correcto. No obstante, quisiera señalar que con la mediana, el grupo `4201` "Encargados y supervisores de ventas de productos y de servicios financieros" tiene una educación requerida de 12 años equivalente a preparatoria cuando, en teoría, podría suponer una educación superior.
+
+# Utilizar los tres métodos 
+
+Ahora bien, ¿podré construir un cuadro comparativo con los tres métodos?
+
+```{r}
+# métodos: verdugo y verdugo, y mediana
+edu_req_g1 <- jovenes %>% 
+  mutate(anios_esc = as.double(anios_esc)) %>% 
+  group_by(ocupacion1) %>%
+  summarise(
+    vv_neg = mean(anios_esc) - sd(anios_esc),
+    vv_pos = mean(anios_esc) + sd(anios_esc),
+    mediana = median(anios_esc)
+  )
+
+# método: moda
+edu_req_g2 <- jovenes %>%
+  group_by(ocupacion1, anios_esc) %>% 
+  summarise(
+    tot = sum(fac_tri.x)
+  ) %>% 
+    filter(tot == max(tot)) %>% 
+    rename("moda" = "anios_esc") %>% 
+    select(-tot)
+
+# variable de desajuste
+edu_mis_g <- left_join(jovenes, edu_req_g1, by = "ocupacion1") %>% 
+  left_join(edu_req_g2, by = "ocupacion1") %>% 
+  mutate(
+    anios_esc = as.double(anios_esc), 
+    moda = as.double(moda),
+    # verdugo y verdugo
+    edu_mis_vv = case_when(
+      anios_esc > vv_pos ~ "over",
+      anios_esc < vv_neg ~ "under",
+      TRUE ~ "required"
+    ),
+    # mediana
+    edu_mis_med = case_when(
+      anios_esc > mediana ~ "over",
+      anios_esc < mediana ~ "under",
+      TRUE ~ "required"
+    ),
+    # moda
+    edu_mis_mod = case_when(
+      anios_esc > moda ~ "over",
+      anios_esc < moda ~ "under",
+      TRUE ~ "required"
+    )
+  )
+```
+
+Verdugo y Verdugo
+
+```{r}
+edu_mis_g %>% 
+  group_by(edu_mis_vv) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Mediana
+
+```{r}
+edu_mis_g %>% 
+  group_by(edu_mis_med) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Moda
+
+```{r}
+edu_mis_g %>% 
+  group_by(edu_mis_mod) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot))
+```
+
+Listo! 
+
+Se puede crear tablas y unirlas para tenerlas en una sola
+
+```{r}
+verdugo <- edu_mis_g %>% 
+  group_by(edu_mis_vv) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  rename(
+    "Tipo" = "edu_mis_vv",
+    "Media" = "prop"
+  ) %>% 
+  select(-tot)
+
+mediana <- edu_mis_g %>% 
+  group_by(edu_mis_med) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  rename(
+    "Tipo" = "edu_mis_med",
+    "Mediana" = "prop"
+  ) %>% 
+  select(-tot)
+
+moda <- edu_mis_g %>% 
+  group_by(edu_mis_mod) %>% 
+  summarise(tot = sum(fac_tri.x)) %>% 
+  mutate(prop = tot / sum(tot)) %>% 
+  rename(
+    "Tipo" = "edu_mis_mod",
+    "Moda" = "prop"
+  ) %>% 
+  select(-tot)
+
+desajuste <- left_join(verdugo, mediana, by = "Tipo") %>% 
+  left_join(moda, by = "Tipo") %>% 
+  mutate(
+    Tipo = factor(Tipo),
+    Tipo = fct_recode(
+      Tipo,
+      "Sobre-educación" = "over",
+      "Requerida" = "required",
+      "Infra-educación" = "under"
+    )
+  )
+
+desajuste 
+```
+
+Se observa que sólo el 6% de jóvenes de 25 a 34 años está sobre-educado con el método de la media, el 33% con la mediana y hasta un 41% con la moda. ¿Cómo hacerlo de forma gráfica?
+
+# Resumen
+
+* Puedo determinar la incidencia de la sobre-educación con los tres tipos de métodos estadísticos: media, mediana y moda; la moda es el que presenta mayor porcentaje de sobre-educados.
+* Puedo determinar los años de escolaridad requeridos con el grupo ocupacional de mayor agregación (división) así como en el grupo de menor agregación (unitario), con una diferencia relativa del 6%.
+* Puedo conocer los años de escolaridad individual mediante dos variables: `cs_p13_1` y `anios_esc`, aunque sugiero utilizar la segunda variable debido a que es una variable continua, además no presenta un sesgo elevado (mediante el coeficiente de asimetría) en el caso general y desagregado por grupos ocupacionales. 
+
+En línea con las sugerencias de mi director de tesis, realizaré lo siguiente:
+
+* Determinar la incidencia de la sobre-educación solamente con el método de la moda, mostraré la incidencia de forma desagregada desde el lado de la oferta (trabajadores), y no de la demanda (puestos de trabajo), ya que me interesa conocer el número (absoluto y relativo) de sobre-educados por carrera universitaria. En ese sentido, trabajaré con las variables `carrera3` y no con `ocupacion2`.
+* Determinar los años de escolaridad requeridos con el grupo de mayor agregación (división), por lo que eliminaré el valor `NA`.
+* Utilizar la variable `anios_esc` para conocer los años de escolaridad individual, por lo que transformaré dicho valor a numérico (entero o racional) y eliminaré el valor `99` ya que representa `No sabe`
+
+# Referencias

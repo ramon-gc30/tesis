@@ -1,0 +1,201 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+library(scales)
+library(writexl)
+
+source("scripts/0_funciones_v9.R")
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+jovenes_reg <- read_rds("datos/jovenes_normativo_reg.rds")
+incidencia_tot <- read_rds("datos/incidencia_tot.rds")
+incidencia_sub <- read_rds("datos/incidencia_sub.rds")
+```
+
+Se valida ingreso promedio
+
+```{r}
+calcular_descriptivos(jovenes, ingreso_mensual)
+```
+
+Nivel de ingreso
+
+```{r}
+jovenes |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  calcular_prop(ingreso_nivel)
+```
+ 
+ Incidencia
+ 
+```{r}
+incidencia_tot
+```
+ 
+ Ingreso promedio por desajuste
+ 
+```{r}
+jovenes |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(
+    n = n(),
+    tot = survey_total(vartype = NULL),
+    promedio = survey_mean(ingreso_mensual, vartype = NULL)
+  )
+```
+ 
+ Estadísticas descriptivas
+ 
+```{r}
+# continuas
+argumentos <- tribble(
+  ~datos, ~variable,
+  # ---
+  "jovenes_reg", "ingreso_mensual",
+  "jovenes_reg", "exper",
+  "jovenes_reg", "horas_lab",
+  "jovenes_reg", "edad",
+  "jovenes_reg", "anios_estudios"
+)
+
+est_descrip_jov_reg <- pmap(argumentos, calcular_descriptivos_map) |> 
+  list_rbind()
+
+# discretas
+argumentos <- tribble(
+  ~datos, ~grupo,
+  # ---
+  "jovenes_reg", "educacion",
+  "jovenes_reg", "over_obj",
+  "jovenes_reg", "under_obj",
+  "jovenes_reg", "mujer",
+  "jovenes_reg", "casada",
+  "jovenes_reg", "jefe_hogar",
+  "jovenes_reg", "regiones",
+  "jovenes_reg", "campo_amplio",
+  "jovenes_reg", "division",
+  "jovenes_reg", "pos_ocu",
+  "jovenes_reg", "sector_eco",
+  "jovenes_reg", "tamanio",
+  "jovenes_reg", "informal",
+  "jovenes_reg", "jornada",
+  "jovenes_reg", "unidad_eco"
+)
+
+prop_jov_reg <- pmap(argumentos, calcular_prop_map) |> 
+  list_rbind()
+```
+ 
+
+```{r}
+est_descrip_jov_reg
+prop_jov_reg
+```
+
+¿Exportar a CSV?
+
+```{r}
+write_csv(prop_jov_reg, "C:/Prog/tesis/datos/prop_jov_reg.csv")
+```
+
+REGRESIÓN
+
+```{r}
+model_jovenes_tot <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_tot)
+```
+
+EDUCACIÓN
+
+```{r}
+model_jovenes_edu <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_edu)
+```
+
+GÉNERO
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * mujer + educacion + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+CARRERAS EDUCATIVAS
+
+```{r}
+model_jovenes_car <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * campo_amplio + educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_car)
+```
+
+REGIONES
+
+```{r}
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * regiones + educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+CARRERAS
+
+```{r}
+incidencia_sub |> 
+  filter(gpo_lab == "campo_amplio")
+```
+
+
+```{r}
+calcular_prop_map("jovenes", "campo_amplio")
+calcular_prop_map("jovenes", "division") |> 
+  arrange(desc(prop))
+```
+
+```{r}
+0.505822999 + 0.088579316
+```
+

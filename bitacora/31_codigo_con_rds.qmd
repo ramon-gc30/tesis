@@ -1,0 +1,56 @@
+○---
+date: today
+format: html
+---
+
+Antecedentes
+
+En un inicio mi código se encontraba en un solo archivo. Posteriormente lo dividí en distintos archivos a través de funciones. Pero, al leer "Proyectos/Tesis/Propuesta para organizar scripts", leí la propuesta de Gemini de organizarlo en tres archivos:
+
+1. `preparacion_datos`
+2. `funciones`
+3. `analisis`
+
+Para lo cual debía guardar las tablas resultantes mediante `write_rds` de `tidyverse` o `saveRDS` del paquete `base`.
+
+Después de leer algo en la documentación correspondiente, intenté pasar mi código en dos archivos:
+
+1. `preparacion_datos`
+2. `funciones`
+
+En el archivo 1, al final guardé las tablas de interés mediante `write_rds`:
+
+* `pob_total`: contiene la población total
+* `pob_15ymas`: la población de 15 años y más
+* `jovenes_tot`: jóvenes de 25 a 34 años egresados de educación superior total
+* `ocupada`: población ocupada con desajuste educativo individual asignado mediante el enfoque normativo de la OIT, definida como tipo encuesta
+* `ocupada_reg`: observaciones para la regresión de la población ocupada
+* `jovenes`: población objetivo jóvenes 25-34 años egresados de educación superior ocupados con desajuste educativo individual asignado mediante el enfoque normativo de la OIT, definida como tipo encuesta
+* `jovenes_reg`: observaciones para la regresión de la población objetivo
+
+Así podré realizar
+
+* Análisis descriptivo
+* Calcular incidencia
+* Estimar efecto salarial
+
+Sin cargar todo el archivo`.R`, sólo defino la tabla correspondiente y listo. A continuación, se realiza un ejemplo
+
+```{r}
+library(tidyverse)
+
+source("C:/Prog/tesis/scripts2/funciones.R")
+jovenes_normativo <- read_rds("datos/jovenes_normativo.rds")
+```
+
+Se calcula incidencia
+
+```{r}
+calcular_incidencia_svy_tot(jovenes_normativo, edu_mismatch_obj)
+```
+
+OMG!!!! Los resultados coinciden los calculados antes de esta nueva propuesta
+
+Y aquí realizo las tablas para el análisis, en específico para el capítulo de resultados tanto para cuadros como para figuras
+
+Que eficiente!!! Sin duda alguna, esta propuesta se queda

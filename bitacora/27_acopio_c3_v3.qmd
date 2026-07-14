@@ -1,0 +1,669 @@
+---
+date: today
+---
+
+Este documento tiene como propósito ser un acopio para la versión 3 del capítulo 3 Resultados
+
+Pretendo solamente mostrar:
+
+* Análisis descriptivo
+* Incidencia general y desagregada
+* Efecto salarial
+
+En análisis descriptivo solamente mostraré las variables que utilizo en el modelo
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/26_codigo_completo_con_funciones_v12.R")
+```
+
+1. Análisis descriptivo
+
+Primero, se tiene que definir los datos como tipo survey, se copia el código de "C:/Prog/tesis/25_apoyo_c2_v3-3_muestra2.qmd"
+
+```{r}
+# jovenes_svy <- svydesign(
+#   ids = ~upm,
+#   strata = ~est,
+#   weights = ~fac_tri,
+#   nest = TRUE,
+#   data = jovenes
+# )
+```
+
+De una vez, se deja el código para la regresión
+
+```{r}
+# model_jov_svy <- svyglm(
+#   log(ingreso_mensual) ~ 
+#     educacion + over_obj + under_obj + exper + I(exper**2) + 
+#     log(horas_lab) + mujer + casada + jefe_hogar + regiones + campo_amplio +
+#     division + pos_ocu + sector_eco + tamanio + informal + 
+#     jornada + unidad_eco, 
+#   design = jovenes_svy
+# )
+```
+
+Se hace con la función `as_survey_design` para trabajar con los verbos del `tidyverse`
+
+```{r}
+jovenes_svy <- jovenes |>
+  as_survey_design(
+    ids = upm,
+    strata = est,
+    weights = fac_tri,
+    nest = TRUE
+  )
+```
+
+Se valida
+
+```{r}
+# jovenes_svy
+```
+
+Se definió de manera correcta
+
+Ahora sí, se calcula el ingreso mensual
+
+```{r}
+jovenes_svy |> 
+  summarise(
+    minimo = min(ingreso_mensual, na.rm = TRUE),
+    promedio = survey_mean(ingreso_mensual, na.rm = TRUE),
+    desv_est = survey_sd(ingreso_mensual, na.rm = TRUE),
+    maximo = max(ingreso_mensual, na.rm = TRUE)
+  )
+```
+
+Validamos la distribución
+
+```{r}
+jovenes |> 
+  ggplot(aes(ingreso_mensual)) + 
+  geom_histogram()
+```
+
+Presenta una distribución sesgada a la derecha, como el caso general
+
+¿Puede crearse una función?
+
+```{r}
+obtener_est_descriptivos <- function(datos){
+  datos_procesados <- datos |> 
+    summarise(
+      minimo = min(variable, na.rm = TRUE),
+      promedio = survey_mean(variable, na.rm = TRUE, vartype = NULL),
+      desv_est = survey_sd(variable, na.rm = TRUE),
+      maximo = max(variable, na.rm = TRUE)
+  )
+  return(datos_procesados)
+}
+```
+
+Función para gráficas
+
+```{r}
+graficar_distribucion <- function(datos){
+  datos_procesados <- datos |>
+    ggplot(aes(variable)) + 
+    geom_histogram()
+  return(datos_procesados)
+}
+```
+
+
+Se valida
+
+INGRESO MENSUAL
+
+```{r}
+jovenes_svy |>
+  mutate(variable = ingreso_mensual) |>
+  obtener_est_descriptivos()
+```
+
+```{r}
+jovenes |> 
+  mutate(variable = log(ingreso_mensual)) |>
+  graficar_distribucion()
+```
+
+
+Sí es posible
+
+AÑOS DE ESCOLARIDAD
+
+```{r}
+jovenes_svy |>
+  mutate(variable = anios_estudios) |>
+  obtener_est_descriptivos()
+```
+
+Distribución
+
+```{r}
+jovenes |> 
+  mutate(variable = anios_estudios) |>
+  graficar_distribucion()
+```
+
+EXPERIENCIA
+
+```{r}
+jovenes_svy |>
+  mutate(variable = exper) |>
+  obtener_est_descriptivos()
+```
+
+```{r}
+jovenes |> 
+  mutate(variable = exper) |>
+  graficar_distribucion()
+```
+
+HORAS
+
+```{r}
+jovenes_svy |>
+  mutate(variable = horas_lab) |>
+  obtener_est_descriptivos()
+```
+
+```{r}
+jovenes |> 
+  mutate(variable = horas_lab) |>
+  graficar_distribucion()
+
+jovenes |> 
+  mutate(variable = log(horas_lab)) |>
+  graficar_distribucion()
+```
+
+¿En qué afecta si la variable no se distribuye como una normal?
+
+Ahora vamos con las variables continuas y categóricas
+
+TOTAL DE LA MUESTRA
+
+```{r}
+jovenes_svy |> 
+  summarise(
+    n = n(),
+    tot = survey_total(vartype = NULL)  
+  )
+```
+
+
+GÉNERO
+
+```{r}
+jovenes_svy |> 
+  group_by(mujer) |>
+  summarise(
+    n = n(),
+    tot = survey_total(vartype = NULL),
+    prop = survey_prop(vartype = NULL)
+  )
+```
+
+Se crea función
+
+```{r}
+obtener_tot_svy <- function(datos){
+  datos_procesados <- datos |>
+    group_by(variable) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    )
+  return(datos_procesados)
+}
+```
+
+Se valida
+
+```{r}
+jovenes_svy |>
+  mutate(variable = mujer) |>
+  obtener_tot_svy()
+```
+
+ESTADO CONYUGAL
+
+```{r}
+jovenes_svy |>
+  mutate(variable = casada) |>
+  obtener_tot_svy()
+```
+
+PARENTESCO EN EL HOGAR
+
+```{r}
+jovenes_svy |>
+  mutate(variable = jefe_hogar) |>
+  obtener_tot_svy()
+```
+
+CARRERAS EDUCATIVAS
+
+```{r}
+jovenes_svy |>
+  mutate(variable = campo_amplio) |>
+  obtener_tot_svy()
+```
+
+REGIONES
+
+```{r}
+jovenes_svy |>
+  mutate(variable = regiones) |>
+  obtener_tot_svy()
+```
+
+DIVISIÓN
+
+```{r}
+jovenes_svy |>
+  mutate(variable = division) |>
+  obtener_tot_svy()
+```
+
+POSICIÓN EN LA OCUPACIÓN
+
+```{r}
+jovenes_svy |>
+  mutate(variable = pos_ocu) |>
+  obtener_tot_svy()
+```
+
+SECTOR ECONÓMICO
+
+```{r}
+jovenes_svy |>
+  mutate(variable = sector_eco) |>
+  obtener_tot_svy()
+```
+
+Tamaño de la unidad económica
+
+```{r}
+jovenes_svy |>
+  mutate(variable = tamanio) |>
+  obtener_tot_svy()
+```
+
+Condición de informalidad
+
+```{r}
+jovenes_svy |>
+  mutate(variable = informal) |>
+  obtener_tot_svy()
+```
+
+Duración de la jornada laboral
+
+```{r}
+jovenes_svy |>
+  mutate(variable = jornada) |>
+  obtener_tot_svy()
+```
+
+Tipo de unidad económica
+
+```{r}
+jovenes_svy |>
+  mutate(variable = unidad_eco) |>
+  obtener_tot_svy()
+```
+
+Está muy desagregado, mejor utilizo el campo `tue1`
+
+```{r}
+jovenes_svy |>
+  mutate(variable = tue1) |>
+  obtener_tot_svy()
+```
+
+Por lo tanto, 
+
+ANTES
+
+```
+# tipo de unidad económica (INEGI, 2024: 21)
+      unidad_eco = if_else(tue2 == 0, "8", tue2),
+```
+
+AHORA
+
+```
+# tipo de unidad económica (INEGI, 2024: 21)
+      unidad_eco = factor(tue1),
+```
+
+Se hace el cambio en el archivo de R que queda en "C:/Prog/tesis/scripts/26_construccion_variables_v2.R" y se modica la fuente en "C:/Prog/tesis/scripts/26_codigo_completo_con_funciones_v12.R"
+
+Ya se tienen los datos para el análisis descriptivo, ahora se procede a la incidencia
+
+INCIDENCIA
+
+Primero se define función para general
+
+```{r}
+calcular_incidencia_svy_tot <- function(datos){
+  datos_procesados <- datos |>
+    group_by(variable) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    )
+  return(datos_procesados)
+}
+```
+
+Después, para desagregada
+
+Se definen dos funciones
+
+1) Grupo por tipo de desajuste: es decir, de la población total en un nivel de la variable, desglosa cuántos presentan distintos tipos de desajuste
+
+```{r}
+calcular_incidencia_svy_sub1 <- function(datos){
+  datos_procesados <- datos |>
+    group_by(grupo, variable) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    )
+  return(datos_procesados)
+}
+```
+
+2) Tipo de desajuste por grupo: de la población total que presenta desajuste, cuántos están por valores del grupo
+
+```{r}
+calcular_incidencia_svy_sub2 <- function(datos){
+  datos_procesados <- datos |>
+    group_by(variable, grupo) |>
+    summarise(
+      n = n(),
+      tot = survey_total(vartype = NULL),
+      prop = survey_prop(vartype = NULL)
+    )
+  return(datos_procesados)
+}
+```
+
+De momento se trabajará con la función 1
+
+Se valida
+
+General
+
+```{r}
+jovenes_svy |> 
+  mutate(variable = edu_mismatch_obj) |> 
+  calcular_incidencia_svy_tot()
+```
+
+El 51% de jóvenes egresados de educación superior está sobrecalificado
+
+Género
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = mujer,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Se interpreta como sigue. Del total de mujeres, el 49.5% está sobrecalificada. Por su parte, el 52.4% de hombres está sobrecalificado
+
+Con la función 2, sería como sigue
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = mujer,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub2()
+```
+
+Del total de jóvenes sobrecalificados, el 50.5% es hombre y 49.4% es mujer
+
+¿Cómo sería con `over_obj`?
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = mujer,
+    variable = over_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Con la función 1, la interpretación es así: el 49.5% de mujeres están sobrecalificadas, mientras que el 52.4% de hombres está sobrecalificado
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = mujer,
+    variable = over_obj
+  ) |> 
+  calcular_incidencia_svy_sub2()
+```
+
+Con la función 2, del total de jóvenes sobrecalificados el 49.7% son mujeres y 50.5% son hombres
+
+De momento me interesa del total de grupo por desajuste educativo
+
+Nivel educativo
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = educacion,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Los estudios de técnico superior presentan la mayor incidencia de sobrecalificación comparado con el resto de los estudios de tipo superior. Técnico superior: 58.9%. 
+
+Se observa que la incidencia disminuye conforme aumenta el nivel educativo dado que pasa de 58.9% en técnico superior a 30.5% en doctorado. Sin embargo, de maestría a doctorado incrementa ligeramente, pasa de 28.0% a 30.5%.
+
+Del total de sobrecalificados?
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = educacion,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub2()
+```
+
+Del total de sobrecalificados, 94.8% tienen estudios de licenciatura.
+
+Carrera educativa
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = campo_amplio,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Las carreras de servicios presentan la mayor sobrecalificación con 88.8%. Seguido de Administración y negocios (4) con 63.5%. Por su parte, ciencias de la salud presenta la menor incidencia: 26%
+
+REGIONES
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = regiones,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+La región norte-occidente presenta la mayor sobrecalificación: 60%. Por su parte, la región sur presenta la menor: 46.2%
+
+Por estados
+
+```{r}
+incidencia_estatal <- jovenes_svy |> 
+  mutate(
+    grupo = ent,
+    variable = over_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+
+incidencia_estatal |> 
+  filter(variable == 1) |> 
+  mutate(grupo = as.integer(grupo)) |> 
+  arrange(desc(prop))
+```
+
+Guerrero (12), Tabasco (27) y Quintana Roo (23) presenta la mayor incidencia: 63.7%, 62.0% y 61.8%. Por su parte, CDMX, Querétaro y Nuevo León la menor: 36.8%, 43.6% y 44.7%.
+
+Ya se tiene los resultados principales de la incidencia
+
+División
+
+Aquí se hace al revés: del total de sobrecalificados ¿en qué divisiones se encuentran?
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = division,
+    variable = over_obj
+  ) |> 
+  calcular_incidencia_svy_sub2()
+```
+
+La mayoría de jóvenes sobrecalificados se encuentran en la divisón 2, 3 y 4: 20.0%, 25.6%, y 20.0%, total: 65.6%
+
+Estado conyugal
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = casada,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Falta por edad
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = edad,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+No hay una relación clara por edad
+
+Ahora se crea el archivo que contiene los resultados
+
+Parentesco en el hogar
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = jefe_hogar,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Posición en la ocupación
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = pos_ocu,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Los trabajadores sin pago presentan la mayor sobrecalificación: 88.7%
+
+Sector económico
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = sector_eco,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+El sector primario presenta la mayor sobrecalificación: 77.2%
+
+Tamaño
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = tamanio,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+Micronegocios presenta mayor sobrecalificación: 62.0%
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = informal,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = jornada,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = unidad_eco,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+
+```{r}
+jovenes_svy |> 
+  mutate(
+    grupo = ing7c,
+    variable = edu_mismatch_obj
+  ) |> 
+  calcular_incidencia_svy_sub1()
+```
+

@@ -1,0 +1,967 @@
+---
+date: today
+format: html
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(survey)
+library(srvyr)
+library(ggrepel)
+library(scales)
+
+source("scripts/0_funciones_v9.R")
+jovenes <- read_rds("datos/jovenes_normativo.rds")
+jovenes_reg <- read_rds("datos/jovenes_normativo_reg.rds")
+
+jovenes <- jovenes |> 
+  mutate(tcco2 = if_else(tcco != "0", "1", "0"))
+```
+
+Total
+
+```{r}
+calcular_total(jovenes)
+```
+
+¿POR QUÉ HAY MÁS HOMBRES OVER QUE MUJERES?
+
+% por carreras
+
+```{r}
+calcular_prop(jovenes, campo_amplio) |> 
+  arrange(desc(prop))
+```
+
+```{r}
+0.236838165	+ 0.179029392 + 0.177578498 + 0.118118777
+```
+
+% por carrera y por género
+
+```{r}
+calcular_prop_sub(jovenes, campo_amplio, mujer)
+```
+
+* 10: hombres 59.9% y mujeres 40.0%; hay más hombres
+* 04: hombres 42.8% y mujeres 57.2%; hay más mujeres
+* 08: hombres 66.9% y mujeres 33.1%; hay más hombres
+* 07: hombres 74.2% y mujeres 25.8%; hay más hombres
+* 03: hombres 40.3% y mujeres 59.7%; hay más mujeres
+* 06: hombres 73.8% y mujeres 26.2%; hay más hombres
+* 05: hombres 53.0% y mujeres 47.0%; hay más hombres
+* 02: hombres 48.7% y mujeres 51.3%; hay más mujeres
+* 01: hombres 29.2% y mujeres 70.8%; hay más mujeres
+* 09: hombres 32.7% y mujeres 67.3%; hay más mujeres
+
+En efecto, parece que hay más varones sobrecalificados por que en las carreras con mayor sobrecalificación también hay una mayor proporción de hombres que mujeres. Esto aplica para las carreras: 10, 08, 07
+
+Aunque la diferencia no es tanta, en las carreras 04 y 03 hay más mujeres que hombres
+
+Lo que resulta interesante es que persiste como una selección de carreras por género, o que en ciertas carreras persiste una fuerte presencia de varones incluso en los jóvenes:
+
+* 08 Agronomía y veterinaria
+* 07 Ingeniería, manufactura y construcción
+* 06 Tecnologías de la información y la comunicación
+
+En esas carreras hay una mayor proporción de varones, siendo la brecha de 
+
+```{r}
+# 08
+0.6692660 - 0.3307340
+
+# 07 
+0.7415653 - 0.2584347
+
+# 06
+0.7382991 - 0.2617009
+```
+
+De hasta el 48.3% en la carrera 07
+
+Por su parte, las carreras que tienen mayor % de mujeres son:
+
+* 01 Educación
+* 09 ciencias de la salud
+
+donde la diferencia es de 
+
+```{r}
+# 01 
+0.7082920 - 0.2917080
+
+# 09
+0.6727938 - 0.3272062
+```
+
+De hasta 41.7% en la carrera 01
+
+La pregunta interesante es ¿por qué? Quinn y Rubb hablaron al respecto, habrá que validar
+
+Son cuestiones netamente de decisión de carrera profesional? Restricciones a las mujeres para cursar esas carreras? porque la mayor diferencia se da en carreras relacionadas a las matemáticas
+
+De forma gráfica
+
+```{r}
+mujer_campo <- calcular_prop_sub(jovenes, campo_amplio, mujer)
+
+mujer_campo |>
+  mutate(mujer = as.character(mujer)) |>
+  ggplot(aes(campo_amplio, prop, fill = mujer)) +
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+
+# hombre_campo <- mujer_campo |> 
+#   filter(mujer == 0) |> 
+#   select(campo_amplio, prop) |> 
+#   rename("hombre" = "prop")
+# 
+# hom_over_campo <- full_join(hombre_campo, over_campo, by = "campo_amplio")
+# 
+# hom_over_campo |> 
+#   ggplot(aes(hombre, over)) + 
+#   geom_point() + 
+#   geom_smooth(method = "lm") + 
+#   geom_text_repel(aes(label = campo_amplio))
+```
+
+Correlación
+
+```{r}
+stats::cor(hom_over_campo$hombre, hom_over_campo$over)
+```
+
+
+¿Por campo especifico?
+
+```{r}
+calcular_prop_sub(jovenes, campo_espec, mujer) |> 
+  mutate(dif = prop - lag(prop))
+```
+
+Dentro de:
+
+* 08: hay más varones en agronomía y no en veterinaria,
+* 09: hay más mujeres en enfermería
+
+Interesante
+
+% over
+
+```{r}
+calcular_prop_sub(jovenes, campo_amplio, over_obj) |> 
+  filter(over_obj == 1) |> 
+  arrange(desc(prop))
+```
+
+
+¿TASA DE RETORNO DE LA EDUCACIÓN?
+
+```{r}
+jovenes_reg |> 
+  select(contains("anios"))
+```
+
+
+```{r}
+model_jovenes1 <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes1)
+```
+
+```{r}
+model_jovenes2 <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes2)
+```
+
+TÉRMINOS DE INTERACCIÓN
+
+EDUCACIÓN
+
+```{r}
+model_jovenes_edu <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * anios_estudios + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_edu)
+```
+
+La tasa de retorno de individuos sobrecalificados es 5.7% menor comparado con aquellos que no lo están. Pero la diferencia de over no es consistente con la literatura. Véase (Wooldridge, 2010: 239)
+
+Diferencia por OVER
+
+```{r}
+0.070250 - 0.056957
+```
+
+Tasa de retorno con OVER 1.3%
+
+GÉNERO
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * mujer + anios_estudios + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+CARRERAS EDUCATIVAS
+
+```{r}
+model_jovenes_car <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * campo_amplio + anios_estudios + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_car)
+```
+
+REGIONES
+
+```{r}
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * regiones + anios_estudios + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+INFORMALIDAD
+
+```{r}
+jovenes_reg <- jovenes_reg |> 
+  mutate(informal = if_else(emp_ppal == 1, 1, 0))
+
+model_jovenes_til <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj * informal + anios_estudios + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_til)
+```
+
+Con variable continua o categórica, el resultado es el mismo solo hay un efecto heterogéneo entre campos educativos.
+
+TCCO
+
+```{r}
+jovenes_reg <- jovenes_reg |> 
+  mutate(
+    tcco2 = if_else(tcco != "0", 1, 0),
+    informal = if_else(informal == "1", 1, 0)
+  )
+
+model_jovenes2 <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + tcco2 + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes2)
+```
+
+```{r}
+model_jovenes_tcco <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj * tcco2 + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_tcco)
+```
+
+
+INCIDENCIA DESDE CARACTERÍSTICAS DE OCUPACIÓN
+
+* `pos_ocu`
+* `tamanio`
+* `unidad_eco`
+* `informal`: Se refiere a la suma, sin duplicar, de las y los ocupados que son laboralmente vulnerables por la naturaleza de la unidad económica  para la que trabajan, más aquellas personas cuyo vínculo o dependencia laboral no se reconoce por su fuente de trabajo. Así, en esta tasa se incluyen —además del componente que labora en micronegocios no registrados o sector informal— otras modalidades análogas, como las y los ocupados por cuenta propia en la agricultura de subsistencia, así como a quienes laboran sin la protección de la seguridad social y cuyos servicios los utilizan las unidades económicas registradas.
+* `ingreso_nivel`
+* `sector_eco`
+* subocupación: `sub_o = 1`: Porcentaje de la población ocupada que tiene la necesidad y disponibilidad de ofertar más tiempo de trabajo de lo que su ocupación  actual le permite
+* CCO: `tcco = 1 a 3`: incluye a las personas que trabajan menos de 35 horas a la semana por razones ajenas a sus decisiones, las que trabajan más de  35 horas semanales con ingresos mensuales inferiores al salario mínimo y las que laboran más de 48 horas semanales y ganan hasta 2 salarios mínimos.
+
+
+Me quiero enfocar en: TIL1, ingreso_nivel, subocupación, y TCCO
+
+```{r}
+calcular_prop_sub(jovenes, informal, edu_mismatch_obj)
+```
+
+En efecto, el 63.1% de los que están en empleos informales están sobrecalificados
+
+De forma gráfica
+
+```{r}
+calcular_prop_sub(jovenes, informal, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(informal, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+
+```{r}
+calcular_prop_sub(jovenes, ingreso_nivel, edu_mismatch_obj)
+```
+
+De los que tienen hasta 1 salario mínimo, el 71.6% está sobrecalificado, en cambio más de 5 salarios mínimos el 34.2% lo está
+
+Gráfica
+
+```{r}
+calcular_prop_sub(jovenes, ingreso_nivel, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(ingreso_nivel, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+Subocupación
+
+```{r}
+calcular_prop_sub(jovenes, sub_o, edu_mismatch_obj)
+```
+
+De los que están subocupados, el 57.1% está sobrecalificado comparado con 50.5% que no lo está
+
+Gráfica
+
+```{r}
+calcular_prop_sub(jovenes, sub_o, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(sub_o, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+TCCO
+
+```{r}
+(df <- calcular_prop_sub(jovenes, tcco, edu_mismatch_obj))
+
+df |> 
+  select(-prop) |> 
+  mutate(tcco2 = if_else(tcco != "0", 1, 0)) |> 
+  group_by(tcco2, edu_mismatch_obj) |>
+  summarise(
+    n = sum(n),
+    tot = sum(tot)
+  ) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+El 71.0% de individuos clasificados como CCO están sobrecalificados, comparado con el 46.2% de los que no lo están  
+
+Gráfica
+
+```{r}
+calcular_prop_sub(jovenes, tcco2, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(tcco2, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+
+```{r}
+calcular_prop_sub(jovenes, pos_ocu, edu_mismatch_obj)
+calcular_prop_sub(jovenes, tamanio, edu_mismatch_obj)
+calcular_prop_sub(jovenes, unidad_eco, edu_mismatch_obj)
+calcular_prop_sub(jovenes, sector_eco, edu_mismatch_obj)
+```
+
+Trabajadores por cuenta propia 50.4%
+
+Micronegocios 62.0%
+
+Gráfica
+
+```{r}
+calcular_prop_sub(jovenes, pos_ocu, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(pos_ocu, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+
+calcular_prop_sub(jovenes, tamanio, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(tamanio, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+
+calcular_prop_sub(jovenes, unidad_eco, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(unidad_eco, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+
+calcular_prop_sub(jovenes, sector_eco, over_obj) |> 
+  mutate(over_obj = as.character(over_obj)) |> 
+  ggplot(aes(sector_eco, prop, fill = over_obj)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+
+% POR CARRERA Y POR INFORMAL
+
+```{r}
+calcular_prop_sub(jovenes, campo_amplio, informal) |> 
+  filter(informal == "1") |> 
+  arrange(desc(prop))
+# calcular_prop_sub(jovenes, campo_amplio, tamanio)
+# calcular_prop_sub(jovenes, campo_amplio, sector_eco)
+```
+
+Vamos a validar la relación
+
+```{r}
+informal_campo <- calcular_prop_sub(jovenes, campo_amplio, informal) |> 
+  filter(informal == "1") |> 
+  select(campo_amplio, prop) |> 
+  rename("informal" = "prop")
+
+over_campo <- calcular_prop_sub(jovenes, campo_amplio, over_obj) |> 
+  filter(over_obj == "1") |> 
+  select(campo_amplio, prop) |> 
+  rename("over" = "prop")
+
+inf_over_campo <- full_join(informal_campo, over_campo, by = "campo_amplio")
+
+inf_over_campo
+```
+
+Se realiza gráfica
+
+```{r}
+inf_over_campo |> 
+  ggplot(aes(informal, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = campo_amplio))
+```
+
+Se valida correlación
+
+```{r}
+cor(inf_over_campo$informal, inf_over_campo$over)
+```
+
+Indica una relación positiva, pero no tan fuerte
+
+Se agrega TCCO
+
+```{r}
+jovenes <- jovenes |> 
+  mutate(tcco2 = if_else(tcco != "0", 1, 0))
+```
+
+Se calcula TCCO
+
+```{r}
+tcco_campo <- calcular_prop_sub(jovenes, campo_amplio, tcco2) |> 
+  filter(tcco2 == 1) |> 
+  select(campo_amplio, prop) |> 
+  rename("tcco" = "prop")
+
+tcco_over_campo <- full_join(tcco_campo, over_campo, by = "campo_amplio")
+```
+
+Gráfica
+
+```{r}
+tcco_over_campo |> 
+  ggplot(aes(tcco, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = campo_amplio))
+```
+
+Se valida correlación
+
+```{r}
+cor(tcco_over_campo$tcco, tcco_over_campo$over)
+``` 
+
+Saturación?
+
+```{r}
+prop_campo <- calcular_prop(jovenes, campo_amplio) |> 
+  select(campo_amplio, prop) 
+
+over_campo <- calcular_prop_sub(jovenes, campo_amplio, over_obj) |> 
+  filter(over_obj == 1) |> 
+  select(campo_amplio, prop) |> 
+  rename("over" = "prop")
+
+prop_over_campo <- full_join(prop_campo, over_campo, by = "campo_amplio")
+
+prop_over_campo |> 
+  ggplot(aes(prop, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = campo_amplio))
+```
+
+Correlación
+
+```{r}
+cor(prop_over_campo$prop, prop_over_campo$over)
+```
+
+
+
+Por nivel educativo
+
+```{r}
+over_edu <- calcular_prop_sub(jovenes, educacion, over_obj) |> 
+  filter(over_obj == "1") |> 
+  select(educacion, prop) |> 
+  rename("over" = "prop")
+
+til1_edu <- calcular_prop_sub(jovenes, educacion, informal) |>
+  filter(informal == "1") |> 
+  select(educacion, prop) |> 
+  rename("informal" = "prop")
+
+tcco_edu <- calcular_prop_sub(jovenes, educacion, tcco2) |> 
+  filter(tcco2 == "1") |> 
+  select(educacion, prop) |> 
+  rename("tcco" = "prop")
+
+tasas_edu <- over_edu |> 
+  full_join(til1_edu) |> 
+  full_join(tcco_edu)
+```
+
+Gráfica
+
+```{r}
+tasas_edu |> 
+  ggplot(aes(informal, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = educacion))
+
+tasas_edu |> 
+  ggplot(aes(tcco, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = educacion))
+```
+
+Correlación
+
+```{r}
+stats::cor(tasas_edu$informal, tasas_edu$over)
+stats::cor(tasas_edu$tcco, tasas_edu$over)
+```
+
+Por estados
+
+```{r}
+over_ent <- calcular_prop_sub(jovenes, ent, over_obj) |> 
+  filter(over_obj == "1") |> 
+  select(ent, prop) |> 
+  rename("over" = "prop")
+
+til1_ent <- calcular_prop_sub(jovenes, ent, informal) |>
+  filter(informal == "1") |> 
+  select(ent, prop) |> 
+  rename("informal" = "prop")
+
+tcco_ent <- calcular_prop_sub(jovenes, ent, tcco2) |> 
+  filter(tcco2 == "1") |> 
+  select(ent, prop) |> 
+  rename("tcco" = "prop")
+
+tasas_ent <- over_ent |> 
+  full_join(til1_ent) |> 
+  full_join(tcco_ent)
+```
+
+Gráfica
+
+```{r}
+tasas_ent |> 
+  ggplot(aes(informal, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = ent))
+
+tasas_ent |> 
+  ggplot(aes(tcco, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = ent))
+```
+
+Correlación
+
+```{r}
+stats::cor(tasas_ent$informal, tasas_ent$over)
+stats::cor(tasas_ent$tcco, tasas_ent$over)
+```
+
+PROP CIUDADES
+
+```{r}
+calcular_prop(jovenes, cd_a) |> 
+  arrange(desc(prop))
+```
+
+
+SECTOR
+
+```{r}
+calcular_prop(jovenes, sector_eco)
+```
+
+DUDA
+
+¿Título o lugar?
+
+REGIONES
+
+```{r}
+prop_regiones <- calcular_prop_sub(jovenes, regiones, sector_eco)
+
+prop_regiones |> 
+  ggplot(aes(regiones, prop, fill = sector_eco)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+Presentan una composición sectorial medianamente estableces
+
+```{r}
+prop_regiones <- calcular_prop_sub(jovenes, regiones, tamanio)
+
+prop_regiones |> 
+  ggplot(aes(regiones, prop, fill = tamanio)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+Sur tiene 8% de jóvenes ocupados en grandes empresas, centro el 16% y la región norte el 23%
+
+Recordemos que hay una relación entre tamaño e informalidad
+
+```{r}
+prop_tamanio <- calcular_prop_sub(jovenes, tamanio, informal)
+
+prop_tamanio |> 
+  ggplot(aes(tamanio, prop, fill = informal)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+Por tanto,
+
+```{r}
+prop_regiones <- calcular_prop_sub(jovenes, regiones, informal)
+
+prop_regiones |> 
+  ggplot(aes(regiones, prop, fill = informal)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+Hasta el 40% está en empleos informales en la región sur, comparado con 25% en centro y 20% en norte
+
+```{r}
+prop_regiones <- calcular_prop_sub(jovenes, regiones, campo_amplio)
+
+prop_regiones |> 
+  ggplot(aes(regiones, prop, fill = campo_amplio)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+No existe tanta diferencia de % de campos educativos por regiones
+
+¿Al revés?
+
+```{r}
+prop_campo <- calcular_prop_sub(jovenes, campo_amplio, regiones)
+
+prop_campo |> 
+  ggplot(aes(campo_amplio, prop, fill = regiones)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+El resultado es consistente con el % por regiones donde la región centro presenta la mayor proporción
+
+```{r}
+prop_regiones <- jovenes |> 
+  group_by(regiones, campo_amplio, over_obj) |> 
+  summarise(
+    tot = survey_total(vartype = NULL),
+    prop = survey_prop(vartype = NULL)
+  )
+
+prop_regiones |> 
+  filter(over_obj == 1) |> 
+  pivot_wider(
+    id_cols = campo_amplio,
+    names_from = regiones,
+    values_from = prop
+  )
+
+
+prop_campo <- jovenes |> 
+  group_by(campo_amplio, regiones, over_obj) |> 
+  summarise(
+    tot = survey_total(vartype = NULL),
+    prop = survey_prop(vartype = NULL)
+  )
+
+prop_campo |> 
+  filter(over_obj == 1) |> 
+  pivot_wider(
+    id_cols = regiones,
+    names_from = campo_amplio,
+    values_from = prop
+  )
+```
+
+Tamaño 
+
+```{r}
+prop_campo <- calcular_prop_sub(jovenes, campo_amplio, informal)
+```
+
+
+Vayamos por divisiones
+
+```{r}
+prop_campo <- calcular_prop_sub(jovenes, division, campo_amplio)
+
+prop_campo |> 
+  ggplot(aes(division, prop, fill = campo_amplio)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+El tema no es por título, parece que por regiones 
+
+¿SEGMENTACIÓN?
+
+```{r}
+prop_division <- calcular_prop_sub(jovenes, division, informal)
+
+prop_division |> 
+  ggplot(aes(division, prop, fill = informal)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+
+prop_division <- calcular_prop_sub(jovenes, division, tcco2)
+
+prop_division |> 
+  ggplot(aes(division, prop, fill = tcco2)) + 
+  geom_col() + 
+  scale_y_continuous(breaks = breaks_width(0.1))
+```
+
+INGRESO PROMEDIO
+
+```{r}
+jovenes |> 
+  group_by(informal) |> 
+  summarise(
+    promedio = survey_mean(ingreso_mensual, na.rm = TRUE)
+  )
+
+jovenes |> 
+  group_by(over_obj) |> 
+  summarise(
+    promedio = survey_mean(ingreso_mensual, na.rm = TRUE)
+  )
+
+jovenes |> 
+  mutate(
+    over_inf = case_when(
+      over_obj == 1 & informal == 1 ~ "si_over_si_inf",
+      over_obj == 1 & informal == 0 ~ "si_over_no_inf",
+      over_obj == 0 & informal == 0 ~ "no_over_no_inf",
+      over_obj == 0 & informal == 1 ~ "no_over_si_inf",
+      TRUE ~ NA
+    )
+  ) |> 
+  group_by(over_inf) |> 
+  summarise(
+    promedio = survey_mean(ingreso_mensual, na.rm = TRUE)
+  )
+```
+
+MIGRACIÓN
+
+De acuerdo al cuestionario, las preguntas que hacen alusión a temas de migración son:
+
+* 20a: Hace un año, en  (mes) de (año), ¿en qué estado de la República o en qué país vivía ...?
+* 20b: ¿En qué municipio  (alcaldía) vivía ... hace un año?
+* 20c: ¿Por qué ... dejó  de vivir en ese  (municipio o alcaldía o país)?
+
+```{r}
+calcular_prop(jovenes, cs_p20a_1)
+calcular_prop(jovenes, cs_p20b_1)
+calcular_prop(jovenes, cs_p20c_1)
+```
+
+Menos del 5% reporta que vivó en otro estado o municipio hace un año, habrá que validar el tema de la pregunta ya que analiza migración en el último año
+
+```{r}
+calcular_prop_sub(jovenes, regiones, over_obj) |> 
+  filter(over_obj == 1)
+```
+
+DIVISIONES POR REGIONES
+
+```{r}
+prop_regiones <- calcular_prop_sub(jovenes, regiones, division)
+```
+
+Se tiene que hacer con el total de la población ocupada, pero OJO vemos solo el lado de la oferta NO la demanda ¿cómo validar u observar desde el lado de la demanda?
+
+CARRERAS ESPECÍFICAS
+
+```{r}
+prop_campo_espec <- calcular_prop_sub(jovenes, campo_espec, tcco2) |> 
+  filter(tcco2 == "1") |> 
+  select(campo_espec, prop) |> 
+  rename("tcco" = "prop")
+
+prop2_campo_espec <- calcular_prop_sub(jovenes, campo_espec, informal) |> 
+  filter(informal == "1") |> 
+  select(campo_espec, prop) |> 
+  rename("informal" = "prop")
+
+over_campo_espec <- calcular_prop_sub(jovenes, campo_espec, over_obj) |> 
+  filter(over_obj == "1") |> 
+  select(campo_espec, prop) |> 
+  rename("over" = "prop")
+
+campo_espec <- full_join(prop_campo_espec, over_campo_espec) |> 
+  full_join(prop2_campo_espec)
+```
+
+Gráfica
+
+```{r}
+campo_espec |> 
+  ggplot(aes(tcco, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = campo_espec))
+
+campo_espec |> 
+  ggplot(aes(informal, over)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text_repel(aes(label = campo_espec))
+```
+
+
+Correlación
+
+```{r}
+cor(campo_espec$tcco, campo_espec$over)
+```
+
+EFECTO POR EDAD
+
+```{r}
+jovenes_reg <- jovenes_reg |> 
+  mutate(edad = as.character(edad))
+
+model_jovenes1 <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + edad + over_obj +  
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes1)
+```
+
+Interacción
+
+```{r}
+model_jovenes2 <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + edad * over_obj +  
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes2)
+```
+
+```{r}
+model_jovenes3 <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + edad * over_obj +  
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes3)
+```
+

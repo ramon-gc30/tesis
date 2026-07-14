@@ -1,0 +1,1004 @@
+---
+date: today
+format: html
+---
+
+Este documento tiene como objetivo servir de apoyo para la escritura de la versión 3 del capítulo 3 Resultados
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/7_figuras_v2.R")
+```
+
+INCIDENCIA GENERAL
+
+```{r}
+tbl_inc_tot
+```
+
+El 50.9% de jóvenes egresados de educación superior se encuentran en ocupaciones que requieren una educación menor
+
+El 47.7% están adecuadamente emparejados.
+
+El 47.7% no presenta desajuste entre la educación que poseen y la requerida por la ocupación
+
+Los resultados muestran que 1 de cada 2 jóvenes egresados presentan desajuste educativo, es decir, la educación que poseen es distinta a la requerida por la ocupación. 
+
+Los resultados muestran que una parte considerable de jóvenes egresados presentan desajuste educativo
+
+
+POR GÉNERO
+
+```{r}
+tbl_inc_genero
+```
+
+El 49.1% de las jóvenes están adecuadamente emparejadas a la ocupación. Por su parte, el 46.2% de los hombres lo están.
+
+En cuanto a la sobrecalificación, existen más hombres sobrecalificados que mujeres. Los primeros presentan un porcentaje de 52.4%, mientras que las mujeres 49.5%
+[esta diferencia es estadísticamente significativa?]
+
+
+```{r}
+calcular_inc_svy_grp(datos_svy, edu_mismatch_obj, mujer)
+```
+
+Del total de jóvenes sobrecalificados, el 49.5% son mujeres, mientras que 50.5% son hombres. 
+
+```{r}
+tbl_est_desc_genero
+```
+
+Cabe señalar que no existe tanta diferencia de género en la composición de la muestra. Del total de observaciones, el 50.9% son mujeres y 49.1% son hombres.
+
+[Recuerda que puede obtenerse el porcentaje general, como si fuera una media ponderada, así
+
+$$
+=(\% muestra\_muj * \% over\_muj) + ( \% muestra\_hom * \% over\_hom) \\
+=\left(0.5091\ast0.495\right)+\left(0.4908\ast0.524\right) \\
+=0.509\ =\ 50.9\%
+$$
+
+Que es igual al porcentaje general
+
+Donde: $%over%$, se obtiene de grupo -> desajuste
+
+]
+
+POR EDAD
+
+```{r}
+fig_inc_edad
+```
+
+Los resultados son relativamente acordes a la evidencia sugerida por la literatura, donde el porcentaje de individuos sobrecalificados disminuye conforme aumenta la edad de la muestra.
+
+```{r}
+tbl_inc_edad
+```
+
+En ese sentido, el 56.2% de jóvenes de 25 años están sobrecalificados y en el caso de 34 años, el 50.3% lo está; una disminución del 10.5%.
+
+Sin embargo, la tendencia no es tan clara o uniforme. En algunos casos, vuelve a incrementarse el porcentaje de sobrecalificados. Por ejemplo, en la edad de 28 años existen 51.2% de sobrecalificados, pero a la edad siguiente (29 años) se incrementa hasta 54.7%, es decir, un incremento del 6.8%.
+
+```{r}
+0.503 / 0.562 - 1
+0.547 / 0.512 - 1
+```
+
+```{r}
+tbl_inc_edad |> 
+  ungroup() |> 
+  filter(edu_mismatch_obj == 1) |> 
+  mutate(variacion = prop / lag(prop) - 1)
+```
+
+En los casos donde existen mayor variación son los siguientes. De 29 a 30 años, disminuye 11.3% el porcentaje de sobrecalificados, dado que pasa de 54.7% a 48.5%.
+
+Asimismo, de 32 a 33 años también existe una reducción del 11.6% de sobrecalificados, ya que pasa de 50.4% a 44.6%.
+
+Por su parte, de 33 a 34 años se incrementa 12.7% el número de sobrecalificados, debido a que pasa de 44.6% a 50.3%. 
+
+```{r}
+tbl_inc_edad |> 
+  filter(edu_mismatch_obj == 1) |> 
+  mutate(edu_mismatch_obj = factor(edu_mismatch_obj)) |> 
+  ggplot(aes(x = edad, y = prop)) +
+  geom_point(color = "#314763", size = 3) + 
+  geom_line(color = "#314763") + 
+  geom_smooth(method = "lm")
+```
+
+Nota: no utilizo el método por defecto de `geom_smooth`, muestro el comportamiento de los datos a través de ajustarlos por MCO
+
+Ajustando los datos a un modelo de regresión lineal, se observa que en promedio el porcentaje de sobrecalificados disminuye conforme aumenta la edad del individuo.
+
+```{r}
+df <- tbl_inc_edad |> 
+  filter(edu_mismatch_obj == 1)
+
+model_inc_edad <- lm(prop ~ edad, data = df)
+summary.lm(model_inc_edad)
+```
+
+En específico, un año adicional en la edad de la muestra disminuye, en promedio, 0.9% el porcentaje de sobrecalificados, manteniendo los demás factores como constantes
+
+```{r}
+model_inc_edad$coefficients
+```
+
+```{r}
+0.009047219 * 100
+```
+
+Por lo tanto, aunque la tendencia no sea tan clara, en promedio, conforme aumenta la edad del individuo disminuye el porcentaje de sobrecalificados.
+
+No obstante, el porcentaje sigue siendo elevado el porcentaje observado es de 50.3% y el porcentaje estimado es de 47.0%, es decir, en la edad de 34 años el porcentaje de sobrecalificados, en promedio, es de 47.0%.
+
+En ambos casos, la incidencia sigue siendo considerable.
+
+```{r}
+model_inc_edad$fitted.values
+```
+
+¿Cómo es el comportamiento de la población total ocupada?
+
+Primero, se construye la tabla `general`. Por fortuna, el archivo "C:/Prog/tesis/scripts/6_cuadros_v3.R" ya está casi definida la tabla con la que deseamos trabajar. Queda pendiente definir las variables como factor y los datos como tipo survey
+
+```{r}
+general2 <- convertir_a_factor(general)
+
+general_svy <- definir_encuesta(general2)
+```
+
+Después, se calcula la incidencia general para conocer el panorama
+
+```{r}
+calcular_incidencia_svy_tot(general_svy, edu_mismatch_obj)
+```
+
+El 20.2% de la población ocupada está sobrecalificada, mientras que el 59.4% está adecuadamente emparejada.
+
+Ahora sí, se valida la incidencia por edad
+
+```{r}
+# inc_gral <- general_svy |> 
+#   filter(over_obj == 1) |> 
+#   calcular_inc_svy_des(edad, over_obj)
+```
+
+```{r}
+# inc_gral |> 
+#   ungroup() |> 
+#   summarise(tot = sum(tot))
+```
+
+Esa no es el total de la población ocupada, se valida con la incidencia general
+
+```{r}
+inc_gral <- calcular_incidencia_svy_tot(general_svy, edu_mismatch_obj)
+
+inc_gral |> 
+  summarise(tot = sum(tot))
+```
+
+Exacto! Sí son 59.4 millones. Entonces no puedo aplicar la fórmula, haré el cálculo manual
+
+```{r}
+general_svy |> 
+  summarise(tot = sum(fac_tri))
+```
+
+Sí se puede trabajar con los verbos del `tidyverse`
+
+```{r}
+inc_gral_edad <- general_svy |> 
+  group_by(edad, over_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  ungroup()
+
+inc_gral_edad |> 
+  group_by(over_obj) |> 
+  summarise(tot = sum(tot)) 
+```
+
+Se observa que sí estaba bien. El código anterio solo mostraba el total de sobrecalificados.
+
+Bueno, ahora se calcula porcentaje
+
+```{r}
+inc_gral_edad <- inc_gral_edad |> 
+  group_by(edad) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+Se grafica
+
+```{r}
+inc_gral_edad |> 
+  filter(over_obj == 1) |> 
+  mutate(over_obj = factor(over_obj)) |> 
+  ggplot(aes(x = edad, y = prop)) +
+  geom_point(color = "#314763", size = 1) + 
+  geom_line(color = "#314763") + 
+  geom_smooth(method = "lm")
+```
+
+Ajustando los datos a un modelo de regresión lineal tipo MCO, en promedio también disminuye el porcentaje de sobrecalificados. 
+
+Se valida valor extremo
+
+```{r}
+inc_gral_edad |> 
+  filter(over_obj == 1 & edad > 80)
+```
+
+El valor `97` NO indica valor no especificado. Si es una edad válida en la muestra.
+
+Por tanto, la relación entre la edad y la sobrecalificación presenta una tendencia cóncava hacia arriba donde en los primeros y últimos años de edad laboral existe una elevada proporción de individuos sobrecalificados, pero conforme posteriormente (anteriormente) disminuye dicho porcentaje
+
+```{r}
+df_2 <- inc_gral_edad |> 
+  filter(over_obj == 1)
+
+model_inc_edad_gral <- lm(prop ~ edad, data = df_2)
+
+summary.lm(model_inc_edad_gral)
+```
+
+Con datos de la población total ocupada, un aumento en la edad del individuo disminuye, en promedio, 0.3% el porcentaje de sobrecalificados.
+
+```{r}
+model_inc_edad_gral$coefficients
+```
+
+```{r}
+0.003433419 * 100
+```
+
+POR NIVEL EDUCATIVO
+
+```{r}
+tbl_inc_educacion
+```
+
+```{r}
+fig_inc_educacion
+```
+
+Los jóvenes egresados de técnico superior presentan el mayor porcentaje de sobrecalificados: 58.9%. Por su parte, los egresados de maestría presentan el menor porcentaje: 28.1%
+
+Parece que conforme aumenta el nivel educativo del individuo disminuye el porcentaje de sobrecalificados. 
+
+Para ser exactos, creo que también se observa un comportamiento cóncavo hacia arriba. Se valida con `anios_estudios`
+
+```{r}
+inc_anios_est <- calcular_inc_svy_des(datos_svy, anios_estudios, over_obj) |> ungroup()
+```
+
+Se realiza gráfica
+
+```{r}
+inc_anios_est |> 
+  filter(over_obj == 1) |> 
+  mutate(over_obj = factor(over_obj)) |> 
+  ggplot(aes(x = anios_estudios, y = prop)) +
+  geom_point(color = "#314763", size = 1) + 
+  geom_line(color = "#314763") + 
+  geom_smooth(method = "lm")
+```
+
+En efecto, en promedio disminuye la proporción de sobrecalificados conforme se incrementan los años de estudios de la muestra
+
+```{r}
+df_3 <- inc_anios_est |> 
+  filter(over_obj == 1)
+
+model_inc_anios_est <- lm(prop ~ anios_estudios, data = df_3)
+
+summary.lm(model_inc_anios_est)
+```
+
+```{r}
+model_inc_anios_est$coefficients
+```
+
+En promedio, disminuye 4.1% el porcentaje de sobrecalificados cuando aumenta un año de educación, ceteris paribus.
+
+```{r}
+0.04070593 * 100
+```
+
+¿Se puede valir por género? Quizá sí, pero sería sin la función
+
+```{r}
+datos_svy |> 
+  group_by(educacion, mujer, over_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ungroup() |> 
+  filter(over_obj == 1)
+```
+
+Espero entender bien, cuando se analiza por género. En el caso de técnico superior, el 61.4% de las mujeres están sobrecalificadas comparado con el 56.8% de los hombres. 
+
+En licenciatura: 53.8% hombres y 50.8%
+
+En maestría: 30.4% hombres y 25.8% mujeres
+
+En doctorado: 0% hombres y 43.2% mujeres
+
+Conforme aumenta el nivel educativo, disminuye el porcentaje de mujeres sobrecalificadas
+
+POR CARRERAS
+
+```{r}
+tbl_inc_carreras |> 
+  ungroup() |> 
+  filter(edu_mismatch_obj == 1) |> 
+  arrange(desc(prop))
+```
+
+```{r}
+fig_inc_carreras
+```
+
+El 88.8% de jóvenes egresados de la carrera de servicios están sobrecalificados.
+
+Este es un hallazgo impresionante. La literatura no ha mostrado algo al respecto de la carrera de servicios. La literatura ha identificado que las carreras relacionadas a ciencias sociales y economico administrativas presentaban la mayor incidencia. Parece que, como lo sospechaba, la literatura no consideró los estudios de técnico superior, es decir, a toda la educación superior. Solamente se enfocaban en los individuos con estudios profesionales (de licenciatura). ¿Cómo se puede validar?
+
+Primero, validando la composición de la distribución por nivel educativo
+
+```{r}
+datos_svy |> 
+  filter(campo_amplio == "10") |> 
+  group_by(campo_amplio, educacion) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  arrange(desc(prop))
+```
+
+Del total de individuos egresados de la carrera de servicios, el 91.1% son egresados de los estudios de licenciatura.
+
+Entonces, no. A pesar de que elimine los estudios de técnico superior, la carrera de servicios presentará la mayor incidencia. Se valida.
+
+```{r}
+datos_svy |> 
+  filter(campo_amplio == "10") |> 
+  group_by(campo_amplio, educacion, over_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot))
+```
+
+En efecto, del total de jóvenes egresados de la carrera de servicios los que tienen estudios de licenciatura, el 90.5% está sobrecalificado. Por su parte, los egresados de técnico superior el 74.4% lo está. 
+
+¿Qué campos específicos presentan mayor sobrecalificación?
+
+Primero se añade dicha variable, se intenta directamente en `jovenes`
+
+```
+datos_procesados <- datos_procesados %>% 
+    mutate(
+      campo_amplio = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c)
+    ) %>% 
+    separate(
+      campo_amplio,
+      # campo amplio a 1 dígito de CMPE
+      into = c("campo_amplio", "res"),
+      sep = 2
+    ) %>% 
+    select(-res)
+```
+
+```{r}
+df_4 <- jovenes |> 
+  mutate(
+    campo_espec = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    campo_detal = if_else(str_length(cs_p14_c) == 5, str_c("0", cs_p14_c), cs_p14_c),
+    ) %>% 
+  separate(
+    campo_espec,
+      # campo específico a 2 dígitos de CMPE
+      into = c("campo_espec", "res"),
+      sep = 3
+    ) %>% 
+  separate(
+    campo_detal,
+      # campo detallado a 3 dígitos de CMPE
+      into = c("campo_detal", "res"),
+      sep = 4
+    ) %>%
+  select(-res)
+```
+
+Se calcula incidencia
+
+```{r}
+df_6 <- df_4 |> 
+  group_by(campo_espec, over_obj) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ungroup() |>
+  filter(over_obj == 1) |> 
+  arrange(desc(prop))
+
+df_6
+```
+
+Los campos específicos que presentan mayor sobrecalificación son:
+
+* 101 servicios profesionales y deportes: 90.9%
+* 104: servicios de seguridad: 90.0%
+* 081: agronomía, horticultura, silvicultura y pesca: 73.7%
+
+Por su parte, las que presentan menor incidencia:
+
+* 091: ciencias médicas: 9.3%
+* 103: seguridad para el trabajo: 10.2%
+* 053 Matemáticas y estadística: 18.2%
+
+¿Cuántos están por encima de la incidencia general?
+
+```{r}
+df_5 <- tribble(
+  ~campo_espec, ~over_obj, ~tot, ~prop,
+  "general", 1, 1, 0.509449336
+)
+
+df_6 |> 
+  add_row(df_5) |> 
+  filter(prop >= prop[campo_espec == "general"])
+
+df_6 |> 
+  add_row(df_5) |> 
+  filter(prop <= prop[campo_espec == "general"])
+```
+
+12 carreras son superior a la incidencia general.
+
+Mientras que 17 son menores a la incidencia general
+
+Por último,
+
+```{r}
+df_4 |> 
+  group_by(campo_espec, over_obj, campo_detal) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+Del total de sobrecalificados:
+
+De las carreras con mayor sobrecalificación:
+
+101
+
+* El 57.0% son de 1015 gastronomía y servicios
+* 25.9% de 1016 Hospitalidad y turismo
+* 15.0% de 1013 Servicios de cuidado personal y belleza
+
+104
+
+* 96.6% de 1041 Seguridad pública
+
+081
+
+* 89.8% de 0811 Producción y explotación agrícola y ganadera
+
+Del total sin sobrecalificación:
+
+De las carreras con menor sobrecalificación:
+
+091 
+
+* 84.2% de 0911 Medicina general
+
+053
+
+* 55.0% de 0531 Matemáticas
+* 45.0% de 0532 Estadística y actuaría
+
+Si Salas Velasco menciona que las carreras de habilidades específicas presentan menor probabilidad de desajuste vertical y horizontal, ¿por qué las carreras de servicios presentan la mayor incidencia?
+
+POR REGIONES
+
+```{r}
+tbl_inc_regiones |> 
+  filter(edu_mismatch_obj == 1)
+```
+
+Me percate que tenía asignado incorrectamente los valores que identifica cada región del país
+
+El cambio se hace en "C:/Prog/tesis/scripts/3_construccion_variables_v2.R" y se guardan en "C:/Prog/tesis/scripts/3_construccion_variables_v3.R". Asimismo, se modifica "C:/Prog/tesis/scripts/6_cuadros_v3.R" el cambio de archivo. Se vuelve a ejecutar todo el código de este archivo
+
+Después de aplicar los cambios. Se observa que la región sur presenta la mayor incidencia: 59.9%. Mientras que la región centro la menor incidencia: 46.2%.
+
+POR ESTADOS
+
+```{r}
+tbl_inc_estados |> 
+  filter(edu_mismatch_obj == 1) |> 
+  arrange(desc(prop))
+```
+
+```{r}
+fig_inc_estados
+```
+
+Los estados que presentan mayor incidencia:
+
+* 12 Guerrero: 63.7%
+* 27 Tabasco: 62.0%
+* 23 Quintana Roo: 61.8%
+
+Por su parte, los que presentan menor incidencia:
+
+* 9 CDMX: 36.8%
+* 22 Querétaro: 43.6%
+* 19 Nuevo Léon: 44.7%
+
+¿Cuántos están por encima o por debajo de la incidencia general?
+
+```{r}
+df_7 <- tribble(
+  ~ent, ~edu_mismatch_obj, ~n, ~tot, ~prop,
+  "general", 1, 1, 1, 0.509449336
+)
+
+tbl_inc_estados |> 
+  ungroup() |> 
+  add_row(df_7) |> 
+  filter(edu_mismatch_obj == 1) |> 
+  filter(prop >= prop[ent == "general"])
+
+tbl_inc_estados |> 
+  ungroup() |> 
+  add_row(df_7) |> 
+  filter(edu_mismatch_obj == 1) |> 
+  filter(prop <= prop[ent == "general"])
+```
+
+23 estados tienen una incidencia mayor a la general y 9 por debajo
+
+Parece existir una relación entre las condiciones laborales precarias y la sobrecalificación por entidad federativa, pero ¿cómo validarlo?
+
+* Tasa de condiciones críticas de ocupación TCCO
+* Tasa de informalidad laboral 1 TIL1
+
+Pero, ¿qué es TCCO?
+
+Se investigo en internet: https://www.inegi.org.mx/contenidos/saladeprensa/boletines/2026/iooe/IOE2026_01.pdf p. 9
+
+Además, de las tasa mencionadas existen:
+
+* Tasa de presión general
+* Tasa de subocupación
+
+A continuación, se definen
+
+Tasa de presión general: 
+
+"... la tasa es una medida global de la competencia por plazas de trabajo que se conforma por quienes quieren trabajar; por quienes tienen un empleo, pero quieren cambiarlo; y por quienes buscan
+otro más para tener un segundo trabajo."
+
+Tasa de subocupación:
+
+"Constituye a la población ocupada que tiene la necesidad y disponibilidad de ofertar más tiempo de trabajo de lo que su ocupación actual le permite."
+
+Tasa de condiciones críticas de ocupación:
+
+"Indicador de condiciones inadecuadas de empleo desde el punto de vista del tiempo de trabajo, los ingresos o una combinación insatisfactoria de ambos. Incluye a las personas que trabajan
+menos de 35 horas a la semana por razones ajenas a sus decisiones, a quienes trabajan más de 35 horas semanales con ingresos mensuales inferiores al salario mínimo y a quienes laboran más de 48 horas semanales y que ganan hasta dos salarios mínimos"
+
+Tasa de informalidad laboral 1:
+
+"Se refiere a la suma, sin duplicar, de las y los ocupados que son laboralmente vulnerables por la naturaleza de la unidad económica para la que trabajan, más aquellas personas cuyo vínculo o
+dependencia laboral no se reconoce por su fuente de trabajo. En esta tasa se incluyen —además del componente que labora en micronegocios no registrados o sector informal— otras modalidades análogas, como las y los ocupados por cuenta propia en la agricultura de
+subsistencia, así como a quienes laboran sin la protección de la seguridad social y cuyos servicios los utilizan las unidades económicas registradas"
+
+Es decir,
+
+* TPG: refiere competencia por puestos de trabajo
+* TSUB: indica cuántas personas quieren trabajar más tiempo
+* TCCO: condición del trabajo medido en tiempo de trabajo e ingreso percibido
+* TIL1: trabajadores vulnerables o que la empresa no los reconoce como tal
+
+Me interesa TCCO y TIL1, establezco que las características de la ocupación se relacionan con la sobrecalificación, es decir, en los estados donde existe una mayor tasa crítica de ocupación hay mayor incidencia y viceversa. 
+
+Vamos a empezar con TCCO
+
+De acuerdo a (INEGI, 2023) se calcula así
+
+$$
+TCCO = PCCO / PO * 100
+$$
+
+Donde
+
+$PCCO$: Población en Condiciones Críticas de Ocupación (TCCO=1 a 3)
+
+$PO$: Población Ocupada (Clase2=1)
+
+Primero, vamos a calcular la tasa general para lo cual ocuparemos la tabla `ocupada`
+
+```{r}
+ocupada |> 
+  count(tcco) 
+```
+
+Entonces, se seleccionan los valores distintos a 0.
+
+```{r}
+ocupada |> 
+  count(clase2)
+```
+
+Se me ocurre a partir de aplicar filtro en `summarise`
+
+```{r}
+ocupada |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  summarise(
+    pcco = sum(fac_tri[tcco != "0"]),
+    po = sum(fac_tri),
+    tcco = pcco / po 
+  )
+```
+
+Se valida con "https://www.inegi.org.mx/contenidos/saladeprensa/boletines/2025/enoe/enoe2025_08.pdf"
+
+Los resultados se aproximan mucho. En el informe aparece una tasa de 32.5% y aquí de 32.2%
+
+Ahora se procede a crear la función
+
+```{r}
+calcular_tcco <- function(datos, ponderador){
+  datos |> 
+    summarise(
+    pcco = sum({{ ponderador }}[tcco != "0"]),
+    po = sum({{ ponderador }}),
+    tcco = pcco / po 
+  )
+}
+```
+
+Se valida
+
+```{r}
+ocupada |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  calcular_tcco(fac_tri)
+```
+
+Ahora se hace a nivel estatal
+
+```{r}
+ocupada |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  group_by(ent) |> 
+  summarise(
+    pcco = sum(fac_tri[tcco != "0"]),
+    po = sum(fac_tri),
+    tcco = pcco / po
+  )
+```
+
+Está correcto!!
+
+Ahora se unen
+
+```{r}
+tcco_estados <- ocupada |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  group_by(ent) |> 
+  summarise(
+    pcco = sum(fac_tri[tcco != "0"]),
+    po = sum(fac_tri),
+    tcco = pcco / po
+  )
+```
+
+Se valida tipos de datos en `tbl_inc_estados`
+
+```{r}
+glimpse(tbl_inc_estados)
+```
+
+Se unen
+
+```{r}
+tcco_estados_over <- tbl_inc_estados |> 
+  filter(edu_mismatch_obj == 1) |> 
+  left_join(tcco_estados, by = "ent")
+```
+
+Se grafica
+
+```{r}
+tcco_estados_over |> 
+  ggplot(aes(tcco, prop)) + 
+  geom_point() + 
+  geom_smooth() +
+  geom_text_repel(aes(label = ent))
+```
+
+Sin establecer ningún tipo de relación, a priori, establecido por defecto en `geom_smooth`. Se observa un comportamiento casi lineal.
+
+Se calcula coeficiente de correlación
+
+```{r}
+stats::cor(tcco_estados_over$tcco, tcco_estados_over$prop)
+```
+
+Es del 38.2%, que indica una relación positiva
+
+Ahora vayamos con las demás tasas. Me interesa la tasa de informalidad 1. Se calcula así
+
+$$
+TIL1 = POI / PO
+$$
+
+Donde
+
+$PO$: población en Ocupación Informal (EMP_PPAL=1)
+
+$PO$: Población Ocupada (Clase2=1)
+
+Se calcula TIL1 general
+
+```{r}
+ocupada |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  summarise(
+    poi = sum(fac_tri[emp_ppal == "1"]),
+    po = sum(fac_tri),
+    til1 = poi / po
+  )
+```
+
+Está correcto
+
+Se calcula a nivel estatal
+
+```{r}
+# solo para TIL1
+calcular_til1_estados <- function(datos, grupo, ponderador){
+  datos |> 
+    mutate(ponderador = as.double({{ ponderador }})) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      poi = sum(ponderador[emp_ppal == "1"]),
+      po = sum(ponderador),
+      til1 = poi / po
+    )
+}
+
+# Obtener tasa en general
+calcular_t_ocup_gpo <- function(datos, grupo, ponderador, poblacion, condicion, valor){
+  # concateno
+  filtro <- paste(poblacion, condicion, valor)
+  
+  datos |> 
+    mutate(ponderador = as.double({{ ponderador }})) |> 
+    group_by({{ grupo }}) |> 
+    summarise(
+      numerador = sum(ponderador[ !!parse_expr(filtro) ]),
+      denominador = sum(ponderador),
+      tasa = numerador / denominador
+    )
+}
+
+crear_fig_tasa_vs_over <- function(datos, grupo, tasa, prop){
+  datos |> 
+    ggplot(aes({{ tasa }}, {{ prop }})) + 
+    geom_point() + 
+    geom_smooth() +
+    geom_text_repel(aes(label = {{ grupo }}))
+}
+```
+
+Se valida
+
+TIL1
+
+```{r}
+til1_estados <- calcular_t_ocup_gpo(ocupada, ent, fac_tri, "emp_ppal", "==", "1")
+```
+
+Sí se pudo!!!
+
+Se une
+
+```{r}
+til1_estados_over <- tbl_inc_estados |> 
+  filter(edu_mismatch_obj == 1) |> 
+  left_join(til1_estados, by = "ent")
+
+crear_fig_tasa_vs_over(til1_estados_over, ent, tasa, prop)
+```
+
+Existe una mejor relación
+
+```{r}
+stats::cor(til1_estados_over$tasa, til1_estados_over$prop)
+```
+
+```{r}
+unir_tbl_tasa_over <- function(datos1, datos2, llave){
+  datos1 |> 
+    filter(edu_mismatch_obj == 1) |> 
+    left_join(datos2, by = join_by({{  llave  }}))
+}
+```
+
+Se valida
+
+```{r}
+unir_tbl_tasa_over(tbl_inc_estados, til1_estados, ent)
+```
+
+De momento me quedo con las dos tasas calculadas:
+
+* TCCO
+* TIL1
+
+```{r}
+tcco_estados_over
+til1_estados_over
+```
+
+Por último, vamos a realizar una regresión múltiple con dichas tasas
+
+```{r}
+estados_tasas_over <- tcco_estados_over |> 
+  full_join(til1_estados_over, by = "ent") |> 
+  select(ent, prop.x, tcco, tasa) |> 
+  rename(
+    "over" = "prop.x",
+    "til1" = "tasa"
+  )
+
+model_estados_t_over <- lm(over ~ tcco + til1, data = estados_tasas_over)
+
+summary.lm(model_estados_t_over)
+```
+
+TCCO no es significativa!!! Se elimina del modelo y se vuelve a estimar
+
+```{r}
+model_estados_t_over <- lm(over ~ til1, data = estados_tasas_over)
+
+summary.lm(model_estados_t_over)
+```
+
+```{r}
+model_estados_t_over$coefficients
+```
+
+El modelo explica el 30.4% de la variabilidad de los datos (R-Cuadrada).
+
+Por otra parte, el coeficiente tiene un nivel de confianza del 99%, siendo estadísticamente significativo.
+
+Indica que, un aumento del 1% de la tasa de informalidad laboral 1 (TIL1) incrementa, en promedio, el porcentaje de sobrecalificación un 26.3% de jóvenes egresados en el estado $i$
+
+Se validan valores predichos
+
+```{r}
+model_estados_t_over$fitted.values
+```
+
+Parece que, la incidencia de la sobrecalificación a nivel estatal está relacionado a la estructura del mercado laboral de dicho estado. En estados caracterizados por mayor vulnerabilidad de los trabajadores presentan los mayores niveles de incidencia de sobrecalificación. 
+
+En ese sentido,
+
+```{r}
+datos_svy |> 
+  calcular_inc_svy_des(informal, over_obj)
+```
+
+Los jóvenes ubicados en la informalidad presentan mayor incidencia: 63.1% comparado con 46.4% aquellos que no lo están.
+
+También se valida la relación entre % individuos con educación superior y % sobrecalificados.
+
+Para lo cual, vamos a trabajar con `general2`
+
+```{r}
+estados_prop_edu_sup <- general2 |> 
+ group_by(ent, educacion) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  ungroup() |> 
+  mutate(
+    educacion = as.integer(educacion),
+    valid_edu_sup = if_else(between(educacion, 6, 9), 1, 0)
+  ) |> 
+  group_by(ent) |>
+  summarise(
+    edu_sup = sum(tot[valid_edu_sup == 1], na.rm = TRUE), 
+    tot = sum(tot)
+  ) |> 
+  mutate(prop = edu_sup / tot)
+```
+
+Ahora se une con la tabla creada previamente: `estados_tasas_over`
+
+```{r}
+estados_tasas_over2 <- estados_prop_edu_sup |> 
+  select(ent, prop) |> 
+  rename("edu_sup" = "prop") |> 
+  full_join(estados_tasas_over, by = "ent")
+```
+
+Se valida la gráfica
+
+```{r}
+crear_fig_tasa_vs_over(estados_tasas_over2, ent, edu_sup, over)
+```
+
+Se observa una relación negativa, en los estados que presentan mayor porcentaje de individuos con educación superior presentan la menor incidencia en jóvenes
+
+se calcula coeficiente de correlación
+
+```{r}
+cor(estados_tasas_over2$edu_sup, estados_tasas_over2$over)
+```
+
+Es una relación digamos algo "fuerte"
+
+Se valida regresión
+
+```{r}
+model_estados_t_over2 <- lm(over ~ tcco + til1 + edu_sup, data = estados_tasas_over2)
+
+summary.lm(model_estados_t_over2)
+```
+
+Las tasas ya no son significativas, se quitan del modelo
+
+```{r}
+model_estados_t_over2 <- lm(over ~ edu_sup, data = estados_tasas_over2)
+
+summary.lm(model_estados_t_over2)
+```
+
+Ya me confundí con la interpretación, y si lo convierto a porcentaje?
+
+```{r}
+df_8 <- estados_tasas_over2 |> 
+  mutate(
+    edu_sup = edu_sup * 100,
+    over = over * 100,
+    tcco = tcco * 100,
+    til1 = til1 * 100
+  )
+
+model_df8 <- lm(over ~ edu_sup, data = df_8)
+
+summary.lm(model_df8)
+```
+
+```{r}
+df_8 
+
+model_df8$coefficients
+model_df8$fitted.values
+```
+
+
+```{r}
+plot(model_estados_t_over2)
+```
+
+
+Por último,
+
+```{r}
+datos_svy |> 
+  filter(!is.na(ingreso_mensual)) |> 
+  group_by(edu_mismatch_obj) |> 
+  summarise(promedio = survey_mean(ingreso_mensual))
+```
+

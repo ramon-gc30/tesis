@@ -1,0 +1,511 @@
+---
+title: "Tesis"
+format: 
+  pdf:
+    pdf-engine: xelatex # asegurar el motor
+    latex-auto-install: true # permite descargar paquetes faltantes
+---
+
+```{r}
+#| label: setup
+#| echo: true
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(modelsummary)
+library(datos)
+library(knitr)
+library(scales)
+```
+
+Ahora se trabajará con el paquete `modelsummary`
+
+Primero, hagamos una regresión
+
+```{r}
+diamantes2 <- diamantes |> 
+  mutate(
+    corte = factor(corte, ordered = FALSE),
+    color = factor(color, ordered = FALSE),
+    claridad = factor(claridad, ordered = FALSE)
+  ) 
+
+modelo <- lm(log(precio) ~ log(quilate), data = diamantes2)
+summary.lm(modelo)
+``` 
+
+Se observa que primero se le quito el factor con orden para que la regresión considerará variables categóricas ($n- 1$) y no ordinal.
+
+Ahora veamos la función
+
+```{r}
+# ?modelsummary
+```
+
+La función permite crear tablas de resúmenes de modelos tipo `summary.lm` pero más bonitas. Intentemos así sola
+
+```{r}
+# modelsummary::modelsummary(modelo)
+```
+
+En `output` se especifica el tipo de formato de tabla que tendrá, la IA sugiere `output = "kableExtra"`
+
+```{r}
+# modelsummary::modelsummary(
+#   modelo
+#   output = "latex"
+# )
+```
+
+Creo que arroja problemas al especificar `output = latex` por lo que nos quedamos con `output = "kableExtra"`.
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  escape = FALSE
+)
+```
+
+El argumento `fmt` especifica cuántos dígitos aparecerán después del punto decimal, si solo se pone un número cambia los coeficientes y los errores estándar
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  escape = FALSE
+)
+```
+
+`fmt_significant`: indica cuántos dígitos quedan después del decimal, pero parece que siempre considera 2 dígitos después del decimal 
+
+```{r}
+# modelsummary::modelsummary(
+#   modelo,
+#   output = "kableExtra",
+#   fmt = fmt_significant(1),
+#   escape = FALSE
+# )
+```
+
+No veo diferencias con `fmt_decimal`, bueno sí `digits` modifica los decimales de los coeficientes y `pdigits` de los p values 
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = fmt_decimal(digits = 4, pdigits = 4),
+  escape = FALSE
+)
+```
+
+Entiendo que `fmt_term` modifica valores especificos de los coeficientes señalados
+
+`fmt_statistics` modifica los decimales de los estadísticos del modelo
+
+```{r}
+# modelsummary::modelsummary(
+#   modelo,
+#   output = "kableExtra",
+#   fmt = fmt_statistic("r.squared" = 4),
+#   escape = FALSE
+# )
+```
+
+Se observa que `fmt_statistics(default = 5)` no tiene ningún cambio
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  # fmt = fmt_statistic(default = 5),
+  escape = FALSE
+)
+```
+
+`estimate` modifica la visualización de los estimadores
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = NULL,
+  estimate = "{estimate} ({std.error}) {stars}",
+  escape = FALSE
+)
+```
+
+`stars` especifica el nivel de significancia marcado con asteriscos
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  stars = TRUE,
+  escape = FALSE
+)
+```
+
+`coef_map`: permite modificar el nombre de las variables del modelo
+
+`coef_omit`: permite omitir coeficientes de variables especificadas
+
+`coef_rename` permite modificar el nombre de las variables [validar junto con `coef_map`]
+
+`gof_map`: permite renombrar, reordenar y omitir estadísticos del modelo
+
+`gof_omit`: omite estadísticos del modelo, no elimina los estadísticos señalados
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  stars = TRUE,
+  gof_omit = "AIC",
+  escape = FALSE
+)
+```
+
+Según la IA, ya puede entrar las funciones de `kableExtra`
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  # estimate = "{estimate} {stars}",
+  stars = TRUE,
+  gof_omit = "AIC",
+  # notes = "\\\\textit{Nota:} Errores estándar entre paréntesis.",
+  escape = FALSE
+) |>
+  kableExtra::kable_styling(
+    position = "center"
+  )
+  # kableExtra::footnote(
+  #   general = "\\\\textit{Nota:} Errores estándar entre paréntesis. * p < .05, ** p < .01, *** p < .001.",
+  #   general_title = "",
+  #   escape = FALSE
+  # )
+```
+
+Como se observa, aparece la nota abajo de la tabla y también la especificada en `footnote`. Se valida la documentación y la única forma de solucionarlo, es especificando `estimate = "{estimate} {stars}`. 
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  estimate = "{estimate} {stars}",
+  stars = TRUE,
+  gof_omit = "AIC",
+  escape = FALSE
+) |>
+  kableExtra::kable_styling(
+    position = "center"
+  ) |>
+  kableExtra::footnote(
+    general = "\\\\textit{Nota:} errores estándar entre paréntesis. + p < 0.1, * p < .05, ** p < .01, *** p < .001.",
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+Ya entendí! `statistics` muestra el estadístico debajo del coeficiente, por defecto muestra el error estándar.
+
+Puede hacerse lo siguiente: mostrar los errores estándar a lado del coeficiente 
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  estimate = "{estimate} ({std.error}) {stars}",
+  statistic = NULL,
+  # stars = TRUE,
+  # got_omit = "AIC",
+  escape = FALSE
+) |>
+  kableExtra::kable_styling(
+    position = "center"
+  ) |>
+  kableExtra::footnote(
+    general = "\\\\textit{Nota:} errores estándar entre paréntesis. + p < 0.1, * p < .05, ** p < .01, *** p < .001.",
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+Se observa que ya es innecesario el argumento `stars`.
+
+Se observa el funcionamiento de `gof_omit`
+
+```{r}
+modelsummary::modelsummary(
+  modelo,
+  output = "kableExtra",
+  fmt = 4,
+  estimate = "{estimate} ({std.error}) {stars}",
+  statistic = NULL,
+  gof_omit = "AIC|BIC|Log",
+  escape = FALSE
+) |>
+  kableExtra::kable_styling(
+    position = "center"
+  ) |>
+  kableExtra::footnote(
+    general = "\\\\textit{Nota:} errores estándar entre paréntesis. + p < 0.1, * p < .05, ** p < .01, *** p < .001.",
+    general_title = "",
+    escape = FALSE
+  )
+```
+
+El único tema pendiente es renombrar la columna ¿cómo se puede hacer?
+
+Arroja este error al momento de renderizar
+
+```
+ERROR: 
+compilation failed- error
+Package siunitx Error: Invalid number '\num {8.449}'.
+
+For immediate help type H <return>.
+ ...                                              
+                                                  
+l.486 (Intercept) & \num{\num{8.449}}
+                                     \\
+
+The input '\num {8.449}' could not be parsed as a number following the format
+defined in module documentation.
+
+
+ 
+
+see 21_tablas_con_kableExtra3.log for more information.
+WARN: Error encountered when rendering files
+```
+
+¿Por qué?
+
+Al parecer hay problemas con `fmt_statistic` ya quedó solucionado, también el problema se presenta con `fmt_significant` ¿por qué?
+
+El único pendiente es modificar los encabezados de cada columna ¿cómo? la documentación señala 
+
+```
+options(modelsummary_model_labels = "roman")
+
+options(modelsummary_model_labels_term = "Parameter")
+
+options(modelsummary_model_labels_group = "Group")
+
+options(modelsummary_model_labels_model = "Model")
+```
+Pero lo que quiero es cambiarla para un caso particular, ¿cómo?
+
+Según IA de Google, se realiza así
+
+```
+library(modelsummary)
+mod1 <- lm(mpg ~ hp, data = mtcars)
+mod2 <- lm(mpg ~ hp + cyl, data = mtcars)
+
+# Los nombres en la lista serán los nombres de las columnas
+modelsummary(list("Modelo A" = mod1, "Modelo B" = mod2))
+```
+
+Ejemplo
+
+```{r}
+modelsummary::modelsummary(
+  list("Modelo" = modelo),
+  output = "kableExtra"
+)
+```
+
+De igual modo, los coeficiente se cambian de nombre así
+
+```{r}
+coef_name <- c(
+  # nombre_actual = nuevo_nombre
+  "(Intercept)" = "Intercepto",
+  "log(quilate)" = "Quilate"
+)
+
+modelsummary::modelsummary(
+  list("Modelo" = modelo),
+  output = "kableExtra",
+  coef_map = coef_name
+)
+```
+
+
+Por lo que nuestro ejemplo final queda así
+
+```{r}
+#| label: tbl-regresion
+#| tbl-cap: "Resultados de la regresión"
+#| tbl-cap-location: top
+#| tbl-pos: "h"
+
+# regresión
+modelo <- lm(log(precio) ~ log(quilate), data = diamantes2)
+
+# renombrar variables
+coef_name <- c(
+  # nombre_actual = nuevo_nombre
+  "(Intercept)" = "Intercepto",
+  "log(quilate)" = "Quilate"
+)
+
+modelsummary::modelsummary(
+  # renombra columna
+  list("Resultados" = modelo),
+  # salida PDF
+  output = "kableExtra",
+  # cuatro decimales
+  fmt = 4,
+  # muestra coeficiente, error estándar y significancia
+  estimate = "{estimate} ({std.error}) {stars}",
+  # renombra variables
+  coef_map = coef_name,
+  # omite estadísticos
+  gof_omit = "AIC|BIC|Log",
+  align = "ll"
+) |> 
+  kableExtra::kable_styling(
+    # posiciona al centro
+    position = "center"
+  ) |> 
+  kableExtra::footnote(
+    # añade pie de página
+    general = "\\\\textbf{Nota:} errores estándar entre paréntesis. + p < 0.1, * p < .05, ** p < .01, *** p < .001.",
+    general_title = "",
+    # no omite escapes 
+    escape = FALSE
+  )
+```
+
+Los resultados de la regresión se muestran en @tbl-regresion.
+
+El único pendiente es añadir salto de línea en la nota de la tabla. Añadiendo `\\\\` arroja error y con `\\\\newline` no se realiza ningún cambio.
+
+Al validar con IA Gemini, sugiere pasarlo a tipo vector
+
+```{r}
+#| label: tbl-regresion2
+#| tbl-cap: "Resultados de la regresión 2"
+#| tbl-cap-location: top
+#| tbl-pos: "h"
+
+# regresión
+modelo <- lm(log(precio) ~ log(quilate), data = diamantes2)
+
+# renombrar variables
+coef_name <- c(
+  # nombre_actual = nuevo_nombre
+  "(Intercept)" = "Intercepto",
+  "log(quilate)" = "Quilate"
+)
+
+# nota al pie de página en forma de vector
+nota <- c(
+  "\\\\textbf{Nota:}",
+  "Errores estándar entre paréntesis,",
+  "+ p < 0.1, * p < .05, ** p < .01, *** p < .001."
+)
+
+modelsummary::modelsummary(
+  # renombra columna
+  list("Resultados" = modelo),
+  # salida PDF
+  output = "kableExtra",
+  # cuatro decimales
+  fmt = 4,
+  # muestra coeficiente, error estándar y significancia
+  estimate = "{estimate} ({std.error}) {stars}",
+  # renombra variables
+  coef_map = coef_name,
+  # omite estadísticos
+  gof_omit = "AIC|BIC|Log",
+  align = "ll"
+) |> 
+  kableExtra::kable_styling(
+    # posiciona al centro
+    position = "center"
+  ) |> 
+  kableExtra::footnote(
+    # añade pie de página
+    general = nota,
+    general_title = "",
+    # no omite escapes 
+    escape = FALSE
+  )
+```
+
+Listo! Ya quedó
+
+La plantilla queda como sigue
+
+```
+#| label: tbl-etique 
+#| tbl-cap: "Título"
+#| tbl-cap-location: top # ubicación tabla
+#| tbl-pos: "h" # posiciona debajo del código
+
+# renombrar variables
+coef_name <- c(
+  # nombre_actual = nuevo_nombre
+  "(Intercept)" = "Intercepto",
+  "variable1" = "nuevo_nombre"
+)
+
+# nota al pie de página en forma de vector
+nota <- c(
+  "\\\\textbf{Nota:}",
+  "Errores estándar entre paréntesis,",
+  "+ p < 0.1, * p < .05, ** p < .01, *** p < .001."
+)
+
+modelsummary::modelsummary(
+  # renombra columna
+  list("nuevo_nombre" = modelo), # donde "modelo" es la regresión
+  # salida PDF
+  output = "kableExtra",
+  # cuatro decimales
+  fmt = 4,
+  # muestra coeficiente, error estándar y significancia
+  # en la misma fila
+  # si se quiere separado 
+  # estimate = "{estimate} {stars}"
+  estimate = "{estimate} ({std.error}) {stars}",
+  # renombra variables
+  coef_map = coef_name,
+  # omite estadísticos
+  gof_omit = "AIC|BIC|Log",
+  # alinea a la izquierda ambas columnas
+  align = "ll"
+) |> 
+  kableExtra::kable_styling(
+    # posiciona al centro
+    position = "center"
+  ) |> 
+  kableExtra::footnote(
+    # añade pie de página
+    general = nota,
+    general_title = "",
+    # no omite escapes 
+    escape = FALSE
+  )
+```
+
+Se observa que el flujo es el siguiente
+
+1. `kableExtra::kbl`: formato de la tabla
+2. `kableExtra::kable_styling`: posición de la tabla
+3. `kableExtra::footnote`: nota al pie de la tabla
+
+Por ejemplo, para el caso de la tabla ancha del capítulo 2 puede crearse en formato csv exportarse y después modificarse bajo ese flujo

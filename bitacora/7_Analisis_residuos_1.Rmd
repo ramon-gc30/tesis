@@ -1,0 +1,294 @@
+---
+title: "Análisis de los residuos"
+output: html_notebook
+bibliography: references.bib
+---
+
+# Introducción
+
+Este documento es la continuación de:
+
+1.  C:/Prog/tesis/1_Primeros_pasos.Rmd
+2.  C:/Prog/tesis/INEGI-2023_Conociendo-ENOE.Rmd
+3.  C:/Prog/tesis/2_Analisis_exploratorio_datos1.Rmd
+4.  C:/Prog/tesis/3_Limpieza_datos.Rmd
+5.  C:/Prog/tesis/4_Panorama_jovenes.Rmd
+6.  C:/Prog/tesis/5_Sobre-educacion.Rmd
+7.  C:/Prog/tesis/5_Sobre-educacion_2.Rmd
+8.  C:/Prog/tesis/5_Sobre-educacion_3.Rmd
+9.  C:/Prog/tesis/5_Sobre-educacion_4.Rmd
+10. C:/Prog/tesis/5_Sobre-educacion_5.Rmd
+11. C:/Prog/tesis/6_Efecto_salarial_1.Rmd
+12. C:/Prog/tesis/6_Efecto_salarial_2.Rmd
+
+El objetivo es verificar que los residuos cumplan con los supuestos clásicos del modelo de regresión:
+
+1. Media cero
+2. Homocedasticidad: misma varianza
+3. No correlación
+4. Independencia lineal 
+
+# Instalación
+
+Según [Chat GPT](https://chatgpt.com/s/t_690cff8c2f808191bcd4f8a034615540), se deben instalar los siguientes paquetes:
+
+```{r}
+# gráficos
+# system.file(package = "performance")
+# system.file(package = "car")
+# install.packages("performance", dependencies = TRUE)
+# install.packages("car", dependencies = TRUE)
+
+# test de normalidad
+# system.file(package = "stats")
+# system.file(package = "nortest")
+# system.file(package = "moments")
+
+# test de homocedasticidad
+# system.file(package = "lmtest")
+# system.file(package = "car")
+
+# test de autocorrelación
+# system.file(package = "lmtest")
+
+# diagnóstico global
+# system.file(package = "performance")
+# system.file(package = "see")
+# install.packages("see", dependencies = TRUE)
+
+library(tidyverse)
+library(performance)
+library(car)
+library(stats)
+library(nortest)
+library(moments)
+library(lmtest)
+library(see)
+```
+
+# Paquete `gujarati`
+
+Se utilizará los datos que muestra Arias-García(2021) para realizar el ejemplo. Cabe señalar que el autor extrajó los datos de Gujarati, según [brunoruas](https://github.com/brunoruas2/gujarati) existe un paquete que contiene dichos datos. Vamos a validar. 
+
+```{r}
+# system.file(package = "devtools")
+# install.packages('devtools')
+library(devtools)
+devtools::install_github('https://github.com/brunoruas2/gujarati')
+```
+
+De acuerdo con Arias-García(2021), los datos provienen de la tabla 3-2
+
+```{r}
+# system.file(package = "gujarati")
+library(gujarati)
+
+gujarati::Table3_2
+```
+
+Sí se encuentran los datos en el paquete `gujarati` (Pd. me encanta R). Realicemos la regresión. Pero primero, cambiemos el tipo de variable de factor a númerico.
+
+# Segmentar variables
+
+```{r}
+df <- as_tibble(gujarati::Table3_2)
+
+df %>% 
+  transmute(
+    obs = as.integer(obs),
+    salario = as.double(Mean.Hourly.Wage),
+    escolaridad = as.double(Years.of.Schooling)
+  )
+```
+
+Como se observa, al momento de convertir de factor a número los valores no coinciden ¿por qué?
+
+Después de leer la sección de convertir de factor a número, regresando a nuestro ejemplo:
+
+```{r}
+df <- as_tibble(gujarati::Table3_2)
+
+df %>% 
+  transmute(
+    obs = as.integer(levels(obs))[obs],
+    salario = as.double(levels(Mean.Hourly.Wage))[Mean.Hourly.Wage],
+    escolaridad = as.integer(levels(Years.of.Schooling))[Years.of.Schooling]
+  )
+```
+
+Ahora ya coincide.
+
+```{r}
+df <- as_tibble(gujarati::Table3_2)
+
+df <- df %>% 
+  transmute(
+    obs = as.integer(levels(obs))[obs],
+    salario = as.double(levels(Mean.Hourly.Wage))[Mean.Hourly.Wage],
+    escolaridad = as.integer(levels(Years.of.Schooling))[Years.of.Schooling]
+  )
+```
+
+# Regresión
+
+```{r}
+modelo <- lm(salario ~ escolaridad, data = df)
+summary.lm(modelo)
+```
+
+# Análisis gráfico
+
+## Gráficos base de R
+
+```{r}
+par(mfrow = c(2, 2))
+plot(modelo)
+```
+
+## Con `ggplot2` y `performance`
+
+```{r}
+performance::check_model(modelo)
+```
+
+## QQ plot manual con `ggplot`
+
+```{r}
+ggplot(data.frame(res = resid(modelo)), aes(sample = res)) +
+  stat_qq() + 
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot de los residuos")
+```
+
+## Individual
+
+### Normalidad
+
+#### Histograma
+
+```{r}
+hist(modelo$residuals, prob = TRUE)
+lines(density(modelo$residuals))
+```
+
+#### QQ plot manual con `plot`
+
+```{r}
+plot(modelo, 2)
+```
+
+### Homocedasticidad
+
+```{r}
+par(mfrow = c(1, 2))
+plot(modelo, 1)
+plot(modelo, 3)
+```
+
+## Autocorrelación
+
+```{r}
+par(mfrow = c(1, 2))
+plot(modelo, 1)
+plot(modelo, 3)
+```
+
+# Pruebas estadísticas
+
+## Normalidad
+
+```{r}
+# Shapiro-Wilk
+shapiro.test(resid(modelo))
+```
+
+```{r}
+# Anderson-Darling
+nortest::ad.test(resid(modelo))
+```
+
+```{r}
+# Jarque-Bera
+moments::jarque.test(resid(modelo))
+```
+
+## Homocedasticidad
+
+```{r}
+# Breusch-Pagan
+lmtest::bptest(modelo)
+```
+
+```{r}
+# Test de varianza no constante ¿?
+car::ncvTest(modelo)
+```
+
+## Autocorrelación
+
+```{r}
+# Durbin-Watson
+lmtest::dwtest(modelo)
+```
+
+# ¿Cómo interpretar las pruebas estadísticas?
+
+## Normalidad
+
+* Shapiro-Wilk: $H_0$: los residuos se distribuyen normalmente,
+* Anderson-Darling: $H_0$: los residuos se distribuyen normalmente,
+* Jarque-Bera: $H_0$: los residuos se distribuyen normalmente
+
+## Homocedasticidad
+
+* Breusch-Pagan: $H_0$ varianza constante (homocedasticidad) en los residuos
+* Varianza no constante $H_0$ homocedasticidad
+
+## No autocorrelación
+
+* Durbin-Watson $H_0$: no hay autocorrelación de primer orden
+
+## p-value
+
+Recuerda:
+
+* Si `p-value` < 0.05 se rechaza la hipótesis nula ($H_0),
+* Si `p-value` > 0.05 no se rechaza la hipótesis nula ($H_0),
+
+# ¿Cómo convertir un factor a número con `mutate`?
+
+```{r}
+# library(dplyr)
+
+# Crear un data frame de ejemplo
+df2 <- tibble(
+  mi_factor = factor(c("100", "200", "300", "100", "200"))
+  # mi_otro_factor = factor(c("X", "Y", "X", "Z", "Y"))
+)
+
+# Método 1: Usar los niveles del factor para obtener los valores numéricos correctos
+df2 <- df2 %>%
+  mutate(mi_entero = as.numeric(levels(mi_factor))[mi_factor])
+
+# Si quieres convertir a entero asegurando que el resultado no tenga decimales,
+# puedes usar la función `as.integer()` después de la conversión a numérico.
+df2 <- df2 %>%
+  mutate(mi_entero_2 = as.integer(as.numeric(levels(mi_factor))[mi_factor]))
+
+
+# Método 2: Usar `as.numeric()` directamente (esto dará los códigos internos del factor)
+# A menudo no es lo que se desea porque devuelve los índices internos (por ejemplo, 1, 2, 3)
+# en lugar de los valores numéricos correspondientes.
+(df2 <- df2 %>%
+  mutate(mi_entero_con_indice = as.numeric(mi_factor)))
+```
+
+# Referencias
+
+Arias-García, A. (2021, junio 6). R: Análisis de Residuos. totumat. <https://totumat.com/2021/06/04/r-analisis-de-residuos>
+
+Chat GPT. Entrada: "Hola! Una pregunta! ¿Cómo puedo hacer el análisis de los residuos en R? Tanto de forma gráfica como a través de pruebas estadísticas. ¿Puedes señalarme los paquetes requeridos y más?" <https://chatgpt.com/s/t_690cff8c2f808191bcd4f8a034615540>
+
+Chat GPT. Entrada: "¿me puedes decir la hipótesis nula de cada prueba estadística, por favor? en forma matemática y explicada en palabras"  <https://chatgpt.com/s/t_690d17c3cd84819189290b73baf63540>
+
+brunoruas2. gujarati. Github. <https://github.com/brunoruas2/gujarati>

@@ -1,0 +1,189 @@
+---
+date: today
+format: html
+---
+
+Este documento pretenderá recabar los datos para la versión 3 del C3-1
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+source("scripts/1_importacion_v12.R")
+source("scripts/2_construccion_tablas_v14.R")
+source("scripts/3_construccion_variables_v4.R")
+source("scripts/4_metodologia_v1.R")
+source("scripts/5_calcular_incidencia_v4.R")
+```
+
+¿Cuántos jóvenes 25-34 años egresados de educación superior hay en el país? ¿Cuánto representa de la población total?
+
+Primero, se construyen las variables y se define educación en términos de CINE-11
+
+NOTA: creo que debo separar las funciones de análisis descriptivo a incidencia
+
+```{r}
+pob_total |> 
+  mutate(fac_tri = as.double(fac_tri)) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(tot = scales::comma(tot))
+```
+
+En el segundo trimestre de 2025, hay 130.6 millones de habitantes en el país
+
+
+```{r}
+pob_total_proc <- pob_total |> 
+  mutate(
+      edad = as.integer(eda),
+      # 98 y 99 indican edad no especificada
+      # se convierten a NA para evitar errores de cálculo en exper
+      edad = if_else(edad == 98 | edad == 99, NA, edad),
+      # para crear grupo de jóvenes 25-34 años OECD(2019: 135) 
+      # y comparar incidencia por grupos de edad
+      edad_7g = case_when(
+        between(edad, 0, 14) ~ "1",
+        between(edad, 15, 24) ~ "2",
+        between(edad, 25, 34) ~ "3",
+        between(edad, 35, 44) ~ "4",
+        between(edad, 45, 54) ~ "5",
+        between(edad, 55, 64) ~ "6",
+        between(edad, 65, 97) ~ "7",
+        # edad no especificada mayores a 12 INEGI(2024:16)
+        edad == "98" ~ "98",
+        # edad no especificada menores a 12 INEGI(2024:16)
+        edad == "99" ~ "99",
+        # NA sin comillas para valores faltantes
+        TRUE ~ NA
+      ),
+      fac_tri = as.double(fac_tri)
+  )
+
+pob_total_proc |> 
+  group_by(edad_7g) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  ) |> 
+  mutate(
+    prop = tot / sum(tot),
+    tot = scales::comma(tot)
+  )
+```
+
+Hay 18.6 millones de jóvenes de 25 a 34 años que representa el 14.2% de la población total
+
+Ahora vayamos por nivel educativo, para lo cual se considera carrera técnica como de tipo superior y definido en términos de CINE-11
+
+```{r}
+pob_total_proc <- pob_total_proc |> 
+  mutate(
+    # años de escolaridad (INEGI, 2024: 25)
+      anios_estudios = as.integer(anios_esc),
+      # 99 indica no especificado, se convierte a NA
+      anios_estudios = if_else(anios_estudios != 99, anios_estudios, NA),
+      # nivel escolar
+      educacion = as.integer(cs_p13_1),
+      # 99 pasa a NA para evitar 99 - edu_req
+      educacion = if_else(educacion != 99, educacion, NA),
+      # 5 pasa a 7 ambos son estudios profesionales
+      educacion = if_else(educacion == 5, 7, educacion),
+      # cambian los valores de cs_p15 para que coincidan con cs_p13_1
+      edu_previa = case_when(
+        # primaria
+        cs_p15 == "1" ~ 2,
+        # secundaria
+        cs_p15 == "2" ~ 3,
+        # preparatoria
+        cs_p15 == "3" ~ 4,
+        TRUE ~ NA
+      ),
+      # si reporta estudios previos de secundaria en carrera técnica
+      # se le asigna estudios de preparatoria (LGE, Art 47; LGES, Art 3)
+      educacion = if_else(educacion == 6 & edu_previa == 3, 4, educacion),
+      educacion = case_when(
+        # si no concluyó sus estudios y reporta educación previa
+        # se le asigna el nivel reportado en cs_p15 
+        cs_p16 == "2" & !is.na(edu_previa) ~ edu_previa,
+        # si no concluyó sus estudios y no reporta educación previa
+        # doctorado baja a maestría
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 9 ~ 8,
+        # maestría baja a licenciatura
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 8 ~ 7,
+        # licenciatura baja a preparatoria
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 7 ~ 4,
+        # carrera técnica baja a preparatoria
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 6 ~ 4,
+        # normal baja a preparatoria
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 5 ~ 4,
+        # preparatoria baja a secundaria
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 4 ~ 3,
+        # secundaria baja a primaria 
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 3 ~ 2,
+        # primaria baja a preescolar
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 2 ~ 1,
+        # preescolar baja a ninguna
+        cs_p16 == "2" & is.na(edu_previa) & educacion == 1 ~ 0,
+        # si concluyó se le asigna el nivel educativo reportado
+        TRUE ~ educacion
+      )
+  )
+```
+
+Se calcula cifras
+
+```{r}
+pob_total_proc |> 
+  group_by(educacion) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(
+    tipo_edu = case_when(
+      between(educacion, 0, 1) ~ "0",
+      between(educacion, 2, 3) ~ "1",
+      educacion == 4 ~ "2",
+      between(educacion, 6, 9) ~ "3",
+      TRUE ~ NA
+    )
+  ) |> 
+  group_by(tipo_edu) |> 
+  summarise(tot = sum(tot)) |> 
+  mutate(
+    prop = tot / sum(tot),
+    tot = scales::comma(tot)
+  )
+```
+
+18 millones de mexicanos cuentan con educación superior que representa el 13.8% de la población total mexicana
+
+
+¿Cómo es la distribución de edad de la población total?
+
+```{r}
+pob_total_proc |> 
+  group_by(edad) |> 
+  summarise(tot = sum(fac_tri)) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  ggplot(aes(edad, prop)) + 
+  geom_col()
+```
+
+Se tiene que trabajar con la población legar para trabajar, es decir, de 15 años y más, contenida en la tabla `pob_15ymas`. 
+
+Se realiza en un nuevo documento, cabe señalar que las funciones para realizar el análisis descriptivo se separó de "C:/Prog/tesis/scripts/5_calcular_incidencia_v4.R" y se guardó en "C:/Prog/tesis/scripts/5-1_funciones_analisis_descriptivo_v5.R"
+
+Primero, se hace el cálculo del diagrama 1 de (INEGI, 2025: 2) para validar que los resultados son correctos
+
+Se intentará definir como encuesta compleja
+
+```{r}
+# pob_15ymas_svy <- pob_15ymas |> 
+#   mutate(fac_tri = as.double(fac_tri)) |> 
+#   definir_encuesta()
+```
+
+
+

@@ -1,0 +1,229 @@
+---
+date: today
+format: html
+---
+
+A partir de los datos obtenidos en "C:/Prog/tesis/31_c3_v3_analisis_descrip_6.qmd", se realizará un acopio de ideas para realizar la sección 3-1 V3.
+
+## General
+
+En el segundo trimestre de 2025, la población de 15 años y más es de 102.6 millones de los cuales hay 5.4 millones de jóvenes de 25 a 34 años egresados de educación superior que representa el 5.2% de la población de 15 años y más.
+
+De la población de 15 años y más, hay 18.6 millones de jóvenes de 25 a 34 años que representa el 18.1%. Asimismo, hay 18.0 millones de individuos egresados de educación superior que representa el 17.6% de la población de 15 años y más.
+
+De la población de 15 años y más, hay un total de 5.4 millones de jóvenes de 25 a 34 años egresados de educación superior.
+
+De los cuales, el 86.5% (4.7 millones) se encuentra económicamente activo (PEA) mientras que el 13.5% (0.7 millones) no lo está (PNEA). 
+
+De los jóvenes de 25 a 34 años egresados de educación superior económicamente activos, hay 4.5 millones ocupados y 0.2 millones de desocupados. 
+
+Por tanto, existe una tasa de ocupación del 95.7% y una tasa de desocupación del 4.3%. 
+
+Por su parte, a nivel nacional o agregado se registra una tasa de ocupación del 97.3% y una tasa de desocupación del 2.7%.
+
+En ese sentido, la tasa de desocupación en jóvenes egresados es relativamente mayor que la tasa nacional
+
+```{r}
+4.3 - 2.7
+```
+
+Es aproximadamente superior  1.6 puntos porcentuales
+
+De la población desocupada, el 89.3% tiene experiencia y el 10.7% no.
+
+Asimismo, el 55.3% reporta que perdió o terminó su empleo anterior. El 39.5% se encuentra desocupada debido a insatisfacción con el empleo anterior y solamente el 2.7% dejó o cerró un negocio propio 
+
+Del lado de la PNEA, el 15.4% está en estatus de disponible mientras que el 84.6% no lo está
+
+Asimismo, de la población desocupada el 37.5% lleva más de un mes hasta tres meses desocupado, el 28.9% lleva hasta un mes, y el 20.8% más de tres hasta seis meses.
+
+En el lado de la población disponible, el 93.5% no busca empleo por considerar que no tiene posibilidades. Mientras que el 6.5% ha desistido de buscar empleo.
+
+En cuanto a la población no disponible, el 77.8% no tiene interés en trabajar por atender otras obligaciones. Mientras que el 12.5% está con interés para trabajar, pero bajo un contexto que le impide hacerlo.
+
+
+Por último:
+
+* Tasa de participación: 86.5%
+* TCCO: 19.0% (población ocupada)
+* TIL1: 27.1% (población ocupada)
+
+La tasa de participación de los jóvenes es muy superior a la nacional
+
+```{r}
+86.5 - 59.5
+```
+
+Para ser exactos, es 27 puntos porcentuales superior
+
+Asimismo, también existe una menor cantidad de jóvenes egresados ocupados en condiciones críticas de ocupación comparado con la nacional
+
+```{r}
+32.5 - 19
+```
+
+Por su parte, también hay una menor cantidad de jóvenes egresados en la informalidad con respecto a la nacional
+
+```{r}
+54.8 - 27.1
+```
+
+En términos generales, los jóvenes egresados parecen no presentar tantos problemas en el mercado laboral, excepto el tema de la desocupación 
+
+La pregunta interesante es:
+
+* Comparado con jóvenes de distinta educación, ¿la tasa de desocupación de jóvenes con educación superior es mayor o menor?
+
+* Comparado con individuos con educación superior, ¿la tasa de desocupación en jóvenes es mayor o menor?
+
+## Por género
+
+De jóvenes egresados de educación superior, hay 3.0 millones de mujeres (55.3%) y 2.4 millones de hombres
+
+De las jóvenes egresadas, el 61.2% no tiene hijos, el 36.0% tiene de 1 a 2 hijos, el 2.7% de 3 a 5 hijos, y menor del 1% tiene de 6 a más hijos
+
+En cuanto a la composición de PEA y PNEA, existen diferencias por género: el 94.8% de los jóvenes son PEA comparado con el 79.8% de las jóvenes
+
+No existen diferencias en la tasa de ocupación y desocupación por género. La tasa de ocupación de hombres es del 95.9% y el de mujeres de 95.6%. Mientras que la tasa de desocupación es de 4.1% y 4.4%, respectivamente.
+
+Con respecto a la PNEA, el 29.8% de los hombres están disponibles comparado con el 12.4% de las mujeres. Asimismo, el 70.2% de los hombres no están disponibles comparado con el 87.6% de las mujeres ¿Por qué?
+
+En cuanto a la PNEA disponible, no existen diferencias significativas. Por ejemplo, de la población disponible para trabajar que han desistido de buscar empleo hay 7.3% hombres y 6.1% mujeres. Mientras que de la población disponible para trabajar que no buscan empleo por considerar que no tienen posibilidades hay 92.7% y 93.9%, en ese orden.
+
+De la PNEA no disponible, sí existen diferencias por género. De la población sin interés para trabajar por atender otras obligaciones hay 59.3% de hombres comparado con 80.9% mujeres. 
+
+Asimismo, de la población con interés para trabajar, pero bajo un contexto que le impide hacerlo. Hay 3.2% y 14.0%, en ese orden.
+
+Al validar la población de jóvenes no disponibles por el número de hijos, se observa que la población con interés para trabajar, pero bajo un contexto que le impide hacerlo varía según el número de hijos. Hay un 10.3% de las mujeres que no tienen hijos, comparado con un 16.0% de mujeres que tienen de 1 a 3 hijos y 20.1% que tienen de 3 a 5 hijos.
+
+Parece existir una cierta relación en el número de hijos y el interés en trabajar pero no pueden por el contexto
+
+
+## OCUPADA
+
+Ahora el análisis se centrará en la población objetivo: jóvenes de 25 a 34 años egresados de educación superior ocupados.
+
+### Por sector económico
+
+El 78.5% de la población ocupada se encuentra ocupada en el sector terciario (servicios), seguido de 19.2% en el sector secundaria y sólo un 1.4% en el primario.
+
+De la población ocupada en el sector secundario, el 74.7% está en la industria manufacturera, el 19.7% en la industria de la construcción, y el 5.5% en la industria, extractiva y de la electricidad.
+
+De la población ocupada en el sector terciario, el 28.2 está en Servicios sociales, el 24.1% en Servicios profesionales, financieros y corporativos, el 19.8% en el Comercio, el 8.4% en Gobierno y organismos internacionales, el 7% en Transportes, comunicaciones, correo y almacenamiento, el 6.3% en Servicios diversos, y el 6.2% en Restaurantes y servicios de alojamiento.
+
+Casi 8 de cada 10 jóvenes están ocupados en el sector servicios.
+
+### Por tamaño 
+
+El 25.1% de la población ocupada está en pequeños establecimientos, el 24.0% en micronegocios, el 15.9% en Grandes establecimientos, el 14.9% en Medianos establecimientos, y sólo el 6.6% en gobierno.
+
+Es decir, hay más jóvenes ocupados en las MIPYMES que en las grandes empresas.
+
+### Por ocupación
+
+El 50.6% de jóvenes están ocupados en Profesionistas y técnicos, el 13.1% en Trabajadores auxiliares en actividades administrativas, el 11.0% en Comerciantes, empleados en ventas y agentes de ventas, y el 8.9% en Funcionarios, directores y jefes.
+
+Aparentemente, alrededor de la mitad de jóvenes están en ocupaciones acordes a su educación o profesión. 
+
+En la división 1:
+
+```{r}
+0.683333333 + 0.116666667	+ 0.050000000
+```
+
+El 85% de las ocupaciones requieren un nivel alto de cualificación.
+
+En la división 2:
+
+```{r}
+0.547169811 + 0.245283019	+ 0.006289308	
+```
+
+El 79.9% requieren únicamente un nivel alto de cualificación (educación superior)
+
+
+En las divisiones 3 al 8, el 85.7%, 58.8%, 66.7%, 75.8%, 82.8% y 69.4%, en ese orden, de las ocupaciones requieren un nivel medio de cualificación (secundaria-preparatoria). En el caso de la división 9, el 76.7% requieren un nivel básico de cualificación
+
+Se podría decir que requieren generalmente
+
+* Divisiones 1 al 2 educación superior
+* Divisiones 3 al 8 educación media superior o básica concluida
+* División 9 educación básica inconclusa o menor que básica
+
+Por tanto, se podría decir que aquellos jóvenes egresados ubicados en las divisiones 3 al 9 estarán en la mayoría de las ocasiones sobrecalificados.
+
+## POR EDUCACIÓN
+
+El 92.7% egresó de los estudios de licenciatura, el 5.4% de maestría y solamente el 1.5% de carrera técnica, y el 0.4% de doctorado.
+
+Es decir en la población objetivo, 9 de cada 10 egresó de la licenciatura.
+
+El nivel educativo con la tasa de participación más alta es doctorado: 96.4%, seguido de maestría, 89.6%, técnico superior 87.9% y licenciatura 86.3%
+
+Parece observarse una relación entre una mayor educación y una mayor tasa de participación
+
+En cuanto a la tasa de desocupación, técnico superior 1.0%, licenciatura 4.5%, maestría 2.0% y doctorado 1.2%
+
+Sin considerar técnico superior, parece vislumbrarse una relación entre mayor educación y menor desocupación.
+
+También se observa que licenciatura, presenta la menor tasa de participación y al mismo tiempo la tasa de desocupación más alta
+
+TCCO: 28.7% técnico superior, 19.4% licenciatura, 11.0% maestría y 8.2% doctorado. 
+
+Una mayor educación se relaciona con una tasa crítica de ocupación más baja.
+
+TIL1:
+
+Técnico superior: 31.8%
+Licenciatura: 27.5%
+Maestría: 20%
+Doctorado: 24.4%
+
+Técnico superior presenta la mayor informalidad, mientras que maestría la menor. 
+
+Aunque se observa una relación entre la % de participación y TCCO, no así el caso de la TIL1
+
+NOTA: 
+
+Tengo estas variables
+
+* Proporción
+* % participación
+* % desocupación
+* TCCO
+* TIL1
+
+Creo que dejaré TCCO y me quedo con TIL1
+
+Podría ser como lo hace OECD(2019). Una gráfica de columnas. La variable relevante es participación u ocupación. Para contextualizar sí sería tasa de ocupación y desocupación. O pensar ¿cuál es la de mayor diferencias?
+
+## EDUCACIÓN REQUERIDA
+
+Ocupaciones que requieren solamente educación superior
+
+```{r}
+0.120408163 + 0.010204082 + 0.261224490	
+```
+
+Alrededor del 39.2% de los 490 grupos de ocupación unitarios del SINCO-19 requieren solamente educación de tipo superior, desde técnico superior hasta doctorado. 
+
+Por su parte, el 36.5% requieren estudios de tipo básico (concluido) y media superior. Y el 10.6% educación básica (no concluido) o menor a ésta. 
+
+Asimismo:
+
+```{r}
+0.030612245 + 0.004081633	
+```
+
+Solamente el 3.1% requiere desde una educación básica (concluida) hasta estudios de técnico superior y el 0.4% también desde educación básica pero hasta estudios de doctorado.
+
+En el caso de la población ocupada
+
+```{r}
+0.0064773399 + 0.1955820048 + 0.0202235301 + 0.0029130516
+```
+
+El 22.5% de la población ocupada tiene una educación de tipo superior.
+
+Otra forma de medir el desajuste es por grupo unitario de ocupación
+

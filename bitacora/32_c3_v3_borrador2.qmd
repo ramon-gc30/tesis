@@ -1,0 +1,532 @@
+---
+date: today
+format: html
+---
+
+Continuación de "C:/Prog/tesis/32_c3_v3_borrador.qmd", donde solamente se utilizarán las tablas construidas
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(scales)
+library(srvyr)
+library(survey)
+
+source("C:/Prog/tesis/scripts/0_funciones_v8.R")
+
+total <- read_rds("datos/descriptivo_total.rds")
+prop <- read_rds("datos/descriptivo_prop.rds")
+prop_sub <- read_rds("datos/descriptivo_prop_sub.rds")
+tasas <- read_rds("datos/descriptivo_tasas.rds")
+tasas_sub <- read_rds("datos/descriptivo_tasas_sub.rds")
+jovenes_ocu <- read_rds("datos/jovenes_normativo.rds")
+# divisiones del sinco 19 por educación requerida
+s19_div <- read_rds("datos/descriptivo_s19_div.rds")
+# tabla de los 490 grupos unitarios de ocupación del SINCO-19
+sinco19_unit <- read_rds("datos/sinco_19_edu_req.rds")
+```
+
+## Total
+
+```{r}
+total
+```
+
+PEA y PNEA
+
+```{r}
+prop |> 
+  filter(grupo == "tamanio") |> 
+  select(-(n:tot)) |> 
+  arrange(desc(prop))
+
+prop_sub |> 
+  filter(gpo_lab == "ent") |>  
+  select(-gpo_lab, -(n:tot))
+
+0.25135205 + 0.24009987 + 0.14857229
+```
+
+Tasas
+
+```{r}
+# tasas
+
+tasas_sub |> 
+  filter(grupo == "ent") |> 
+  select(-(numerador:denominador)) |> 
+  group_by(nombre) |> 
+  arrange(desc(tasa), .by_group = TRUE)
+```
+
+El cálculo de `to` y `td` es incorrecto porque lo hace considerando la población total cuando debe ser la pea.
+
+Se realiza dicha modificación en el archivo Excel `argumentos` y en "C:/Prog/tesis/scripts/2_cuadros_v5.R" guardándose en "C:/Prog/tesis/scripts/2_cuadros_v6.R"
+
+Se vuelve a ejecutar.
+
+Ahora sí está correcto
+
+```{r}
+jovenes_ocu |> 
+  filter(sector_eco == "2" | sector_eco == "3") |> 
+  calcular_prop_sub(sector_eco, rama_est2) |> 
+  arrange(desc(prop), .by_group = TRUE)
+
+0.28278191 + 0.24060649 + 0.19798248
+```
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop(ing7c)
+
+jovenes_ocu |> 
+  mutate(valid = if_else(!is.na(ingreso_mensual), 1, 0)) |> 
+  calcular_prop(valid)
+```
+
+El cuadro con `ing7c` no coincide realmente con la cifra de individuos que no reportaron ingreso. Cuando se hace el intento con `ingocup`
+
+```{r}
+jovenes_ocu |> 
+  mutate(valid = if_else(!is.na(ingocup), 1, 0)) |> 
+  calcular_prop(valid)
+```
+
+Recordemos que `ingocup` trata los valores faltantes como 0. Se valida `salario` e `ingocup`
+
+```{r}
+as.data.frame(jovenes_ocu) |> 
+  select(salario, ingocup, ingreso_mensual) |> 
+  head(50)
+```
+
+Posiblemente puedo crear la tabla `ing7c` con `salario` e `ingreso_mensual`. 
+
+```{r}
+jovenes_ocu |> 
+  mutate(
+    salario = as.double(salario),
+    ingreso_nivel = case_when(
+      # hasta un salario mínimo
+      ingreso_mensual <= salario ~ "1",
+      # más de 1 hasta 2 salarios mínimos
+      (ingreso_mensual > salario) | (ingreso_mensual <= (salario * 2)) ~ "2",
+      # más de 2 hasta 3 salarios mínimos
+      (ingreso_mensual > (salario * 2)) | (ingreso_mensual <= (salario * 3)) ~ "3",
+      # más de 3 hasta 5 salarios mínimos
+      (ingreso_mensual > (salario * 3)) | (ingreso_mensual <= (salario * 5)) ~ "4",
+      # más de 5 salarios mínimos
+      ingreso_mensual > (salario * 5) ~ "5",
+      # ingreso no reportado
+      is.na(ingreso_mensual) ~ "6",
+      TRUE ~ NA
+    )
+  )
+```
+
+En teoría si se pudo, se valida 
+
+```{r}
+as.data.frame(jovenes_ocu) |> 
+  mutate(
+    salario = as.double(salario),
+    ingreso_nivel = case_when(
+      # hasta un salario mínimo
+      ingreso_mensual <= salario ~ "1",
+      # más de 1 hasta 2 salarios mínimos
+      (ingreso_mensual > salario) | (ingreso_mensual <= (salario * 2)) ~ "2",
+      # más de 2 hasta 3 salarios mínimos
+      (ingreso_mensual > (salario * 2)) | (ingreso_mensual <= (salario * 3)) ~ "3",
+      # más de 3 hasta 5 salarios mínimos
+      (ingreso_mensual > (salario * 3)) | (ingreso_mensual <= (salario * 5)) ~ "4",
+      # más de 5 salarios mínimos
+      ingreso_mensual > (salario * 5) ~ "5",
+      # ingreso no reportado
+      is.na(ingreso_mensual) ~ "6",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(salario, ingreso_mensual, ingreso_nivel) |> 
+  head(50)
+```
+
+No está correctamente asignado, por ejemplo el individuo con ingreso de $32,000 en una zona con salario mínimo de \$8,364 le asigna el nivel de ingreso 2 es decir, más de 1 hasta 2 salarios mínimos ¿por qué? creo por el operador lógico OR, quizá debe ser AND. Se hace el cambio
+
+```{r}
+as.data.frame(jovenes_ocu) |> 
+  mutate(
+    salario = as.double(salario),
+    ingreso_nivel = case_when(
+      # hasta un salario mínimo
+      ingreso_mensual <= salario ~ "1",
+      # más de 1 hasta 2 salarios mínimos
+      (ingreso_mensual > salario) & (ingreso_mensual <= (salario * 2)) ~ "2",
+      # más de 2 hasta 3 salarios mínimos
+      (ingreso_mensual > (salario * 2)) & (ingreso_mensual <= (salario * 3)) ~ "3",
+      # más de 3 hasta 5 salarios mínimos
+      (ingreso_mensual > (salario * 3)) & (ingreso_mensual <= (salario * 5)) ~ "4",
+      # más de 5 salarios mínimos
+      ingreso_mensual > (salario * 5) ~ "5",
+      # ingreso no reportado
+      is.na(ingreso_mensual) ~ "6",
+      TRUE ~ NA
+    )
+  ) |> 
+  select(salario, ingreso_mensual, ingreso_nivel) |> 
+  head(50)
+```
+
+Ahora sí está correcto!!!
+
+Se asigna
+
+```{r}
+jovenes_ocu <- jovenes_ocu |> 
+  mutate(
+    salario = as.double(salario),
+    ingreso_nivel = case_when(
+      # hasta un salario mínimo
+      ingreso_mensual <= salario ~ "1",
+      # más de 1 hasta 2 salarios mínimos
+      (ingreso_mensual > salario) & (ingreso_mensual <= (salario * 2)) ~ "2",
+      # más de 2 hasta 3 salarios mínimos
+      (ingreso_mensual > (salario * 2)) & (ingreso_mensual <= (salario * 3)) ~ "3",
+      # más de 3 hasta 5 salarios mínimos
+      (ingreso_mensual > (salario * 3)) & (ingreso_mensual <= (salario * 5)) ~ "4",
+      # más de 5 salarios mínimos
+      ingreso_mensual > (salario * 5) ~ "5",
+      # ingreso no reportado
+      is.na(ingreso_mensual) ~ "6",
+      TRUE ~ NA
+    )
+  )
+```
+
+Se valida nivel de ingreso
+
+```{r}
+jovenes_ocu |> 
+  calcular_prop(ingreso_nivel)
+
+jovenes_ocu |> 
+  filter(ingreso_nivel != "6") |> 
+  calcular_prop(ingreso_nivel)
+```
+
+
+El 53% de los jóvenes no reportaron ingreso, se valida.
+
+Es correcto! En efecto, 2,355,868 de jóvenes egresados ocupados no reportaron ingreso. Se deja esta variable en el script `funciones` y se guarda en `C:/Prog/tesis/scripts/0_funciones_v8.R`
+
+```{r}
+s19_div |> 
+  mutate(
+    edu_requerida2 = case_when(
+      # menor a básica
+      edu_requerida == "1-2" ~ "0",
+      # básica a media superior
+      edu_requerida == "1-4" | edu_requerida == "3-4" ~ "1",
+      # educación superior
+      edu_requerida == "6-6" | edu_requerida == "6-9" | edu_requerida == "7-9" ~ "2",
+      # otros
+      # secundaria-técnico superior o secundaria-doctorado
+      edu_requerida == "3-6" | edu_requerida == "3-9" ~ "3",
+      TRUE ~ "4"
+    )
+  )
+```
+
+Se añade en el script `funciones` como nueva función y se guarda también en `C:/Prog/tesis/scripts/0_funciones_v8.R`
+
+```{r}
+establecer_edu_req_aprox <- function(datos, edu_req){
+  datos |> 
+    mutate(
+    edu_req_aprox = case_when(
+      # menor a básica
+      {{  edu_req  }} == "1-2" ~ "0",
+      # básica a media superior
+      {{  edu_req  }} == "1-4" | {{  edu_req  }} == "3-4" ~ "1",
+      # educación superior
+      {{  edu_req  }} == "6-6" | {{  edu_req  }} == "6-9" | 
+        {{  edu_req  }} == "7-9" ~ "2",
+      # otros
+      # secundaria-técnico superior o secundaria-doctorado
+      {{  edu_req  }} == "3-6" |  {{  edu_req  }} == "3-9" ~ "3",
+      # no especificado
+      TRUE ~ NA
+    )
+  )
+}
+```
+
+Se valida
+
+```{r}
+establecer_edu_req_aprox(s19_div, edu_requerida)
+```
+
+Pero en este caso quiero trabajar a nivel unitario, por tanto se carga dicha tabla
+
+```{r}
+# sinco19_unit <- read_rds("datos/sinco_19_edu_req.rds")
+```
+
+Se valida
+
+```{r}
+glimpse(sinco19_unit)
+```
+
+Se construye aproximación
+
+```{r}
+sinco19_unit <- establecer_edu_req_aprox(sinco19_unit, edu_requerida)
+```
+
+Se construye tabla, recordemos que como no es una tabla de encuesta compleja no puede utilizarse alguna función 
+
+```{r}
+sinco19_unit |> 
+  count(edu_requerida) |> 
+  mutate(prop = n / sum(n))
+
+sinco19_unit |> 
+  count(edu_req_aprox) |> 
+  mutate(prop = n / sum(n))
+```
+
+Se hace la gráfica de la última tabla
+
+```{r}
+sinco19_unit |> 
+  count(edu_req_aprox) |> 
+  mutate(
+    prop = n / sum(n),
+    etiqueta = "porcentaje"
+  ) |> 
+  ggplot(aes(etiqueta, prop, group = edu_req_aprox, fill = edu_req_aprox)) + 
+  geom_col() + 
+  coord_radial(theta = "y", expand = FALSE)
+```
+
+Según la IA, se puede evitar el uso de añadir variable ficticia y añadir directamente en `aes` el valor único para `prop`
+
+Se hace intento
+
+```{r}
+sinco19_unit |> 
+  count(edu_req_aprox) |> 
+  mutate(prop = n / sum(n)) |> 
+  ggplot(aes("", prop, group = edu_req_aprox, fill = edu_req_aprox)) + 
+  geom_col()
+  # coord_radial(theta = "y", expand = FALSE)
+
+sinco19_unit |> 
+  count(edu_req_aprox) |> 
+  mutate(prop = n / sum(n)) |> 
+  ggplot(aes(1, prop, group = edu_req_aprox, fill = edu_req_aprox)) + 
+  geom_col()
+  # coord_radial(theta = "y", expand = FALSE)
+```
+
+Es correcto!!!
+
+Se añade estilo
+
+```{r}
+etiquetas_var1 <- c(
+  "0" = "Menor a básica",
+  "1" = "Básica a Media superior",
+  "2" = "Superior",
+  "3" = "Otros",
+  "NA" = "No especificado"
+)
+
+sinco19_unit |> 
+  count(edu_req_aprox) |> 
+  mutate(
+    # edu_req_aprox = if_else(is.na(edu_req_aprox), "NA", edu_req_aprox),
+    prop = n / sum(n),
+    prop_label = percent(prop, accuracy = 1)
+  ) |> 
+  ggplot(aes("", prop, group = edu_req_aprox, fill = edu_req_aprox)) + 
+  geom_col() + 
+  geom_text(aes(label = prop_label), position = position_stack(vjust = 0.5)) + 
+  scale_x_discrete(breaks = NULL) + 
+  scale_y_continuous(breaks = NULL) + 
+  scale_fill_brewer(
+    palette = "Paired", 
+    direction = -1,
+    name = "Educación requerida",
+    labels = etiquetas_var1
+  ) +
+  theme(text = element_text(family = "Trebuchet MS", size = 12)) +
+  labs(x = NULL, y = NULL) + 
+  coord_radial(theta = "y", expand = FALSE)
+```
+
+Se guarda figura
+
+```{r}
+etiquetas_var1 <- c(
+  "0" = "Menor a básica",
+  "1" = "Básica a Media superior",
+  "2" = "Superior",
+  "3" = "Otros",
+  "NA" = "No especificado"
+)
+
+fig_descriptivo_edu_req_aprox <- sinco19_unit |> 
+  count(edu_req_aprox) |> 
+  mutate(
+    # edu_req_aprox = if_else(is.na(edu_req_aprox), "NA", edu_req_aprox),
+    prop = n / sum(n),
+    prop_label = percent(prop, accuracy = 1)
+  ) |> 
+  ggplot(aes("", prop, group = edu_req_aprox, fill = edu_req_aprox)) + 
+  geom_col() + 
+  geom_text(aes(label = prop_label), position = position_stack(vjust = 0.5)) + 
+  scale_x_discrete(breaks = NULL) + 
+  scale_y_continuous(breaks = NULL) + 
+  scale_fill_brewer(
+    palette = "Paired", 
+    direction = -1,
+    name = "Educación requerida",
+    labels = etiquetas_var1
+  ) +
+  theme(text = element_text(family = "Trebuchet MS", size = 12)) +
+  labs(x = NULL, y = NULL) + 
+  coord_radial(theta = "y", expand = FALSE)
+
+guardar_figura(
+  fig_descriptivo_edu_req_aprox,
+  "figuras/fig_descriptivo_edu_req_aprox.png"
+)
+```
+
+
+Se valida desajuste
+
+```{r}
+prop_sub |> 
+  filter(sub_lab == "edu_requerida") |> 
+  select(-(poblacion:sub_lab), -prop) |> 
+  establecer_edu_req_aprox(sub_val) |> 
+  group_by(gpo_val, edu_req_aprox) |> 
+  summarise(
+    n = sum(n),
+    tot = sum(tot)
+  ) |> 
+  mutate(prop = tot / sum(tot)) |> 
+  arrange(desc(prop), .by_group = TRUE)
+```
+
+Validar con el tema de la educación requerida: dejarla como función o dentro del script `preparacion_datos`?
+
+```{r}
+prop |> 
+  filter(grupo == "division") |> 
+  arrange(desc(prop))
+
+0.505822999 + 
+
+0.130675683 + 0.108057941
+```
+
+División por educación requerida
+
+```{r}
+s19_div |> 
+  establecer_edu_req_aprox(edu_requerida) |> 
+  select(-prop) |> 
+  group_by(s19_div, edu_req_aprox) |> 
+  summarise(n = sum(n)) |> 
+  mutate(prop = n / sum(n))
+
+s19_div |> 
+  establecer_edu_req_aprox(edu_requerida) |> 
+  select(-prop) |> 
+  group_by(s19_div, edu_req_aprox) |> 
+  summarise(n = sum(n)) |> 
+  mutate(prop = n / sum(n)) |> 
+  filter(edu_req_aprox == "2")
+
+s19_div |> 
+  group_by(s19_div) |> 
+  summarise(n = sum(n))
+```
+
+Sí hay que añadir `edu_req_aprox` desde la preparación de datos
+
+La pregunta del millón es donde añadirlo?
+
+El cambio se realiza aquí
+
+```
+# divisiones del SINCO-19 por grupos unitario de ocupación 
+# según educación requerida
+descriptivo_s19_div <- sinco19 |> 
+  group_by(s19_div) |> 
+  count(edu_requerida, .drop = FALSE) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup()
+```
+
+Ubicado en "C:/Prog/tesis/scripts/2_cuadros_v6.R". Por tanto, se cambia a 
+
+```
+# divisiones del SINCO-19 por grupos unitario de ocupación 
+# según educación requerida
+descriptivo_s19_div <- sinco19 |> 
+  establecer_edu_req_aprox(edu_requerida) |> 
+  group_by(s19_div) |> 
+  count(edu_req_aprox, .drop = FALSE) |> 
+  mutate(prop = n / sum(n)) |> 
+  ungroup()
+```
+
+Se realiza modificación en `cuadros` y se guarda en 
+
+Para realizar los cambios se modifica 
+
+```
+## SINCO-19 con educación requerida
+sinco_19_edu_req <- determinar_edu_obj(ciuo08, sinco11_ciuo08, sinco19_11)
+sinco_19_edu_req <- sinco_19_edu_req |> 
+  mutate(s19_div = str_sub(s19_unit, start = 1, end = 1)) |> 
+  relocate(s19_div, .before = s19_unit)
+```
+ 
+ Ubicado en "C:/Prog/tesis/scripts/1_preparacion_datos_v4.R" y sólo se queda
+ 
+```
+## SINCO-19 con educación requerida
+sinco_19_edu_req <- determinar_edu_obj(ciuo08, sinco11_ciuo08, sinco19_11)
+```
+ 
+Ya que es la tabla que estará en el anexo
+
+Se realizarán cambios sustanciales que se dejan para después de finalizar el borrador de 3-1 V3
+
+```{r}
+total
+
+prop |> 
+  filter(grupo == "division") |> 
+  mutate(valor = as.integer(valor)) |> 
+  arrange(valor)
+
+jovenes_ocu |> 
+  group_by(division) |> 
+  summarise(tot = sum(fac_tri))
+```
+
+```{r}
+0.088579316 + 0.505822999
+```
+
