@@ -11,4 +11,4 @@ Pero, a pesar de esta discrepancia, los scripts pueden ejecutarse correctamente 
 * Los datos (o microdatos) de la población objetivo después de las manipulaciones realizadas que permiten calcular la incidencia y estimar la diferencia salarial asociada a la sobrecalificación.
 * Los datos que posibilitan la realización de las figuras y los cuadros mostrados a lo largo de la tesis
 
-Es decir, puede considerarse la versión actual del presente proyecto como la versión final, mientras que la tesis se encuentra en etapa de cierre que puede consultarse en la siguiente liga: <https://drive.google.com/drive/folders/16GR9Nv6JlYYmLo0ICuJ1hxYOaj2-kiNU?usp=drive_link>.  
+Es decir, puede considerarse la versión actual del presente proyecto como la versión final, mientras que la tesis se encuentra en su etapa de cierre.   
