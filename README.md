@@ -1,6 +1,5 @@
 # Tesis
 Juan Ramón Gregorio Carrillo
-domingo, 7 de junio de 2026
 
 Repositorio referente a la tesis titulada:
 
@@ -22,10 +21,10 @@ En primer lugar, la estructura general del repositorio es el siguiente:
     ├── docs
     ├── figuras
     ├── plantillas
-    ├── README_v3-1.docx
-    ├── README_v3-1.md
-    ├── README_v3-1.qmd
-    ├── README_v3-1.rmarkdown
+    ├── README.docx
+    ├── README.md
+    ├── README.qmd
+    ├── README.rmarkdown
     ├── renv
     ├── renv.lock
     ├── scripts

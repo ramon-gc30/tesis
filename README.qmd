@@ -1,8 +1,6 @@
 ---
 title: "Tesis"
 author: "Juan Ramón Gregorio Carrillo"
-date: "06/07/2026"
-date-format: full
 
 execute:
   echo: false
