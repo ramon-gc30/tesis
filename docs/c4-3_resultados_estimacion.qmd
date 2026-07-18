@@ -1,0 +1,81 @@
+---
+title: "Resultados de la estimación"
+format: gfm
+execute:
+  message: false
+  warning: false
+---
+
+```{r}
+#| label: setup
+library(here)
+
+source(here::here("scripts", "3_regresion_v1.R"))
+
+remove("jovenes_reg")
+```
+
+Resultados de la estimación
+
+```{r}
+resultados_jov
+```
+
+Resultados de la estimación con términos de interacción relacionadas a la
+sobrecalificación y a los años de escolaridad
+
+```{r}
+resultados_edu
+```
+
+Resultados de la estimación con términos de interacción relacionadas a la
+sobrecalificación y al género
+
+```{r}
+resultados_muj
+```
+
+Resultados de la estimación con términos de interacción relacionadas a la
+sobrecalificación y al campo amplio de formación académica
+
+```{r}
+resultados_cam
+```
+
+Resultados de la estimación con términos de interacción relacionadas a la
+sobrecalificación y a la región geográfica
+
+```{r}
+resultados_reg
+```
+
+Resultados de la prueba Wald
+
+Años de escolaridad
+
+```{r}
+contraste_over_edu
+```
+
+Género
+
+```{r}
+contraste_over_muj
+```
+
+Campo de formación académica
+
+```{r}
+contraste_over_cam
+```
+
+Regiones
+
+```{r}
+contraste_over_reg
+```
+
+
+
+
+
