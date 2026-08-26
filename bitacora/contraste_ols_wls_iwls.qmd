@@ -1,0 +1,89 @@
+---
+date: "21-08-2026"
+format: gfm
+---
+
+A partir de la duda planteada en la nota `Aprende escribiendo/Método de estimación utilizado en `svyglm`.md`, se realiza un análisis de sensibilidad de la estimación del modelo utilizado donde se compararán los resultados obtenidos por OLS, IWLS e IWLS por muestreo que se obtienen de las funciones `lm`, `glm` y `svyglm`, respectivamente.
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(survey)
+library(srvyr)
+library(here)
+library(lmtest)
+
+jovenes <- read_rds(here::here("datos", "export", "jovenes_reg.rds"))
+```
+
+Se realiza la estimación por OLS
+
+```{r}
+jovenes <- as_tibble(jovenes)
+
+model_ols <- lm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.lm(model_ols)
+```
+
+Sin embargo, los residuos no cumplen con el supuesto de homocedasticidad.
+
+```{r}
+# par(mfrow = 3)
+plot(model_ols)
+```
+
+```{r}
+lmtest::bptest(model_ols)
+```
+
+Se corrige errores estándar ante la presencia de heterocedasticidad
+
+```{r}
+coeftest(model_ols, vcov = vcov(model_ols, type = "HC1"))
+```
+
+Ahora bien, para el caso de IWLS por muestreo 
+
+```{r}
+model_svy <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes
+)
+
+summary(model_svy)
+```
+
+Por último, el caso de IWLS
+
+```{r}
+jovenes <- as_tibble(jovenes)
+
+model_glm <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm)
+```
+
+El resultado por OLS con errores estándar robustos e IWLS es el mismo ¿por qué? quizá porque no se está especificando el peso en la función `glm`.
+
