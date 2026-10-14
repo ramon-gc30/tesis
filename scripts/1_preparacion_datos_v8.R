@@ -18,6 +18,8 @@ library(here)
 library(purrr)
 # exportación a Excel
 library(writexl)
+# exportar a parquet
+library(arrow)
 
 ## Archivos ------------------
 source(here::here("scripts", "0_funciones_v11.R"))
@@ -38,6 +40,8 @@ url <- "https://www.inegi.org.mx/contenidos/programas/enoe/15ymas/microdatos/eno
 directorio <- tempdir()
 
 archivo <- tempfile(tmpdir = directorio, fileext = ".zip")
+
+options(timeout = max(1500, getOption("timeout")))
 
 download.file(url = url, destfile = archivo)
 
@@ -470,19 +474,17 @@ incidencia_sensibilidad <- validar_precision(incidencia_sensibilidad, tot_cv)
 
 ## Guardar --------------------------------------
 
-# tablas completas para regresión
-write_rds(jovenes_reg, here::here("datos", "export", "jovenes_reg.rds"))
 # tablas procesadas para realizar gráficas
-write_rds(pib_vs_egres, here::here("datos", "export", "pib_vs_egres.rds"))
-write_rds(descriptivo_prop, here::here("datos", "export", "descriptivo_prop.rds"))
-write_rds(descriptivo_s19_2, here::here("datos", "export", "descriptivo_sinco19.rds"))
-write_rds(incidencia_sub, here::here("datos", "export", "incidencia_sub.rds"))
+write_parquet(pib_vs_egres, here::here("datos", "export", "pib_vs_egres.parquet"))
+write_parquet(descriptivo_prop, here::here("datos", "export", "descriptivo_prop.parquet"))
+write_parquet(descriptivo_s19_2, here::here("datos", "export", "descriptivo_sinco19.parquet"))
+write_parquet(incidencia_sub, here::here("datos", "export", "incidencia_sub.parquet"))
 
 ## Exportar -------------------------------------
 
 # tabla de población objetivo
 jovenes_ocu <- as_tibble(jovenes_ocu)
-write_csv(jovenes_ocu, here::here("datos", "export", "jovenes_ocu.csv"))
+write_parquet(jovenes_ocu, here::here("datos", "export", "jovenes_ocu.parquet"))
 
 # datos procesados
 hojas_nombre <- list(

@@ -3,8 +3,12 @@ library(tidyverse)
 library(survey)
 library(srvyr)
 library(here)
+library(arrow)
 
-jovenes_reg <- read_rds(here::here("datos", "export", "jovenes_reg.rds"))
+source(here::here("scripts", "0_funciones_v11.R"))
+jovenes_reg <- read_parquet(here::here("datos", "export", "jovenes_ocu.parquet")) |> 
+  seleccionar_obs_reg() |> 
+  definir_encuesta()
 
 # Regresión ===================================================================
 

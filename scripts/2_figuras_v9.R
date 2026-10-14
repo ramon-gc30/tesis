@@ -10,18 +10,20 @@ library(rnaturalearthdata)
 library(rnaturalearthhires)
 # ubicación relativa
 library(here)
+# formato parquet
+library(arrow)
 
 source(here::here("scripts", "0_funciones_v11.R"))
 
 # Introducción
-pib_vs_egres <- read_rds(here::here("datos", "export", "pib_vs_egres.rds"))
+pib_vs_egres <- read_parquet(here::here("datos", "export", "pib_vs_egres.parquet"))
 
 # Análisis descriptivo
-prop <- read_rds(here::here("datos", "export", "descriptivo_prop.rds"))
-sinco19 <- read_rds(here::here("datos", "export", "descriptivo_sinco19.rds"))
+prop <- read_parquet(here::here("datos", "export", "descriptivo_prop.parquet"))
+sinco19 <- read_parquet(here::here("datos", "export", "descriptivo_sinco19.parquet"))
 
 # Incidencia
-incidencia_sub <- read_rds(here::here("datos", "export", "incidencia_sub.rds"))
+incidencia_sub <- read_parquet(here::here("datos", "export", "incidencia_sub.parquet"))
 
 # elementos comunes 
 otros_elementos <- list(labs(x = NULL,y = NULL))

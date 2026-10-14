@@ -1,0 +1,129 @@
+---
+date: "14-10-2026"
+format: gfm
+---
+
+A partir de mi aprendizaje de Power BI con el libro de Deckler (2025) se intentará exportar mis datos para crear un informe en Power BI. 
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(arrow)
+library(here)
+library(renv)
+
+archivo_csv <- here::here("datos", "export", "jovenes_ocu.csv")
+```
+
+No está el paquete `arrow` en el entorno del proyecto. Se valida
+
+```{{r}}
+renv::diagnostics()
+```
+
+No está instalado. Se procede a instalar
+
+```{{r}}
+renv::install(packages = "arrow")
+```
+
+Se guarda el estado actual del proyecto
+
+```{{r}}
+renv::snapshot()
+```
+
+Se valida
+
+```{{r}}
+renv::diagnostics()
+```
+
+Listo! Se carga
+
+Se intenta cargar el archivo CSV con `read_csv_arrow`
+
+```{r}
+jovenes <- read_csv_arrow(archivo_csv)
+```
+
+Se valida tipo de dato
+
+```{r}
+glimpse(jovenes)
+```
+
+La mayoría son de tipo entero.
+
+Se intenta hacer una consulta básica
+
+```{r}
+jovenes |> 
+  count(educacion)
+```
+
+Al parecer sí está correcto. Se intenta convertir a parquet
+
+```{r}
+archivo_parquet <- here::here("datos", "export", "jovenes_ocu.parquet")
+write_parquet(
+  x = jovenes,
+  sink = archivo_parquet
+)
+```
+
+Al parecer sí se pudo, se valida
+
+```{r}
+list.files(here::here("datos", "export"))
+```
+
+Se carga
+
+```{r}
+jovenes_parquet <- read_parquet(file = archivo_parquet)
+```
+
+Se hace una consulta 
+
+```{r}
+jovenes |> 
+  count(educacion)
+```
+
+Algo más complejo
+
+```{r}
+jovenes |> 
+  group_by(educacion, over_obj, mujer) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+
+jovenes_parquet |> 
+  group_by(educacion, over_obj, mujer) |> 
+  summarise(
+    n = n(),
+    tot = sum(fac_tri)
+  )
+```
+
+Al parecer sí se exporta correctamente. La diferencia de tamaño es abismal
+
+```{r}
+archivos <- list.files(here::here("datos", "export"), "jovenes_ocu", full.names = TRUE)
+
+tibble(
+  file = basename(archivos),
+  size = file.size(archivos) / 1024**2
+)
+```
+
+Y al parecer no existen problemas de codificación.
+
+Entonces, puedo pasar de CSV a parquet o solamente para exportar a Power BI
+
