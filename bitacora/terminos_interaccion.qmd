@@ -1,0 +1,574 @@
+---
+date: "07-09-2026"
+format: gfm
+---
+
+¿Por qué los términos de interacción entre sobrecalificación y género y región geográfica no fueron estadísticamente significativos?
+
+Esta duda la plantea la IA (Gemini) como preparativo para el examen profesional, véase `Aprende escribiendo/Respuesta P9 Términos de interacción.md`. 
+
+Planteo la siguiente interpretación econométrica: la diferencia salarial de la sobrecalificación se está controlando distintas características individuales y de la ocupación. Posiblemente, esas variables tengan un efecto al momento de estimar los términos de interacción. 
+
+Por tanto, se intentará estimar el modelo Verdugo y Verdugo ampliado sin dichas variables mediante OLS, IWLS basado en el modelo e IWLS por muestreo (basado en los datos)
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(survey)
+library(srvyr)
+library(here)
+library(lmtest)
+
+jovenes_reg <- read_rds(here::here("datos", "export", "jovenes_reg.rds"))
+
+jovenes <- as_tibble(jovenes_reg)
+```
+
+IWLS por muestreo
+
+General
+
+```{r}
+## General -----
+model_jovenes <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes)
+```
+
+Sin variables dummies
+
+```{r}
+model_jovenes <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer,
+    # jefe_hogar + regiones + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes)
+```
+
+Se calcula diferencia exacta
+
+```{r}
+exp(-0.403767) - 1
+```
+
+Sin considerar las características asociadas al individuo y a la ocupación, la diferencia salarial (exacta) es, en promedio, de 33.2%. Es decir, casi el doble (17.4%)!!! Así pues, se sobreestima la pérdida salarial de la sobrecalificación. 
+
+Género
+
+Modelo original
+
+```{r}
+# Género
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * mujer + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+Cuando se elimina la variable `mujer`:
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:mujer + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+Se observa que la pérdida salarial de la sobrecalificación en mujeres es 12 puntos porcentuales mayor comparado con el de los hombres. Por tanto,
+
+```{r}
+exp(-0.129642 + -0.120268) - 1
+```
+
+El ingreso mensual de las mujeres sobrecalificadas es, en promedio, 22.1% menor comparado con el de mujeres sin desajuste. 
+
+
+Sin variables dicotómicas
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * mujer + exper + I(exper**2) + 
+    log(horas_lab),
+    # jefe_hogar + regiones + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+Ni así la interacción es significativa. ¿Por qué?
+
+Recordemos que la proporción entre hombres y mujeres es relativamente similar:
+
+```{r}
+jovenes_reg |> 
+  group_by(mujer) |> 
+  summarise(
+    tot = survey_total(vartype = NULL),
+    prop = survey_prop(vartype = NULL)
+  )
+```
+
+Pero, si así fuera el caso ¿por qué existe una brecha salarial de género?  Puede ser que la brecha salarial de género no se explique por la sobrecalificación. O dicho en otras palabras, el ingreso de los hombres es, en promedio, mayor al de las mujeres, pero NO por temas de sobrecalificación. 
+
+¿Qué pasa si se elimina el efecto salarial asociado al género?
+
+```{r}
+model_jovenes_muj <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:mujer + exper + I(exper**2) + 
+    log(horas_lab),
+    # jefe_hogar + regiones + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_muj)
+```
+
+Ahora sí es significativo
+
+Regiones
+
+Original
+
+```{r}
+# Regiones
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * regiones + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+Al eliminar la variable `region`
+
+```{r}
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:regiones + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+También es significativo. Además, se observa que el castigo o penalización de la sobrecalificación es mayor en la región sur que en las demás regiones. Por ejemplo, la pérdida salarial en la región centro (región 2) es 9.4 puntos porcentuales menor comparado con la región sur. 
+
+```{r}
+exp(-0.290454 + 0.094373) - 1
+```
+
+Así, en la región centro el ingreso de los jóvenes sobrecalificados es, en promedio, 17.8% menos comparado con jóvenes sin desajuste. Mientras que en la región sur:
+
+```{r}
+exp(-0.290454) - 1 
+```
+
+Dicha diferencia es, en promedio, del 25%.
+
+Sin dummies
+
+```{r}
+# Regiones
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * regiones + exper + I(exper**2) + 
+    log(horas_lab),
+    # mujer + jefe_hogar + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+Tampoco es significativo ¿por qué? la diferencia salarial se presenta dado que la ocupación establece un techo de productividad, está situación es indistinta independientemente de la región. Es decir, incluso estar en economías con ocupaciones mayoritariamente calificadas si el joven egresado se encuentra en una ocupación sobrecalificada ganará menos. 
+
+Si se elimina la variable `regiones`
+
+```{r}
+model_jovenes_reg <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:regiones + exper + I(exper**2) + 
+    log(horas_lab),
+    # mujer + jefe_hogar + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_reg)
+```
+
+También, la interacción es significativa.
+
+Por curiosidad, se valida el tema del nivel educativo
+
+Educación
+
+```{r}
+model_jovenes <- svyglm(
+  log(ingreso_mensual) ~ 
+    educacion + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes)
+```
+
+Términos de interacción sin la variable `educacion`
+
+```{r}
+model_jovenes <- svyglm(
+  log(ingreso_mensual) ~ 
+    over_obj + over_obj:educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes)
+```
+
+Se obtienen resultados econométricos viables, pero económicamente inválidos ya que quito el efecto educación en el modelo. Si se añaden las dos variables
+
+```{r}
+model_jovenes <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:educacion + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes)
+```
+
+Resultan no significativos. Se quitan variables de control. 
+
+```{r}
+model_jovenes <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:educacion + exper + I(exper**2) + 
+    log(horas_lab),
+  # + mujer + jefe_hogar + regiones + campo_amplio +
+  #   division + pos_ocu + tamanio + informal + 
+  #   jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes)
+```
+
+No significativos
+
+En el tema de carreras
+
+```{r}
+# Campos de formación académica
+model_jovenes_cam <- svyglm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:campo_amplio + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  design = jovenes_reg
+)
+
+summary(model_jovenes_cam)
+```
+
+Aumentan el número de términos significativos. La mayor diferencia entre carreras es con respecto a Ingeniería (campo 7) de 17.5 puntos porcentuales. Así pues,
+
+```{r}
+exp(-0.314882) - 1
+exp(-0.314882 + 0.175151) - 1
+```
+
+El ingreso de jóvenes sobrecalificados egresados de ingeniería es, en promedio, 13.0% menos comparado con jóvenes sin desajuste del mismo campo. 
+
+IWLS basado en el modelo
+
+Original
+
+```{r}
+# jovenes <- as_tibble(jovenes_reg)
+
+model_glm <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm)
+```
+
+Sin dummies
+
+
+```{r}
+model_glm <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + exper + I(exper**2) + 
+    log(horas_lab),
+  # + mujer + jefe_hogar + regiones + campo_amplio +
+  #   division + pos_ocu + tamanio + informal + 
+  #   jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm)
+```
+
+En términos exactos
+
+```{r}
+exp(-0.3332889) - 1
+```
+
+Es decir, no considerar el diseño muestral de los datos sobreestima la diferencia salarial en diez puntos porcentuales.
+
+Términos de interacción
+
+Género
+
+Original
+
+```{r}
+model_muj_glm <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * mujer + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_muj_glm)
+```
+
+En términos exactos:
+
+```{r}
+-0.1362952 - 0.0640435
+exp(-0.1362952) - 1
+exp(-0.1362952 - 0.0640435) - 1
+```
+
+Se observa que la pérdida salarial de la sobrecalificación en mujeres es aproximadamente 6 puntos porcentuales mayor con respecto a los hombres. Así pues, el ingreso mensual de las mujeres sobrecalificadas es, en promedio, 18.2% menos comparado con mujeres que no presentan dicho desajuste.
+
+Este resultado es, sin lugar a dudas, sorprendente. Recordemos que cuando se considera un muestreo probabilístico en dos etapas (bietápico), los términos de interacción entre la sobrecalificación y el género fueron estadísticamente no significativas. 
+
+Entonces, cuando se considera que los datos provienen de un muestreo aleatorio simple dichos términos de interacción son estadísticamente significativos y cuando se considera un muestreo complejo no lo son ¿por qué? Esto a pesar de controlar a través de distintas variables relacionadas a los individuos y a la ocupación ¿qué pasa si se eliminan dichas variables?
+
+```{r}
+model_muj_glm <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * mujer + exper + I(exper**2) + 
+    log(horas_lab),
+    # jefe_hogar + regiones + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_muj_glm)
+```
+
+Cuando se eliminan dichas variables, los términos de interacción ahora son estadísticamente no significativos. ¿Por qué?
+
+Por un lado, puede ser que además del tipo de muestreo que se está considerando también tenga algo que ver el tema de la población a la que representa.
+
+Recordemos que `svyglm` permite inferir los resultados para la población que representa a través de la ponderación de la encuesta, contenida en el campo `fac_tri`. Mientras que, `glm` y `lm` (IWLS basado en el modelo y OLS con corrección de errores estándar ante heterocedasticidad) los resultados solamente son válidos para los individuos contenidos en la muestra. 
+
+Así pues, los términos de interacción significativos con `glm` son válidos para los jóvenes encuestados (que reportaron ingreso). Pero cuando se intenta determinar dicha significancia para la población total de jóvenes (que reportaron ingreso) ya no son significativos.
+
+En ese sentido, la pregunta subsecuente sería en la población ocupada de jóvenes, ¿por qué los términos de sobrecalificación y género no son significativos?
+
+Cuando se elimina la variable `mujer`
+
+```{r}
+model_muj_glm <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:mujer + exper + I(exper**2) + 
+    log(horas_lab) + jefe_hogar + regiones + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_muj_glm)
+```
+
+También es significativa
+
+Regiones
+
+```{r}
+# Regiones
+model_glm_reg <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * regiones + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm_reg)
+```
+
+En este caso, con `glm` los términos entre sobrecalificación y región geográfica no son significativos. Si se eliminan las variables de control:
+
+```{r}
+# Regiones
+model_glm_reg <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * regiones + exper + I(exper**2) + 
+    log(horas_lab),
+    # mujer + jefe_hogar + campo_amplio +
+    # division + pos_ocu + tamanio + informal + 
+    # jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm_reg)
+```
+
+Cuando se eliminan las variables de control, dichos términos son significativos. Por tanto, algunos aspectos relacionados a la ocupación capturan cierto efecto causal al momento de validar la interacción entre la sobrecalificación y la región geográfica. 
+
+Al eliminar variable `region`:
+
+```{r}
+model_glm_reg <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:regiones + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + campo_amplio +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm_reg)
+```
+
+También la interacción es significativa
+
+Carreras
+
+```{r}
+# Campos de formación académica
+model_glm_car <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * campo_amplio + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm_car)
+```
+
+Sigue presente una interacción entre la sobrecalificación y las carreras educativas estadísticamente significativa cuando se estima por IWLS (basado en el modelo).
+
+Al eliminar las variables de control:
+
+```{r}
+model_glm_car <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj * campo_amplio + exper + I(exper**2) + 
+    log(horas_lab),
+  # + mujer + jefe_hogar + regiones +
+  #   division + pos_ocu + tamanio + informal + 
+  #   jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm_car)
+```
+
+Persiste una interacción significativa.
+
+Si se elimina `carrera`
+
+```{r}
+model_glm_car <- glm(
+  log(ingreso_mensual) ~ 
+    anios_estudios + over_obj + over_obj:campo_amplio + exper + I(exper**2) + 
+    log(horas_lab) + mujer + jefe_hogar + regiones +
+    division + pos_ocu + tamanio + informal + 
+    jornada + unidad_eco, 
+  data = jovenes
+)
+
+summary.glm(model_glm_car)
+```
+
+También es significativa.
+
+Por tanto, existen distintas explicaciones econométricas:
+
+* Las variables relacionadas a la ocupación capturan el efecto de la interacción entre la sobrecalificación y distintas variables relacionadas a grupos poblacionales.
+
+* Considerar el diseño muestral complejo indica que la interacción no es significativa para la población que representa
+
+* Al eliminar las variables relacionadas a grupos poblacionales, considerando solamente la interacción con la sobrecalificación muchas interacciones son significativas
+
+Las preguntas que me hago al respecto son:
+
+* ¿Por qué se vuelven significativas?
+
+* ¿Cuál es la interpretación econométrica?
+
+Para responder la primera pregunta, sugiero leer el capítulo 7 de (Wooldridge, 2010). En específico, la sección 7.4 Interacciones en las que intervienen variables binarias. 
